@@ -12,3 +12,10 @@ import Testing
     #expect(snapshot.source.state == .connected)
     #expect(snapshot.source.parserVersion == "fixture-v1")
 }
+
+@Test func statusCardCopyIncludesConnectorAndConfidence() throws {
+    let snapshot = try StatusViewModel.loadFixtureSnapshot()
+
+    #expect(StatusCardCopy.sourceLine(for: snapshot) == "Verified by Fixture")
+    #expect(StatusCardCopy.riskLine(for: snapshot) == "Undercount possible")
+}

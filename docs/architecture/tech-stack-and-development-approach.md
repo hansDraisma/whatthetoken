@@ -52,6 +52,8 @@ For TypeScript package tasks:
 
 - Keep quota math, confidence logic, stale detection, deduplication, and snapshot derivation in `packages/core`.
 - Treat `packages/core/src/schemas.ts` as the runtime contract for sanitized usage events and snapshots.
+- Treat `docs/architecture/data-contract.md` as the human-readable companion to `packages/core/src/schemas.ts`.
+- Review `docs/architecture/privacy-boundaries.md` before changing ingestion, sync, fixtures, logs, analytics, or quota UI.
 - Keep provider-specific ingestion code isolated under the app or provider package that owns it.
 - Keep SwiftUI views thin. Views render state; domain decisions belong in model/controller code or shared schemas.
 - Use provider/product/surface taxonomy everywhere.

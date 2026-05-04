@@ -70,7 +70,7 @@ export const usageEventSchema = z
     surface: surfaceSchema,
     eventType: z.enum(["message_sent", "agent_run_started", "agent_run_finished", "quota_polled"]),
     modelKey: z.string().min(1).nullable(),
-    count: z.number().nonnegative(),
+    count: z.number().int().nonnegative(),
     observedAt: z.string().datetime(),
     confidence: confidenceSchema,
     sourceVersion: z.string().min(1),

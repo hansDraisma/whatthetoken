@@ -230,7 +230,17 @@ After commit, hand off this branch as the base for Task 2, Task 5, Task 7, Task 
 - Create: `packages/core/src/schemas.ts`
 - Test: `packages/core/src/__tests__/schemas.test.ts`
 
-- [ ] **Step 1: Write failing schema tests**
+**Status:** Complete in commit `ade0ea8 feat(core): add usage schemas`, with follow-up review fixes applied in this branch.
+
+**Review follow-up evidence:**
+- `usageEventSchema.count` rejects fractional event counts.
+- `@whatthetoken/core` has a `build` script and explicit package exports for emitted `dist` files.
+- Internal runtime imports use `.js` specifiers so the emitted ESM package can be imported by Node.
+- `pnpm --filter @whatthetoken/core build` passed.
+- `node --input-type=module -e "import('@whatthetoken/core')..."` passed from `packages/core` after build.
+- `pnpm check` passed with 4 test files and 14 tests.
+
+- [x] **Step 1: Write failing schema tests**
 
 Create `packages/core/src/__tests__/schemas.test.ts`:
 
@@ -290,6 +300,30 @@ describe("usage schemas", () => {
     ).toThrow();
   });
 
+  it("rejects fractional event counts", () => {
+    expect(() =>
+      usageEventSchema.parse({
+        id: "evt_fractional",
+        userAccountId: "user_01",
+        deviceId: "device_mac_01",
+        providerAccountId: "openai_personal",
+        provider: "openai",
+        product: "codex",
+        surface: "cli",
+        eventType: "message_sent",
+        modelKey: "gpt-5.3-codex",
+        count: 0.5,
+        observedAt: "2026-05-04T10:00:00.000Z",
+        confidence: "observed",
+        sourceVersion: "codex-cli-local-v1",
+        attribution: {
+          os: "macos",
+          canMissOtherDevices: true
+        }
+      })
+    ).toThrow();
+  });
+
   it("accepts a pool-aware Claude Code snapshot", () => {
     const parsed = usageSnapshotSchema.parse({
       id: "snap_01",
@@ -341,7 +375,7 @@ describe("usage schemas", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -351,7 +385,7 @@ pnpm --filter @whatthetoken/core test -- schemas.test.ts
 
 Expected: FAIL because `@whatthetoken/core`, schemas, and test config do not exist yet.
 
-- [ ] **Step 3: Add package config**
+- [x] **Step 3: Add package config**
 
 Create `packages/core/package.json`:
 
@@ -363,7 +397,14 @@ Create `packages/core/package.json`:
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "tsc --noEmit"
@@ -405,7 +446,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: Add schema implementation**
+- [x] **Step 4: Add schema implementation**
 
 Create `packages/core/src/types.ts`:
 
@@ -483,7 +524,7 @@ export const usageEventSchema = z
     surface: surfaceSchema,
     eventType: z.enum(["message_sent", "agent_run_started", "agent_run_finished", "quota_polled"]),
     modelKey: z.string().min(1).nullable(),
-    count: z.number().nonnegative(),
+    count: z.number().int().nonnegative(),
     observedAt: z.string().datetime(),
     confidence: confidenceSchema,
     sourceVersion: z.string().min(1),
@@ -558,11 +599,11 @@ export type UsageSnapshot = z.infer<typeof usageSnapshotSchema>;
 Create `packages/core/src/index.ts`:
 
 ```ts
-export * from "./types";
-export * from "./schemas";
+export * from "./types.js";
+export * from "./schemas.js";
 ```
 
-- [ ] **Step 5: Run schema tests**
+- [x] **Step 5: Run schema tests**
 
 Run:
 
@@ -573,7 +614,7 @@ pnpm --filter @whatthetoken/core test -- schemas.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Run core typecheck**
+- [x] **Step 6: Run core typecheck**
 
 Run:
 
@@ -722,9 +763,9 @@ export function evaluateStaleness(input: EvaluateStalenessInput): EvaluateStalen
 Update `packages/core/src/index.ts`:
 
 ```ts
-export * from "./types";
-export * from "./schemas";
-export * from "./staleness";
+export * from "./types.js";
+export * from "./schemas.js";
+export * from "./staleness.js";
 ```
 
 - [ ] **Step 4: Run tests**
@@ -873,7 +914,7 @@ export function createSnapshotFromQuotaPoll(input: CreateSnapshotInput): UsageSn
 Create `packages/core/src/fixtures.ts`:
 
 ```ts
-import { createSnapshotFromQuotaPoll } from "./snapshots";
+import { createSnapshotFromQuotaPoll } from "./snapshots.js";
 
 export function createClaudeCodeFixtureSnapshot() {
   return createSnapshotFromQuotaPoll({
@@ -898,7 +939,7 @@ export function createClaudeCodeFixtureSnapshot() {
 Create `packages/core/src/fixture-files.ts`:
 
 ```ts
-import { createClaudeCodeFixtureSnapshot } from "./fixtures";
+import { createClaudeCodeFixtureSnapshot } from "./fixtures.js";
 
 export const claudeCodeFixtureSnapshotJson = JSON.stringify(
   createClaudeCodeFixtureSnapshot(),
@@ -910,12 +951,12 @@ export const claudeCodeFixtureSnapshotJson = JSON.stringify(
 Update `packages/core/src/index.ts`:
 
 ```ts
-export * from "./types";
-export * from "./schemas";
-export * from "./staleness";
-export * from "./snapshots";
-export * from "./fixtures";
-export * from "./fixture-files";
+export * from "./types.js";
+export * from "./schemas.js";
+export * from "./staleness.js";
+export * from "./snapshots.js";
+export * from "./fixtures.js";
+export * from "./fixture-files.js";
 ```
 
 - [ ] **Step 4: Run tests**
@@ -948,6 +989,18 @@ git commit -m "feat(core): derive usage snapshots"
 
 ## Task 5: SwiftUI Mac App Shell With Fixture Card
 
+**Status:** Completed in `ebcb7cf` (`feat(mac): render fixture usage status`) and reverified on 2026-05-04 after rebasing onto `origin/main`.
+
+**Verification:**
+- `cd apps/mac && swift test` passed with 1 Swift Testing test.
+- `cd apps/mac && swift build` passed.
+- `pnpm --filter @whatthetoken/core test -- mac-fixture-contract.test.ts` passed with 4 test files and 13 tests.
+- `pnpm check` passed.
+
+**Reviewed gaps closed by Task 5A:**
+- Task 5 proved the Swift package builds and the fixture decodes, but it did not assert the rendered card strings. Task 5A added a small display-model seam so the card title, primary metric, confidence label, updated label, and progress value are tested without snapshot-testing SwiftUI internals.
+- The shipped Swift test name said "WithoutSensitiveContent" but only asserted decoded quota fields. Task 5A renamed the test and added a recursive fixture JSON scan for disallowed sensitive keys.
+
 **Files:**
 - Create: `apps/mac/Package.swift`
 - Create: `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift`
@@ -958,7 +1011,7 @@ git commit -m "feat(core): derive usage snapshots"
 - Create: `apps/mac/Sources/WhatTheTokenMac/Resources/usage-snapshot.fixture.json`
 - Test: `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift`
 
-- [ ] **Step 1: Write failing Swift tests**
+- [x] **Step 1: Write failing Swift tests**
 
 Create `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift`:
 
@@ -976,7 +1029,7 @@ import Testing
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -987,7 +1040,7 @@ swift test
 
 Expected: FAIL because the Swift package and app code do not exist yet.
 
-- [ ] **Step 3: Add Swift package**
+- [x] **Step 3: Add Swift package**
 
 Create `apps/mac/Package.swift`:
 
@@ -1018,7 +1071,7 @@ let package = Package(
 )
 ```
 
-- [ ] **Step 4: Add Swift models and fixture**
+- [x] **Step 4: Add Swift models and fixture**
 
 Create `apps/mac/Sources/WhatTheTokenMac/Models/UsageSnapshot.swift`:
 
@@ -1070,7 +1123,7 @@ Create `apps/mac/Sources/WhatTheTokenMac/Resources/usage-snapshot.fixture.json`:
 }
 ```
 
-- [ ] **Step 5: Add view model**
+- [x] **Step 5: Add view model**
 
 Create `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift`:
 
@@ -1109,7 +1162,7 @@ enum FixtureError: Error {
 }
 ```
 
-- [ ] **Step 6: Add SwiftUI views**
+- [x] **Step 6: Add SwiftUI views**
 
 Create `apps/mac/Sources/WhatTheTokenMac/Views/StatusCardView.swift`:
 
@@ -1214,7 +1267,7 @@ struct WhatTheTokenApp: App {
 }
 ```
 
-- [ ] **Step 7: Run Swift tests**
+- [x] **Step 7: Run Swift tests**
 
 Run:
 
@@ -1225,7 +1278,7 @@ swift test
 
 Expected: PASS.
 
-- [ ] **Step 8: Build Swift app**
+- [x] **Step 8: Build Swift app**
 
 Run:
 
@@ -1236,11 +1289,333 @@ swift build
 
 Expected: PASS on macOS with Swift 6 toolchain. If the local toolchain is older, lower `swift-tools-version` only after confirming available Swift version with `swift --version`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add apps/mac
 git commit -m "feat(mac): render fixture usage status"
+```
+
+## Task 5A: Mac Status Card Display And Fixture Safety Tests
+
+**Status:** Completed in `4ca44ff` (`test(mac): cover fixture card display`) and hardened in `39a6408` (`test(mac): scan fixture keys recursively`).
+
+**Verification:**
+- `cd apps/mac && swift test` passed with 5 Swift Testing tests.
+- `cd apps/mac && swift build` passed.
+- `pnpm check` passed with 4 core test files and 13 core tests.
+
+**Files:**
+- Create: `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusCardDisplayModel.swift`
+- Modify: `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift`
+- Modify: `apps/mac/Sources/WhatTheTokenMac/Views/StatusCardView.swift`
+- Modify: `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift`
+- Test: `apps/mac/Tests/WhatTheTokenMacTests/StatusCardDisplayModelTests.swift`
+
+**Purpose:** Close the Task 5 review gaps by testing the user-visible card strings and making the fixture safety assertion explicit.
+
+- [x] **Step 1: Write failing display model tests**
+
+Create `apps/mac/Tests/WhatTheTokenMacTests/StatusCardDisplayModelTests.swift`:
+
+```swift
+import Testing
+@testable import WhatTheTokenMac
+
+@Test func formatsFixtureBackedStatusCardStrings() throws {
+    let snapshot = try StatusViewModel.loadFixtureSnapshot()
+    let display = StatusCardDisplayModel(snapshot: snapshot)
+
+    #expect(display.title == "Anthropic / claude code")
+    #expect(display.primaryMetric == "38% remaining")
+    #expect(display.confidenceLabel == "Verified")
+    #expect(display.updatedLabel == "Updated 2026-05-04T10:00:00.000Z")
+    #expect(display.progressValue == 0.62)
+}
+
+@Test func formatsObservedUsageWhenRemainingIsUnknown() {
+    let snapshot = UsageSnapshot(
+        id: "snap_observed",
+        userAccountId: "fixture_user",
+        provider: "openai",
+        product: "codex",
+        surface: "cli",
+        poolKey: "openai_codex",
+        windowKey: "daily",
+        unit: "requests",
+        used: nil,
+        limit: nil,
+        remaining: nil,
+        utilization: nil,
+        resetAt: nil,
+        lastUpdatedAt: "2026-05-04T10:00:00.000Z",
+        confidence: "observed",
+        undercountRisk: "possible",
+        staleReason: nil
+    )
+
+    let display = StatusCardDisplayModel(snapshot: snapshot)
+
+    #expect(display.title == "Openai / codex")
+    #expect(display.primaryMetric == "Usage observed")
+    #expect(display.confidenceLabel == "Observed")
+    #expect(display.updatedLabel == "Updated 2026-05-04T10:00:00.000Z")
+    #expect(display.progressValue == 0)
+}
+```
+
+Run:
+
+```bash
+cd apps/mac
+swift test
+```
+
+Expected: FAIL because `StatusCardDisplayModel` does not exist.
+
+- [x] **Step 2: Add display model**
+
+Create `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusCardDisplayModel.swift`:
+
+```swift
+import Foundation
+
+struct StatusCardDisplayModel: Equatable, Sendable {
+    let title: String
+    let primaryMetric: String
+    let confidenceLabel: String
+    let updatedLabel: String
+    let progressValue: Double
+
+    init(snapshot: UsageSnapshot) {
+        title = "\(snapshot.provider.capitalized) / \(snapshot.product.replacingOccurrences(of: "_", with: " "))"
+        confidenceLabel = snapshot.confidence.capitalized
+        updatedLabel = "Updated \(snapshot.lastUpdatedAt)"
+        progressValue = snapshot.utilization ?? 0
+        primaryMetric = Self.primaryMetric(for: snapshot)
+    }
+
+    private static func primaryMetric(for snapshot: UsageSnapshot) -> String {
+        guard let remaining = snapshot.remaining else {
+            return "Usage observed"
+        }
+
+        switch snapshot.unit {
+        case "utilization":
+            return "\(Int(remaining))% remaining"
+        case "credits":
+            return "\(remaining.formatted()) credits remaining"
+        case "tokens":
+            return "\(Int(remaining)) tokens remaining"
+        case "requests":
+            return "\(Int(remaining)) requests remaining"
+        case "messages":
+            return "\(Int(remaining)) messages remaining"
+        default:
+            return "\(remaining.formatted()) remaining"
+        }
+    }
+}
+```
+
+- [x] **Step 3: Use display model in the SwiftUI card**
+
+Replace `apps/mac/Sources/WhatTheTokenMac/Views/StatusCardView.swift` with:
+
+```swift
+import SwiftUI
+
+struct StatusCardView: View {
+    private let display: StatusCardDisplayModel
+
+    init(snapshot: UsageSnapshot) {
+        display = StatusCardDisplayModel(snapshot: snapshot)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(display.title)
+                    .font(.headline)
+                Spacer()
+                Text(display.confidenceLabel)
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.secondary.opacity(0.14))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            Text(display.primaryMetric)
+                .font(.system(size: 28, weight: .semibold))
+
+            ProgressView(value: display.progressValue)
+                .progressViewStyle(.linear)
+
+            Text(display.updatedLabel)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .frame(width: 320, alignment: .leading)
+    }
+}
+```
+
+- [x] **Step 4: Expose fixture data loading through the view model**
+
+Replace `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift` with:
+
+```swift
+import Foundation
+import Observation
+
+@Observable
+final class StatusViewModel {
+    var snapshots: [UsageSnapshot]
+
+    init(snapshots: [UsageSnapshot] = []) {
+        self.snapshots = snapshots
+    }
+
+    static func loadFixtureData() throws -> Data {
+        guard let url = Bundle.module.url(forResource: "usage-snapshot.fixture", withExtension: "json") else {
+            throw FixtureError.missingFixture
+        }
+
+        return try Data(contentsOf: url)
+    }
+
+    static func loadFixtureSnapshot() throws -> UsageSnapshot {
+        let data = try loadFixtureData()
+        return try JSONDecoder().decode(UsageSnapshot.self, from: data)
+    }
+
+    static func fixture() -> StatusViewModel {
+        do {
+            return StatusViewModel(snapshots: [try loadFixtureSnapshot()])
+        } catch {
+            return StatusViewModel(snapshots: [])
+        }
+    }
+}
+
+enum FixtureError: Error {
+    case missingFixture
+}
+```
+
+- [x] **Step 5: Rename fixture decoding test and add explicit safety scan**
+
+Replace `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift` with:
+
+```swift
+import Foundation
+import Testing
+@testable import WhatTheTokenMac
+
+@Test func loadsFixtureSnapshot() throws {
+    let snapshot = try StatusViewModel.loadFixtureSnapshot()
+
+    #expect(snapshot.product == "claude_code")
+    #expect(snapshot.confidence == "verified")
+    #expect(snapshot.remaining == 38)
+    #expect(snapshot.staleReason == nil)
+}
+
+@Test func fixtureJSONDoesNotContainSensitiveKeys() throws {
+    let data = try StatusViewModel.loadFixtureData()
+    let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let disallowedKeys = [
+        "prompt",
+        "completion",
+        "conversation",
+        "conversationUrl",
+        "cookie",
+        "authHeader",
+        "bearerToken",
+        "sessionToken"
+    ]
+
+    #expect(sensitiveKeyMatches(in: object, disallowedKeys: disallowedKeys).isEmpty)
+}
+
+@Test func sensitiveKeyScanFindsNestedMatches() {
+    let object: [String: Any] = [
+        "provider": "anthropic",
+        "metadata": [
+            "conversation": "should not be collected",
+            "usage": [
+                ["remaining": 38],
+                ["sessionToken": "should not be collected"]
+            ]
+        ]
+    ]
+
+    #expect(sensitiveKeyMatches(in: object, disallowedKeys: ["conversation", "sessionToken"]) == [
+        "metadata.conversation",
+        "metadata.usage[1].sessionToken"
+    ])
+}
+
+private func sensitiveKeyMatches(
+    in value: Any,
+    disallowedKeys: [String],
+    path: String = ""
+) -> [String] {
+    if let dictionary = value as? [String: Any] {
+        return dictionary.keys.sorted().flatMap { key -> [String] in
+            let childPath = path.isEmpty ? key : "\(path).\(key)"
+            let currentMatch = disallowedKeys.contains(key) ? [childPath] : []
+            return currentMatch + sensitiveKeyMatches(
+                in: dictionary[key] as Any,
+                disallowedKeys: disallowedKeys,
+                path: childPath
+            )
+        }
+    }
+
+    if let array = value as? [Any] {
+        return array.indices.flatMap { index in
+            sensitiveKeyMatches(
+                in: array[index],
+                disallowedKeys: disallowedKeys,
+                path: "\(path)[\(index)]"
+            )
+        }
+    }
+
+    return []
+}
+```
+
+- [x] **Step 6: Run Swift tests**
+
+Run:
+
+```bash
+cd apps/mac
+swift test
+```
+
+Expected: PASS with five Swift tests covering fixture decoding, recursive fixture safety scanning, nested sensitive-key scan regression coverage, and display model formatting.
+
+- [x] **Step 7: Build Swift app**
+
+Run:
+
+```bash
+cd apps/mac
+swift build
+```
+
+Expected: PASS.
+
+- [x] **Step 8: Commit**
+
+```bash
+git add apps/mac
+git commit -m "test(mac): cover fixture card display"
 ```
 
 ## Task 6: Mac Fixture Contract Test

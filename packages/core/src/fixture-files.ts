@@ -1,4 +1,4 @@
-import { createClaudeCodeFixtureSnapshot } from "./fixtures";
+import { createClaudeCodeFixtureSnapshot } from "./fixtures.js";
 
 export const claudeCodeFixtureSnapshotJson = JSON.stringify(
   createClaudeCodeFixtureSnapshot(),

@@ -61,6 +61,30 @@ describe("usage schemas", () => {
     ).toThrow();
   });
 
+  it("rejects fractional event counts", () => {
+    expect(() =>
+      usageEventSchema.parse({
+        id: "evt_fractional",
+        userAccountId: "user_01",
+        deviceId: "device_mac_01",
+        providerAccountId: "openai_personal",
+        provider: "openai",
+        product: "codex",
+        surface: "cli",
+        eventType: "message_sent",
+        modelKey: "gpt-5.3-codex",
+        count: 0.5,
+        observedAt: "2026-05-04T10:00:00.000Z",
+        confidence: "observed",
+        sourceVersion: "codex-cli-local-v1",
+        attribution: {
+          os: "macos",
+          canMissOtherDevices: true
+        }
+      })
+    ).toThrow();
+  });
+
   it("accepts a pool-aware Claude Code snapshot", () => {
     const parsed = usageSnapshotSchema.parse({
       id: "snap_01",

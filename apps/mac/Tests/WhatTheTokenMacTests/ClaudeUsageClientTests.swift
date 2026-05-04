@@ -57,6 +57,36 @@ import Testing
     #expect(response.fiveHour?.utilization == 42.5)
 }
 
+@Test func decodesSuccessfulExtraUsageOnlyResponse() async throws {
+    let json = """
+    {
+      "extra_usage": {
+        "is_enabled": true,
+        "used_credits": 422.0,
+        "monthly_limit": 1000.0
+      }
+    }
+    """.data(using: .utf8)!
+
+    let loader = StubClaudeURLLoader(result: (
+        json,
+        HTTPURLResponse(
+            url: URL(string: "https://api.anthropic.com/api/oauth/usage")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+    ))
+
+    let client = ClaudeUsageClient(loader: loader)
+    let response = try await client.fetchUsage(
+        accessToken: "synthetic-access-token",
+        claudeVersion: "2.1.126"
+    )
+
+    #expect(response.extraUsage?.usedCredits == 422)
+}
+
 @Test func mapsEmptySuccessfulResponseToSchemaChanged() async throws {
     let loader = StubClaudeURLLoader(result: (
         "{}".data(using: .utf8)!,

@@ -4,6 +4,14 @@ protocol ClaudeUsageFetching: Sendable {
     func fetchUsage(accessToken: String, claudeVersion: String) async throws -> ClaudeUsageResponse
 }
 
+protocol ClaudeVersionProviding: Sendable {
+    var claudeVersion: String { get }
+}
+
+struct StaticClaudeVersionProvider: ClaudeVersionProviding {
+    let claudeVersion: String
+}
+
 struct ClaudeConnectorSettings: Equatable, Sendable {
     let isEnabled: Bool
 }
@@ -17,6 +25,7 @@ struct ClaudeConnectorService: Sendable {
     let settings: ClaudeConnectorSettings
     let credentialStore: ClaudeCredentialStore
     let usageFetcher: ClaudeUsageFetching
+    let claudeVersionProvider: ClaudeVersionProviding
     let deviceId: String
     let userAccountId: String
     let now: @Sendable () -> String
@@ -48,7 +57,7 @@ struct ClaudeConnectorService: Sendable {
         do {
             response = try await usageFetcher.fetchUsage(
                 accessToken: accessToken,
-                claudeVersion: "2.1.126"
+                claudeVersion: claudeVersionProvider.claudeVersion
             )
         } catch let error as ClaudeUsageClientError {
             return ClaudeConnectorResult(

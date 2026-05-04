@@ -54,3 +54,7 @@ The next safe step is a narrow metadata inspection that reads only top-level key
 The Claude Code local connector plan is documented in `docs/superpowers/plans/2026-05-04-local-connector-trust.md`.
 
 Implementation must keep the Claude Code OAuth token local to the Mac connector process. Tests use synthetic credentials and fixture responses only. Synced and displayed data is limited to sanitized `UsageSnapshot` records with connector source metadata.
+
+The first implementation maps Claude Code utilization windows (`five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`) and enabled `extra_usage` credits into sanitized snapshots. Credential access is isolated behind a local command runner with a timeout so Keychain lookup failures do not block refresh indefinitely.
+
+Codex remains deferred to the roadmap until its local metadata and redaction review identifies a safe signal source.

@@ -55,7 +55,7 @@ struct ClaudeUsageClient: ClaudeUsageFetching, Sendable {
         case 200..<300:
             do {
                 let usageResponse = try JSONDecoder().decode(ClaudeUsageResponse.self, from: data)
-                guard usageResponse.hasAnyUsageWindow else {
+                guard usageResponse.hasAnyUsageSignal else {
                     throw ClaudeUsageClientError.schemaChanged
                 }
                 return usageResponse
@@ -75,7 +75,11 @@ struct ClaudeUsageClient: ClaudeUsageFetching, Sendable {
 }
 
 private extension ClaudeUsageResponse {
-    var hasAnyUsageWindow: Bool {
-        fiveHour != nil || sevenDay != nil || sevenDayOpus != nil || sevenDaySonnet != nil
+    var hasAnyUsageSignal: Bool {
+        fiveHour != nil
+            || sevenDay != nil
+            || sevenDayOpus != nil
+            || sevenDaySonnet != nil
+            || extraUsage != nil
     }
 }

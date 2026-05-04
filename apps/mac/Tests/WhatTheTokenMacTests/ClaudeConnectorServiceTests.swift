@@ -16,6 +16,7 @@ import Testing
         settings: ClaudeConnectorSettings(isEnabled: false),
         credentialStore: credentialStore,
         usageFetcher: usageFetcher,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
         deviceId: "device_mac_01",
         userAccountId: "local_user",
         now: { "2026-05-04T10:00:00.000Z" }
@@ -42,6 +43,7 @@ import Testing
         settings: ClaudeConnectorSettings(isEnabled: true),
         credentialStore: credentialStore,
         usageFetcher: usageFetcher,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
         deviceId: "device_mac_01",
         userAccountId: "local_user",
         now: { "2026-05-04T10:00:00.000Z" }
@@ -69,6 +71,7 @@ import Testing
         settings: ClaudeConnectorSettings(isEnabled: true),
         credentialStore: credentialStore,
         usageFetcher: usageFetcher,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
         deviceId: "device_mac_01",
         userAccountId: "local_user",
         now: { "2026-05-04T10:00:00.000Z" }
@@ -85,6 +88,7 @@ import Testing
     #expect(credentialStore.readCount == 1)
     #expect(usageFetcher.fetchCount == 1)
     #expect(usageFetcher.lastAccessToken == "synthetic-access-token")
+    #expect(usageFetcher.lastClaudeVersion == "2.2.0-test")
 }
 
 @Test func tokenInvalidErrorReturnsTokenInvalidStatus() async throws {
@@ -95,6 +99,7 @@ import Testing
         settings: ClaudeConnectorSettings(isEnabled: true),
         credentialStore: credentialStore,
         usageFetcher: usageFetcher,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
         deviceId: "device_mac_01",
         userAccountId: "local_user",
         now: { "2026-05-04T10:00:00.000Z" }
@@ -106,6 +111,47 @@ import Testing
     #expect(result.status.source.state == .tokenInvalid)
     #expect(credentialStore.readCount == 1)
     #expect(usageFetcher.fetchCount == 1)
+}
+
+@Test func rateLimitedErrorReturnsRateLimitedStatus() async throws {
+    let result = try await refreshWithFetcherError(ClaudeUsageClientError.rateLimited)
+
+    #expect(result.snapshots.isEmpty)
+    #expect(result.status.source.state == .rateLimited)
+    #expect(result.status.message == "Claude usage is rate limited")
+}
+
+@Test func networkErrorReturnsNetworkErrorStatus() async throws {
+    let result = try await refreshWithFetcherError(ClaudeUsageClientError.networkError)
+
+    #expect(result.snapshots.isEmpty)
+    #expect(result.status.source.state == .networkError)
+    #expect(result.status.message == "Claude Code usage could not be refreshed")
+}
+
+@Test func schemaChangedErrorReturnsSchemaChangedStatus() async throws {
+    let result = try await refreshWithFetcherError(ClaudeUsageClientError.schemaChanged)
+
+    #expect(result.snapshots.isEmpty)
+    #expect(result.status.source.state == .schemaChanged)
+    #expect(result.status.message == "Claude usage response changed")
+}
+
+private func refreshWithFetcherError(_ error: ClaudeUsageClientError) async throws -> ClaudeConnectorResult {
+    let credentialStore = StubClaudeCredentialStore(accessToken: "synthetic-access-token")
+    let usageFetcher = StubClaudeUsageFetcher(error: error)
+
+    let service = ClaudeConnectorService(
+        settings: ClaudeConnectorSettings(isEnabled: true),
+        credentialStore: credentialStore,
+        usageFetcher: usageFetcher,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
+        deviceId: "device_mac_01",
+        userAccountId: "local_user",
+        now: { "2026-05-04T10:00:00.000Z" }
+    )
+
+    return try await service.refresh()
 }
 
 private final class StubClaudeCredentialStore: ClaudeCredentialStore, @unchecked Sendable {
@@ -125,6 +171,7 @@ private final class StubClaudeCredentialStore: ClaudeCredentialStore, @unchecked
 private final class StubClaudeUsageFetcher: ClaudeUsageFetching, @unchecked Sendable {
     private(set) var fetchCount = 0
     private(set) var lastAccessToken: String?
+    private(set) var lastClaudeVersion: String?
     let result: Result<ClaudeUsageResponse, Error>
 
     init(response: ClaudeUsageResponse) {
@@ -138,6 +185,7 @@ private final class StubClaudeUsageFetcher: ClaudeUsageFetching, @unchecked Send
     func fetchUsage(accessToken: String, claudeVersion: String) async throws -> ClaudeUsageResponse {
         fetchCount += 1
         lastAccessToken = accessToken
+        lastClaudeVersion = claudeVersion
         return try result.get()
     }
 }

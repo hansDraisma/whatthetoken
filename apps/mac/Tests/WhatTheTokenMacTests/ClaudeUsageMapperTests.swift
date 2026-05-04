@@ -62,3 +62,76 @@ import Testing
     #expect(snapshots[0].confidence == "verified")
     #expect(snapshots[0].source == source)
 }
+
+@Test func mapsClaudeModelWindowsToSeparateSanitizedSnapshots() throws {
+    let response = ClaudeUsageResponse(
+        fiveHour: nil,
+        sevenDay: nil,
+        sevenDayOpus: ClaudeWindowUsage(utilization: 80.0, resetsAt: "2026-05-11T10:00:00Z"),
+        sevenDaySonnet: ClaudeWindowUsage(utilization: 35.0, resetsAt: "2026-05-11T10:00:00Z"),
+        extraUsage: nil
+    )
+
+    let source = ConnectorSource(
+        connector: "mac_connector",
+        state: .connected,
+        label: "Mac connector",
+        parserVersion: "claude-code-oauth-usage-v1",
+        deviceId: "device_mac_01"
+    )
+
+    let snapshots = ClaudeUsageMapper.map(
+        response,
+        userAccountId: "local_user",
+        deviceId: "device_mac_01",
+        observedAt: "2026-05-04T10:00:00.000Z",
+        source: source
+    )
+
+    #expect(snapshots.map(\.windowKey) == ["seven_day_opus", "seven_day_sonnet"])
+    #expect(snapshots[0].used == 80)
+    #expect(snapshots[0].remaining == 20)
+    #expect(snapshots[1].used == 35)
+    #expect(snapshots[1].remaining == 65)
+}
+
+@Test func mapsEnabledClaudeExtraUsageCreditsToSanitizedSnapshot() throws {
+    let response = ClaudeUsageResponse(
+        fiveHour: nil,
+        sevenDay: nil,
+        sevenDayOpus: nil,
+        sevenDaySonnet: nil,
+        extraUsage: ClaudeExtraUsage(
+            isEnabled: true,
+            utilization: 30.0,
+            usedCredits: 422.0,
+            monthlyLimit: 1000.0
+        )
+    )
+
+    let source = ConnectorSource(
+        connector: "mac_connector",
+        state: .connected,
+        label: "Mac connector",
+        parserVersion: "claude-code-oauth-usage-v1",
+        deviceId: "device_mac_01"
+    )
+
+    let snapshots = ClaudeUsageMapper.map(
+        response,
+        userAccountId: "local_user",
+        deviceId: "device_mac_01",
+        observedAt: "2026-05-04T10:00:00.000Z",
+        source: source
+    )
+
+    let snapshot = try #require(snapshots.first)
+    #expect(snapshot.poolKey == "anthropic_claude_extra_usage")
+    #expect(snapshot.windowKey == "monthly_extra_usage")
+    #expect(snapshot.unit == "credits")
+    #expect(snapshot.used == 422)
+    #expect(snapshot.limit == 1000)
+    #expect(snapshot.remaining == 578)
+    #expect(snapshot.utilization == 0.422)
+    #expect(snapshot.source == source)
+}

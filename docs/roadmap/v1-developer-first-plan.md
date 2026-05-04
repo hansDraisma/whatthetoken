@@ -16,11 +16,12 @@ This makes Codex, Claude Code, Cursor, and GitHub Copilot more important than ge
 
 V1 is developer-first and ingestion-first:
 
-1. Codex and Claude Code are the priority products.
-2. ChatGPT and Gemini web tracking are useful follow-ons, not the first validation loop.
-3. The first product surface should be a Mac-first developer quota monitor.
-4. The first visible product should render a quota/status signal quickly, even if it is initially local-only and limited.
-5. The implementation plan should wait until this design is accepted.
+1. Claude Code is the first implementation target because it has the clearest local verified usage path.
+2. Codex remains a high-priority developer product, but moves to a later adapter phase after a dedicated local metadata schema and redaction review.
+3. ChatGPT and Gemini web tracking are useful follow-ons, not the first validation loop.
+4. The first product surface should be a Mac-first developer quota monitor.
+5. The first visible product should render a quota/status signal quickly, even if it is initially local-only and limited.
+6. The implementation plan should start with the Claude Code local connector.
 
 ## Adopted Principles
 
@@ -171,8 +172,7 @@ export type UsageSnapshot = {
 ### Must Ship
 
 - Shared TypeScript core package for usage events, snapshots, confidence labels, stale detection, and quota window math.
-- Codex local ingestion spike.
-- Claude Code local ingestion spike.
+- Claude Code local connector that maps sanitized Anthropic usage responses into shared snapshots.
 - Minimal SwiftUI Mac status surface that shows current provider/product/pool status.
 - Trust/privacy README.
 - One agent operating rules document.
@@ -182,6 +182,8 @@ export type UsageSnapshot = {
 
 ### Should Ship If Validation Holds
 
+- Codex local metadata/redaction spike.
+- Codex local connector after the redaction spike identifies a safe source.
 - Supabase sync for sanitized events and snapshots.
 - Browser extension popover.
 - ChatGPT web estimated counter.
@@ -267,7 +269,8 @@ Proposed flow:
 Security framing:
 
 - The Chrome extension and Mac connector should feel like connectors for one product, not separate products.
-- The Mac connector is the secure path for Claude Code and Codex signals because it can use local device state without sending provider credentials to WhatTheToken.
+- The Mac connector is the secure path for Claude Code because it can use local device state without sending provider credentials to WhatTheToken.
+- Codex should use the same connector model later only after its local files or invocation metadata have a separate redaction review.
 - The unified UI should show all providers together regardless of which connector produced the signal.
 - Frontend copy should lead with the trust promise: provider credentials stay on the user's device; WhatTheToken syncs only usage status.
 
@@ -303,37 +306,52 @@ Exit criteria:
 
 ### Phase 1: Core And First Visible Counter
 
-Goal: render one useful developer quota/status signal by the end of week 2.
+Goal: render one useful Claude Code quota/status signal by the end of week 2.
 
 - Scaffold monorepo.
 - Create `packages/core`.
 - Implement data contract.
 - Implement confidence/stale helpers.
-- Implement first ingestion spike for Codex or Claude Code.
-- Render a minimal local, SwiftUI, or extension UI card.
+- Implement the Claude Code local connector path.
+- Render a minimal local SwiftUI card for Claude Code.
 - Add focused tests for core logic.
 
 Exit criteria:
 
-- One provider/product/surface shows a real or observed status.
+- Claude Code shows a verified or stale status from sanitized local connector data.
 - Tests cover the core data transformation path.
 - No sensitive data is collected.
 
-### Phase 2: Second Developer Ingestor
+### Phase 2: Codex Local Metadata Review
 
-Goal: prove multi-tool developer value.
+Goal: determine whether Codex can be safely tracked locally without collecting prompts, responses, auth files, shell snapshots, or session contents.
 
-- Add the second high-priority ingestor, likely Claude Code if Codex is first, or Codex if Claude Code is first.
-- Normalize both into the same `UsageEvent` and `UsageSnapshot` model.
+- Inspect only Codex-owned schema metadata and top-level keys where safe.
+- Document allowed and denied Codex paths.
+- Decide whether Codex can produce `observed` or `verified` snapshots.
+- Write a Codex-specific implementation plan only after the redaction review passes.
+
+Exit criteria:
+
+- A Codex ADR or research note identifies a safe local signal source.
+- No prompt, response, command output, auth, shell snapshot, or session content is read into tests, fixtures, logs, or docs.
+- Codex remains out of implementation until this exit criteria is met.
+
+### Phase 3: Second Developer Ingestor
+
+Goal: prove multi-tool developer value after the Codex review identifies a safe signal.
+
+- Add Codex local connector if Phase 2 finds an approved local signal.
+- Normalize Claude Code and Codex into the same `UsageEvent` and `UsageSnapshot` model.
 - Add undercount/stale states.
 - Add basic diagnostics.
 
 Exit criteria:
 
-- The UI shows at least two developer tools with distinct provenance labels.
+- The UI shows Claude Code plus one second developer tool with distinct provenance labels.
 - Parser/ingestor failures are visible to the user.
 
-### Phase 3: Sync And Account Layer
+### Phase 4: Sync And Account Layer
 
 Goal: make it a real product without compromising trust.
 
@@ -348,7 +366,7 @@ Exit criteria:
 - User can connect a device and see synced status in web.
 - Backend stores no prompts, conversations, cookies, or tokens.
 
-### Phase 4: Browser Extension Counters
+### Phase 5: Browser Extension Counters
 
 Goal: expand from coding agents to browser assistants.
 
@@ -363,7 +381,7 @@ Exit criteria:
 - ChatGPT and Gemini show estimated status with clear caveats.
 - Extension remains minimal-permission and open-source.
 
-### Phase 5: Beta Hardening
+### Phase 6: Beta Hardening
 
 Goal: make the product reliable enough for paid beta.
 
@@ -386,12 +404,11 @@ Exit criteria:
 
 ## Immediate Next Step
 
-Do not write a full implementation plan yet.
+Execute the Claude Code local connector implementation plan.
 
 Next steps:
 
-1. Review and accept or edit this design.
-2. Write the one-page agent operating rules.
-3. Write the two initial ADRs.
-4. Run validation interviews.
-5. Then write the first implementation plan for Phase 1.
+1. Implement `docs/superpowers/plans/2026-05-04-local-connector-trust.md`.
+2. Keep Codex out of implementation until its local metadata/redaction review is complete.
+3. Run validation interviews in parallel with the Claude connector build.
+4. Use the Claude implementation to validate the connector trust message before adding more providers.

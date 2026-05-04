@@ -1,5 +1,13 @@
 import type { UsageSnapshot } from "./schemas";
-import type { Product, Provider, Surface, UndercountRisk, UsageConfidence, UsageUnit } from "./types";
+import type {
+  Product,
+  Provider,
+  SnapshotSource,
+  Surface,
+  UndercountRisk,
+  UsageConfidence,
+  UsageUnit
+} from "./types";
 
 type CreateSnapshotInput = {
   id: string;
@@ -16,6 +24,7 @@ type CreateSnapshotInput = {
   lastUpdatedAt: string;
   confidence: UsageConfidence;
   undercountRisk: UndercountRisk;
+  source: SnapshotSource;
 };
 
 export function createSnapshotFromQuotaPoll(input: CreateSnapshotInput): UsageSnapshot {

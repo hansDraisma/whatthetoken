@@ -15,6 +15,13 @@ export function createClaudeCodeFixtureSnapshot() {
     resetAt: "2026-05-04T15:00:00.000Z",
     lastUpdatedAt: "2026-05-04T10:00:00.000Z",
     confidence: "verified",
-    undercountRisk: "possible"
+    undercountRisk: "possible",
+    source: {
+      connector: "manual_fixture",
+      state: "connected",
+      label: "Fixture",
+      parserVersion: "fixture-v1",
+      deviceId: "fixture_device"
+    }
   });
 }

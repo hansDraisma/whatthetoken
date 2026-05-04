@@ -9,12 +9,16 @@ final class StatusViewModel {
         self.snapshots = snapshots
     }
 
-    static func loadFixtureSnapshot() throws -> UsageSnapshot {
+    static func loadFixtureData() throws -> Data {
         guard let url = Bundle.module.url(forResource: "usage-snapshot.fixture", withExtension: "json") else {
             throw FixtureError.missingFixture
         }
 
-        let data = try Data(contentsOf: url)
+        return try Data(contentsOf: url)
+    }
+
+    static func loadFixtureSnapshot() throws -> UsageSnapshot {
+        let data = try loadFixtureData()
         return try JSONDecoder().decode(UsageSnapshot.self, from: data)
     }
 

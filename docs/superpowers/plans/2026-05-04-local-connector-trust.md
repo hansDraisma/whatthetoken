@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the first secure local connector slice so Claude Code and Codex can appear in one normalized status surface while provider credentials stay local.
+**Goal:** Build the first secure Claude Code local connector slice so verified Claude usage can appear in the normalized status surface while provider credentials stay local.
 
-**Architecture:** `packages/core` owns the connector source metadata contract that every surface can render. `apps/mac` owns the first local connector implementation: tested parsers, in-memory Claude token handling boundaries, fixture-only mapper tests, and a SwiftUI status card that displays source, confidence, freshness, and setup state. This plan does not add Supabase, Chrome extension code, live Anthropic polling in CI, or production analytics.
+**Architecture:** `packages/core` owns the connector source metadata contract that every surface can render. `apps/mac` owns the first Claude local connector implementation: tested parsers, in-memory Claude token handling boundaries, fixture-only mapper tests, and a SwiftUI status card that displays source, confidence, freshness, and setup state. This plan does not add Codex ingestion, Supabase, Chrome extension code, live Anthropic polling in CI, or production analytics.
 
 **Tech Stack:** pnpm workspaces, TypeScript, Zod, Vitest, SwiftUI, Foundation networking, macOS Security command boundary, Swift Testing.
 
@@ -17,7 +17,7 @@
 - Do not call live Anthropic endpoints in automated tests.
 - Keep provider credentials local to the Mac connector process.
 - Keep the Chrome extension and web app as future display surfaces that consume sanitized snapshots.
-- Keep Codex implementation to a visible local-connector source state until its local metadata schema has a separate redaction review.
+- Do not implement Codex ingestion or Codex connector status in this plan. Codex needs a separate local metadata schema and redaction review because it does not use the Claude usage endpoint path.
 
 ## File Structure
 
@@ -44,8 +44,8 @@ Create or modify these files:
 - Create: `apps/mac/Sources/WhatTheTokenMac/Claude/ClaudeUsageClient.swift` - builds and sends Anthropic usage request with injected URL loading.
 - Create: `apps/mac/Tests/WhatTheTokenMacTests/ClaudeUsageClientTests.swift` - request construction and error mapping tests.
 - Create: `apps/mac/Sources/WhatTheTokenMac/Connectors/ConnectorStatus.swift` - source-state result model for local connectors.
-- Create: `apps/mac/Sources/WhatTheTokenMac/Connectors/LocalConnectorViewModel.swift` - combines fixture/local connector statuses into snapshots.
-- Create: `apps/mac/Tests/WhatTheTokenMacTests/LocalConnectorViewModelTests.swift` - verifies unified Claude and Codex display data.
+- Create: `apps/mac/Sources/WhatTheTokenMac/Connectors/LocalConnectorViewModel.swift` - combines Claude fixture/local connector statuses into snapshots.
+- Create: `apps/mac/Tests/WhatTheTokenMacTests/LocalConnectorViewModelTests.swift` - verifies Claude connector display data.
 - Modify: `apps/mac/Sources/WhatTheTokenMac/Views/StatusCardView.swift` - show connector source, confidence, and undercount/freshness text.
 - Modify: `apps/mac/Sources/WhatTheTokenMac/Views/ContentView.swift` - support multiple source-backed cards.
 - Modify: `docs/architecture/data-contract.md` - document snapshot source metadata.
@@ -1125,14 +1125,14 @@ git add apps/mac/Sources/WhatTheTokenMac/Claude/ClaudeUsageClient.swift apps/mac
 git commit -m "feat(mac): add Claude usage client"
 ```
 
-## Task 6: Local Connector View Model And Codex Source State
+## Task 6: Claude Local Connector View Model
 
 **Files:**
 - Create: `apps/mac/Sources/WhatTheTokenMac/Connectors/ConnectorStatus.swift`
 - Create: `apps/mac/Sources/WhatTheTokenMac/Connectors/LocalConnectorViewModel.swift`
 - Create: `apps/mac/Tests/WhatTheTokenMacTests/LocalConnectorViewModelTests.swift`
 
-- [ ] **Step 1: Write failing unified connector tests**
+- [ ] **Step 1: Write failing Claude connector tests**
 
 Create `apps/mac/Tests/WhatTheTokenMacTests/LocalConnectorViewModelTests.swift`:
 
@@ -1141,7 +1141,7 @@ import Foundation
 import Testing
 @testable import WhatTheTokenMac
 
-@Test func exposesClaudeAndCodexInOneConnectorStatusList() {
+@Test func exposesClaudeConnectorStatusAndSnapshotsTogether() {
     let claudeSource = ConnectorSource(
         connector: "mac_connector",
         state: .connected,
@@ -1174,24 +1174,13 @@ import Testing
     let viewModel = LocalConnectorViewModel(
         snapshots: [claudeSnapshot],
         statuses: [
-            ConnectorStatus(product: "claude_code", source: claudeSource, message: "Connected"),
-            ConnectorStatus(
-                product: "codex",
-                source: ConnectorSource(
-                    connector: "mac_connector",
-                    state: .notConnected,
-                    label: "Mac connector",
-                    parserVersion: "codex-local-review-v1",
-                    deviceId: "device_mac_01"
-                ),
-                message: "Codex local metadata needs review before tracking"
-            )
+            ConnectorStatus(product: "claude_code", source: claudeSource, message: "Connected")
         ]
     )
 
     #expect(viewModel.snapshots.count == 1)
-    #expect(viewModel.statuses.map(\\.product) == ["claude_code", "codex"])
-    #expect(viewModel.statuses[1].source.state == .notConnected)
+    #expect(viewModel.statuses.map(\\.product) == ["claude_code"])
+    #expect(viewModel.statuses[0].source.state == .connected)
 }
 ```
 
@@ -1260,7 +1249,7 @@ Expected: PASS.
 
 ```bash
 git add apps/mac/Sources/WhatTheTokenMac/Connectors apps/mac/Tests/WhatTheTokenMacTests/LocalConnectorViewModelTests.swift
-git commit -m "feat(mac): model local connector statuses"
+git commit -m "feat(mac): model Claude connector status"
 ```
 
 ## Task 7: Source-Aware Status UI
@@ -1508,10 +1497,10 @@ Expected: branch updates successfully.
 
 Spec coverage:
 
-- Unified status surface: Tasks 1, 2, 6, and 7 add source metadata and UI copy.
+- Unified status surface: Tasks 1, 2, 6, and 7 add source metadata and UI copy for the first Claude connector.
 - Claude Code collection path: Tasks 3, 4, and 5 add parser, credential boundary, and request client with fixture-only tests.
 - Local credential boundary: Tasks 4, 5, and 8 document and test local-only token handling.
-- Codex visibility: Task 6 adds a visible local connector status without parsing unreviewed Codex local files.
+- Codex deferral: this plan does not implement Codex ingestion or Codex connector status because Codex needs a separate local metadata schema and redaction review.
 - Frontend trust language: Task 7 implements initial Mac provenance copy; Task 8 updates data-contract docs.
 
 Placeholder scan:

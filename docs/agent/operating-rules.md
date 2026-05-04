@@ -62,6 +62,8 @@ A task is done only when:
 Before merging or accepting agent work, check:
 
 - Does this collect only allowed data?
+- Does the change still match `docs/architecture/data-contract.md`?
+- Has `docs/architecture/privacy-boundaries.md` been reviewed for any ingestion, sync, fixture, logging, analytics, or quota UI change?
 - Is confidence labeling correct?
 - Is stale/undercount behavior explicit?
 - Are provider-specific assumptions isolated?

@@ -41,9 +41,19 @@ For workspace-foundation tasks:
 3. Treat `pnpm-lock.yaml` as a reviewed source artifact. Inspect lockfile changes before committing.
 4. Treat root workspace scaffolding as a dependency barrier for parallel Conductor work. Core, Mac, documentation, and provider-spike worktrees should branch from a base that already includes the workspace scaffold.
 
+For TypeScript package tasks:
+
+1. Keep package entrypoints and emitted files aligned. If `package.json` points at `dist`, the package must expose a build script that writes `dist`.
+2. Use explicit `exports` for package boundaries instead of relying only on `main`.
+3. Use `.js` runtime specifiers in TypeScript source for ESM files that compile to Node-loadable JavaScript.
+4. Verify package boundaries with both `pnpm --filter <package> build` and a direct Node import from the package directory when adding or changing entrypoints.
+
 ## Architecture Rules
 
 - Keep quota math, confidence logic, stale detection, deduplication, and snapshot derivation in `packages/core`.
+- Treat `packages/core/src/schemas.ts` as the runtime contract for sanitized usage events and snapshots.
+- Treat `docs/architecture/data-contract.md` as the human-readable companion to `packages/core/src/schemas.ts`.
+- Review `docs/architecture/privacy-boundaries.md` before changing ingestion, sync, fixtures, logs, analytics, or quota UI.
 - Keep provider-specific ingestion code isolated under the app or provider package that owns it.
 - Keep SwiftUI views thin. Views render state; domain decisions belong in model/controller code or shared schemas.
 - Use provider/product/surface taxonomy everywhere.

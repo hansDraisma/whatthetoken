@@ -1307,7 +1307,7 @@ git commit -m "feat(mac): render fixture usage status"
 
 **Purpose:** Close the Task 5 review gaps by testing the user-visible card strings and making the fixture safety assertion explicit.
 
-- [ ] **Step 1: Write failing display model tests**
+- [x] **Step 1: Write failing display model tests**
 
 Create `apps/mac/Tests/WhatTheTokenMacTests/StatusCardDisplayModelTests.swift`:
 
@@ -1366,7 +1366,7 @@ swift test
 
 Expected: FAIL because `StatusCardDisplayModel` does not exist.
 
-- [ ] **Step 2: Add display model**
+- [x] **Step 2: Add display model**
 
 Create `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusCardDisplayModel.swift`:
 
@@ -1411,7 +1411,7 @@ struct StatusCardDisplayModel: Equatable, Sendable {
 }
 ```
 
-- [ ] **Step 3: Use display model in the SwiftUI card**
+- [x] **Step 3: Use display model in the SwiftUI card**
 
 Replace `apps/mac/Sources/WhatTheTokenMac/Views/StatusCardView.swift` with:
 
@@ -1455,7 +1455,7 @@ struct StatusCardView: View {
 }
 ```
 
-- [ ] **Step 4: Expose fixture data loading through the view model**
+- [x] **Step 4: Expose fixture data loading through the view model**
 
 Replace `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift` with:
 
@@ -1498,7 +1498,7 @@ enum FixtureError: Error {
 }
 ```
 
-- [ ] **Step 5: Rename fixture decoding test and add explicit safety scan**
+- [x] **Step 5: Rename fixture decoding test and add explicit safety scan**
 
 Replace `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift` with:
 
@@ -1536,7 +1536,7 @@ import Testing
 }
 ```
 
-- [ ] **Step 6: Run Swift tests**
+- [x] **Step 6: Run Swift tests**
 
 Run:
 
@@ -1547,7 +1547,7 @@ swift test
 
 Expected: PASS with the fixture decoding, fixture safety, and display model tests.
 
-- [ ] **Step 7: Build Swift app**
+- [x] **Step 7: Build Swift app**
 
 Run:
 
@@ -1558,7 +1558,7 @@ swift build
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/mac

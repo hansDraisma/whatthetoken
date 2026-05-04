@@ -101,4 +101,52 @@ describe("usage schemas", () => {
       })
     ).toThrow();
   });
+
+  it("rejects stale snapshots without a stale reason", () => {
+    expect(() =>
+      usageSnapshotSchema.parse({
+        id: "snap_stale_without_reason",
+        userAccountId: "user_01",
+        provider: "anthropic",
+        product: "claude_code",
+        surface: "cli",
+        poolKey: "anthropic_claude_subscription",
+        windowKey: "five_hour",
+        unit: "utilization",
+        used: 62,
+        limit: 100,
+        remaining: 38,
+        utilization: 0.62,
+        resetAt: "2026-05-04T15:00:00.000Z",
+        lastUpdatedAt: "2026-05-04T10:00:00.000Z",
+        confidence: "stale",
+        undercountRisk: "possible",
+        staleReason: null
+      })
+    ).toThrow();
+  });
+
+  it("rejects non-stale snapshots with a stale reason", () => {
+    expect(() =>
+      usageSnapshotSchema.parse({
+        id: "snap_fresh_with_reason",
+        userAccountId: "user_01",
+        provider: "anthropic",
+        product: "claude_code",
+        surface: "cli",
+        poolKey: "anthropic_claude_subscription",
+        windowKey: "five_hour",
+        unit: "utilization",
+        used: 62,
+        limit: 100,
+        remaining: 38,
+        utilization: 0.62,
+        resetAt: "2026-05-04T15:00:00.000Z",
+        lastUpdatedAt: "2026-05-04T10:00:00.000Z",
+        confidence: "verified",
+        undercountRisk: "possible",
+        staleReason: "Last update was 12 minutes ago."
+      })
+    ).toThrow();
+  });
 });

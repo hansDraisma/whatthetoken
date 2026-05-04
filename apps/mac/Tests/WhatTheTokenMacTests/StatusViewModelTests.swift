@@ -8,4 +8,7 @@ import Testing
     #expect(snapshot.confidence == "verified")
     #expect(snapshot.remaining == 38)
     #expect(snapshot.staleReason == nil)
+    #expect(snapshot.source.connector == "manual_fixture")
+    #expect(snapshot.source.state == .connected)
+    #expect(snapshot.source.parserVersion == "fixture-v1")
 }

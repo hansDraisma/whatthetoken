@@ -1,0 +1,1602 @@
+# Phase 1 Core And Mac Counter Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build the foundation for a Mac-first developer AI consumption monitor by creating the shared quota domain package and a minimal SwiftUI status surface that renders a schema-valid usage snapshot.
+
+**Architecture:** `packages/core` owns provider/product/surface types, usage event schemas, usage snapshot schemas, confidence labels, stale detection, and snapshot derivation. `apps/mac` owns the native SwiftUI app shell and initially renders fixture-backed snapshot data that mirrors the shared contract. Provider ingestion for Codex CLI and Claude Code is planned as feasibility spikes after the contract and first UI path exist.
+
+**Tech Stack:** pnpm workspaces, TypeScript, Zod, Vitest, SwiftUI, Swift Package Manager, XCTest/Swift Testing where available.
+
+---
+
+## Constraints
+
+- Use SwiftUI for the Mac product direction.
+- Use TDD for behavior changes.
+- Keep prompt/response/conversation/session data out of all models, logs, fixtures, and tests.
+- Do not add Supabase, Next.js, or a browser extension in Phase 1.
+- Do not implement real provider ingestion until the schema, core logic, and first Mac rendering path exist.
+
+## File Structure
+
+Create or modify these files:
+
+- Create: `package.json` - root workspace scripts.
+- Create: `pnpm-workspace.yaml` - workspace package map.
+- Create: `tsconfig.base.json` - shared TypeScript compiler defaults.
+- Create: `packages/core/package.json` - core package scripts and dependencies.
+- Create: `packages/core/tsconfig.json` - core package TypeScript config.
+- Create: `packages/core/vitest.config.ts` - Vitest config.
+- Create: `packages/core/src/index.ts` - public exports.
+- Create: `packages/core/src/types.ts` - provider/product/surface and confidence types.
+- Create: `packages/core/src/schemas.ts` - Zod schemas for events and snapshots.
+- Create: `packages/core/src/staleness.ts` - stale detection logic.
+- Create: `packages/core/src/snapshots.ts` - snapshot derivation helpers.
+- Create: `packages/core/src/fixtures.ts` - safe fixture builders.
+- Create: `packages/core/src/fixture-files.ts` - reusable fixture JSON constants for app contract tests.
+- Create: `packages/core/src/__tests__/schemas.test.ts` - schema tests.
+- Create: `packages/core/src/__tests__/staleness.test.ts` - stale detection tests.
+- Create: `packages/core/src/__tests__/snapshots.test.ts` - snapshot derivation tests.
+- Create: `packages/core/src/__tests__/mac-fixture-contract.test.ts` - validates the Swift fixture against the shared Zod schema.
+- Create: `apps/mac/Package.swift` - Swift package for the Mac app target.
+- Create: `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift` - SwiftUI app entry.
+- Create: `apps/mac/Sources/WhatTheTokenMac/Models/UsageSnapshot.swift` - Swift model mirroring the Phase 1 snapshot contract.
+- Create: `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift` - view model with fixture loading.
+- Create: `apps/mac/Sources/WhatTheTokenMac/Views/StatusCardView.swift` - reusable quota/status card.
+- Create: `apps/mac/Sources/WhatTheTokenMac/Views/ContentView.swift` - app content root.
+- Create: `apps/mac/Sources/WhatTheTokenMac/Resources/usage-snapshot.fixture.json` - safe local fixture.
+- Create: `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift` - Swift model/view-model tests.
+- Create: `docs/research/codex-cli-local-signal-spike.md` - Codex CLI feasibility findings.
+- Create: `docs/research/claude-code-local-signal-spike.md` - Claude Code feasibility findings.
+- Modify: `.gitignore` - add Node, Swift, and Xcode build outputs.
+- Modify: `docs/agent/operating-rules.md` - keep SwiftUI direction and TDD rules visible.
+- Modify: `docs/architecture/tech-stack-and-development-approach.md` - keep stack decisions current if implementation reveals a necessary adjustment.
+
+## Task 1: Root Workspace Foundation
+
+**Files:**
+- Create: `package.json`
+- Create: `pnpm-workspace.yaml`
+- Create: `tsconfig.base.json`
+- Modify: `.gitignore`
+
+- [ ] **Step 1: Write root workspace files**
+
+Create `package.json`:
+
+```json
+{
+  "name": "whatthetoken",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "check": "pnpm typecheck && pnpm test && pnpm lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}
+```
+
+Create `pnpm-workspace.yaml`:
+
+```yaml
+packages:
+  - "packages/*"
+  - "apps/*"
+```
+
+Create `tsconfig.base.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
+```
+
+Update `.gitignore` to include:
+
+```gitignore
+.superpowers/
+.DS_Store
+node_modules/
+dist/
+coverage/
+.turbo/
+.pnpm-store/
+.build/
+DerivedData/
+*.xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+```
+
+- [ ] **Step 2: Install workspace dependencies**
+
+Run:
+
+```bash
+pnpm install
+```
+
+Expected: lockfile created successfully.
+
+- [ ] **Step 3: Run root check and capture expected initial failure**
+
+Run:
+
+```bash
+pnpm check
+```
+
+Expected: this may fail because no workspace package exists yet. If it fails only due to no package-level scripts, continue to Task 2.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add package.json pnpm-workspace.yaml tsconfig.base.json .gitignore pnpm-lock.yaml
+git commit -m "chore: scaffold workspace"
+```
+
+## Task 2: Core Package Schemas
+
+**Files:**
+- Create: `packages/core/package.json`
+- Create: `packages/core/tsconfig.json`
+- Create: `packages/core/vitest.config.ts`
+- Create: `packages/core/src/index.ts`
+- Create: `packages/core/src/types.ts`
+- Create: `packages/core/src/schemas.ts`
+- Test: `packages/core/src/__tests__/schemas.test.ts`
+
+- [ ] **Step 1: Write failing schema tests**
+
+Create `packages/core/src/__tests__/schemas.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { usageEventSchema, usageSnapshotSchema } from "../schemas";
+
+describe("usage schemas", () => {
+  it("accepts a sanitized Codex CLI usage event", () => {
+    const parsed = usageEventSchema.parse({
+      id: "evt_01",
+      userAccountId: "user_01",
+      deviceId: "device_mac_01",
+      providerAccountId: "openai_personal",
+      provider: "openai",
+      product: "codex",
+      surface: "cli",
+      eventType: "agent_run_started",
+      modelKey: "gpt-5.3-codex",
+      count: 1,
+      observedAt: "2026-05-04T10:00:00.000Z",
+      confidence: "observed",
+      sourceVersion: "codex-cli-local-v1",
+      attribution: {
+        deviceName: "Hans MacBook",
+        os: "macos",
+        canMissOtherDevices: true
+      }
+    });
+
+    expect(parsed.product).toBe("codex");
+    expect(parsed.confidence).toBe("observed");
+  });
+
+  it("rejects prompt or conversation fields", () => {
+    expect(() =>
+      usageEventSchema.parse({
+        id: "evt_02",
+        userAccountId: "user_01",
+        deviceId: "device_mac_01",
+        providerAccountId: "openai_personal",
+        provider: "openai",
+        product: "codex",
+        surface: "cli",
+        eventType: "agent_run_started",
+        modelKey: "gpt-5.3-codex",
+        count: 1,
+        observedAt: "2026-05-04T10:00:00.000Z",
+        confidence: "observed",
+        sourceVersion: "codex-cli-local-v1",
+        prompt: "do not collect this",
+        attribution: {
+          os: "macos",
+          canMissOtherDevices: true
+        }
+      })
+    ).toThrow();
+  });
+
+  it("accepts a pool-aware Claude Code snapshot", () => {
+    const parsed = usageSnapshotSchema.parse({
+      id: "snap_01",
+      userAccountId: "user_01",
+      provider: "anthropic",
+      product: "claude_code",
+      surface: "cli",
+      poolKey: "anthropic_claude_subscription",
+      windowKey: "five_hour",
+      unit: "utilization",
+      used: 62,
+      limit: 100,
+      remaining: 38,
+      utilization: 0.62,
+      resetAt: "2026-05-04T15:00:00.000Z",
+      lastUpdatedAt: "2026-05-04T10:00:00.000Z",
+      confidence: "verified",
+      undercountRisk: "possible",
+      staleReason: null
+    });
+
+    expect(parsed.poolKey).toBe("anthropic_claude_subscription");
+    expect(parsed.confidence).toBe("verified");
+  });
+
+  it("rejects inconsistent snapshot math", () => {
+    expect(() =>
+      usageSnapshotSchema.parse({
+        id: "snap_bad_math",
+        userAccountId: "user_01",
+        provider: "anthropic",
+        product: "claude_code",
+        surface: "cli",
+        poolKey: "anthropic_claude_subscription",
+        windowKey: "five_hour",
+        unit: "utilization",
+        used: 62,
+        limit: 100,
+        remaining: -4,
+        utilization: 2,
+        resetAt: "2026-05-04T15:00:00.000Z",
+        lastUpdatedAt: "2026-05-04T10:00:00.000Z",
+        confidence: "verified",
+        undercountRisk: "possible",
+        staleReason: null
+      })
+    ).toThrow();
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run:
+
+```bash
+pnpm --filter @whatthetoken/core test -- schemas.test.ts
+```
+
+Expected: FAIL because `@whatthetoken/core`, schemas, and test config do not exist yet.
+
+- [ ] **Step 3: Add package config**
+
+Create `packages/core/package.json`:
+
+```json
+{
+  "name": "@whatthetoken/core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "vitest": "^4.0.0"
+  }
+}
+```
+
+Create `packages/core/tsconfig.json`:
+
+```json
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true
+  },
+  "include": ["src"]
+}
+```
+
+Create `packages/core/vitest.config.ts`:
+
+```ts
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts"]
+  }
+});
+```
+
+- [ ] **Step 4: Add schema implementation**
+
+Create `packages/core/src/types.ts`:
+
+```ts
+export type Provider = "openai" | "anthropic" | "google" | "cursor" | "github";
+
+export type Product =
+  | "codex"
+  | "chatgpt"
+  | "claude_code"
+  | "claude"
+  | "gemini"
+  | "cursor"
+  | "github_copilot";
+
+export type Surface =
+  | "cli"
+  | "web"
+  | "browser_extension"
+  | "desktop_app"
+  | "ide"
+  | "cloud_agent"
+  | "mobile";
+
+export type UsageConfidence = "verified" | "observed" | "estimated" | "stale";
+export type UsageUnit = "messages" | "requests" | "tokens" | "credits" | "utilization";
+export type UndercountRisk = "none" | "possible" | "likely";
+```
+
+Create `packages/core/src/schemas.ts`:
+
+```ts
+import { z } from "zod";
+
+export const providerSchema = z.enum(["openai", "anthropic", "google", "cursor", "github"]);
+export const productSchema = z.enum([
+  "codex",
+  "chatgpt",
+  "claude_code",
+  "claude",
+  "gemini",
+  "cursor",
+  "github_copilot"
+]);
+export const surfaceSchema = z.enum([
+  "cli",
+  "web",
+  "browser_extension",
+  "desktop_app",
+  "ide",
+  "cloud_agent",
+  "mobile"
+]);
+export const confidenceSchema = z.enum(["verified", "observed", "estimated", "stale"]);
+export const usageUnitSchema = z.enum(["messages", "requests", "tokens", "credits", "utilization"]);
+export const undercountRiskSchema = z.enum(["none", "possible", "likely"]);
+
+export const attributionSchema = z
+  .object({
+    deviceName: z.string().min(1).optional(),
+    os: z.enum(["macos", "windows", "linux", "ios", "android", "unknown"]).optional(),
+    browser: z.enum(["chrome", "edge", "brave", "firefox", "safari", "unknown"]).optional(),
+    canMissOtherDevices: z.boolean()
+  })
+  .strict();
+
+export const usageEventSchema = z
+  .object({
+    id: z.string().min(1),
+    userAccountId: z.string().min(1),
+    deviceId: z.string().min(1),
+    providerAccountId: z.string().min(1).nullable(),
+    provider: providerSchema,
+    product: productSchema,
+    surface: surfaceSchema,
+    eventType: z.enum(["message_sent", "agent_run_started", "agent_run_finished", "quota_polled"]),
+    modelKey: z.string().min(1).nullable(),
+    count: z.number().nonnegative(),
+    observedAt: z.string().datetime(),
+    confidence: confidenceSchema,
+    sourceVersion: z.string().min(1),
+    attribution: attributionSchema
+  })
+  .strict();
+
+export const usageSnapshotSchema = z
+  .object({
+    id: z.string().min(1),
+    userAccountId: z.string().min(1),
+    provider: providerSchema,
+    product: productSchema,
+    surface: z.union([surfaceSchema, z.literal("aggregate")]),
+    poolKey: z.string().min(1),
+    windowKey: z.string().min(1),
+    unit: usageUnitSchema,
+    used: z.number().nonnegative().nullable(),
+    limit: z.number().positive().nullable(),
+    remaining: z.number().nonnegative().nullable(),
+    utilization: z.number().min(0).nullable(),
+    resetAt: z.string().datetime().nullable(),
+    lastUpdatedAt: z.string().datetime(),
+    confidence: confidenceSchema,
+    undercountRisk: undercountRiskSchema,
+    staleReason: z.string().min(1).nullable()
+  })
+  .strict()
+  .superRefine((snapshot, context) => {
+    if (snapshot.used !== null && snapshot.limit !== null) {
+      const expectedRemaining = Math.max(snapshot.limit - snapshot.used, 0);
+      const expectedUtilization = snapshot.used / snapshot.limit;
+
+      if (snapshot.remaining !== expectedRemaining) {
+        context.addIssue({
+          code: "custom",
+          path: ["remaining"],
+          message: "remaining must equal max(limit - used, 0)"
+        });
+      }
+
+      if (snapshot.utilization !== expectedUtilization) {
+        context.addIssue({
+          code: "custom",
+          path: ["utilization"],
+          message: "utilization must equal used / limit"
+        });
+      }
+    }
+
+    if ((snapshot.used === null || snapshot.limit === null) && snapshot.remaining !== null) {
+      context.addIssue({
+        code: "custom",
+        path: ["remaining"],
+        message: "remaining must be null when used or limit is unknown"
+      });
+    }
+
+    if ((snapshot.used === null || snapshot.limit === null) && snapshot.utilization !== null) {
+      context.addIssue({
+        code: "custom",
+        path: ["utilization"],
+        message: "utilization must be null when used or limit is unknown"
+      });
+    }
+  });
+
+export type UsageEvent = z.infer<typeof usageEventSchema>;
+export type UsageSnapshot = z.infer<typeof usageSnapshotSchema>;
+```
+
+Create `packages/core/src/index.ts`:
+
+```ts
+export * from "./types";
+export * from "./schemas";
+```
+
+- [ ] **Step 5: Run schema tests**
+
+Run:
+
+```bash
+pnpm install
+pnpm --filter @whatthetoken/core test -- schemas.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 6: Run core typecheck**
+
+Run:
+
+```bash
+pnpm --filter @whatthetoken/core typecheck
+```
+
+Expected: PASS.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json packages/core
+git commit -m "feat(core): add usage schemas"
+```
+
+## Task 3: Staleness Logic
+
+**Files:**
+- Create: `packages/core/src/staleness.ts`
+- Test: `packages/core/src/__tests__/staleness.test.ts`
+- Modify: `packages/core/src/index.ts`
+
+- [ ] **Step 1: Write failing tests**
+
+Create `packages/core/src/__tests__/staleness.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { evaluateStaleness } from "../staleness";
+
+describe("evaluateStaleness", () => {
+  it("keeps fresh observed snapshots unchanged", () => {
+    const result = evaluateStaleness({
+      confidence: "observed",
+      lastUpdatedAt: "2026-05-04T10:00:00.000Z",
+      now: "2026-05-04T10:03:00.000Z",
+      staleAfterMinutes: 10
+    });
+
+    expect(result.confidence).toBe("observed");
+    expect(result.staleReason).toBeNull();
+  });
+
+  it("marks old snapshots as stale", () => {
+    const result = evaluateStaleness({
+      confidence: "verified",
+      lastUpdatedAt: "2026-05-04T10:00:00.000Z",
+      now: "2026-05-04T10:12:00.000Z",
+      staleAfterMinutes: 10
+    });
+
+    expect(result.confidence).toBe("stale");
+    expect(result.staleReason).toBe("Last update was 12 minutes ago.");
+  });
+
+  it("marks invalid timestamps as stale", () => {
+    const result = evaluateStaleness({
+      confidence: "verified",
+      lastUpdatedAt: "not-a-date",
+      now: "2026-05-04T10:12:00.000Z",
+      staleAfterMinutes: 10
+    });
+
+    expect(result.confidence).toBe("stale");
+    expect(result.staleReason).toBe("Last update timestamp is invalid.");
+  });
+
+  it("marks future timestamps as stale", () => {
+    const result = evaluateStaleness({
+      confidence: "observed",
+      lastUpdatedAt: "2026-05-04T10:13:00.000Z",
+      now: "2026-05-04T10:12:00.000Z",
+      staleAfterMinutes: 10
+    });
+
+    expect(result.confidence).toBe("stale");
+    expect(result.staleReason).toBe("Last update timestamp is in the future.");
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run:
+
+```bash
+pnpm --filter @whatthetoken/core test -- staleness.test.ts
+```
+
+Expected: FAIL because `evaluateStaleness` does not exist.
+
+- [ ] **Step 3: Implement staleness helper**
+
+Create `packages/core/src/staleness.ts`:
+
+```ts
+import type { UsageConfidence } from "./types";
+
+type EvaluateStalenessInput = {
+  confidence: Exclude<UsageConfidence, "stale">;
+  lastUpdatedAt: string;
+  now: string;
+  staleAfterMinutes: number;
+};
+
+type EvaluateStalenessResult = {
+  confidence: UsageConfidence;
+  staleReason: string | null;
+};
+
+export function evaluateStaleness(input: EvaluateStalenessInput): EvaluateStalenessResult {
+  const lastUpdatedMs = Date.parse(input.lastUpdatedAt);
+  const nowMs = Date.parse(input.now);
+
+  if (Number.isNaN(lastUpdatedMs) || Number.isNaN(nowMs)) {
+    return {
+      confidence: "stale",
+      staleReason: "Last update timestamp is invalid."
+    };
+  }
+
+  if (lastUpdatedMs > nowMs) {
+    return {
+      confidence: "stale",
+      staleReason: "Last update timestamp is in the future."
+    };
+  }
+
+  const ageMinutes = Math.floor((nowMs - lastUpdatedMs) / 60_000);
+
+  if (ageMinutes > input.staleAfterMinutes) {
+    return {
+      confidence: "stale",
+      staleReason: `Last update was ${ageMinutes} minutes ago.`
+    };
+  }
+
+  return {
+    confidence: input.confidence,
+    staleReason: null
+  };
+}
+```
+
+Update `packages/core/src/index.ts`:
+
+```ts
+export * from "./types";
+export * from "./schemas";
+export * from "./staleness";
+```
+
+- [ ] **Step 4: Run tests**
+
+Run:
+
+```bash
+pnpm --filter @whatthetoken/core test -- staleness.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Run core checks**
+
+Run:
+
+```bash
+pnpm --filter @whatthetoken/core typecheck
+pnpm --filter @whatthetoken/core test
+```
+
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/core/src/staleness.ts packages/core/src/index.ts packages/core/src/__tests__/staleness.test.ts
+git commit -m "feat(core): add staleness evaluation"
+```
+
+## Task 4: Snapshot Derivation
+
+**Files:**
+- Create: `packages/core/src/snapshots.ts`
+- Create: `packages/core/src/fixtures.ts`
+- Test: `packages/core/src/__tests__/snapshots.test.ts`
+- Modify: `packages/core/src/index.ts`
+
+- [ ] **Step 1: Write failing tests**
+
+Create `packages/core/src/__tests__/snapshots.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { createSnapshotFromQuotaPoll } from "../snapshots";
+
+describe("createSnapshotFromQuotaPoll", () => {
+  it("creates a verified Claude Code utilization snapshot", () => {
+    const snapshot = createSnapshotFromQuotaPoll({
+      id: "snap_claude_01",
+      userAccountId: "user_01",
+      provider: "anthropic",
+      product: "claude_code",
+      surface: "cli",
+      poolKey: "anthropic_claude_subscription",
+      windowKey: "five_hour",
+      unit: "utilization",
+      used: 62,
+      limit: 100,
+      resetAt: "2026-05-04T15:00:00.000Z",
+      lastUpdatedAt: "2026-05-04T10:00:00.000Z",
+      confidence: "verified",
+      undercountRisk: "possible"
+    });
+
+    expect(snapshot.remaining).toBe(38);
+    expect(snapshot.utilization).toBe(0.62);
+    expect(snapshot.staleReason).toBeNull();
+  });
+
+  it("supports observed Codex credit usage without a known hard limit", () => {
+    const snapshot = createSnapshotFromQuotaPoll({
+      id: "snap_codex_01",
+      userAccountId: "user_01",
+      provider: "openai",
+      product: "codex",
+      surface: "cli",
+      poolKey: "openai_codex_included_usage",
+      windowKey: "monthly",
+      unit: "credits",
+      used: 12.5,
+      limit: null,
+      resetAt: null,
+      lastUpdatedAt: "2026-05-04T10:00:00.000Z",
+      confidence: "observed",
+      undercountRisk: "possible"
+    });
+
+    expect(snapshot.remaining).toBeNull();
+    expect(snapshot.utilization).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run:
+
+```bash
+pnpm --filter @whatthetoken/core test -- snapshots.test.ts
+```
+
+Expected: FAIL because `createSnapshotFromQuotaPoll` does not exist.
+
+- [ ] **Step 3: Implement snapshot derivation**
+
+Create `packages/core/src/snapshots.ts`:
+
+```ts
+import type { Product, Provider, Surface, UndercountRisk, UsageConfidence, UsageUnit } from "./types";
+import type { UsageSnapshot } from "./schemas";
+
+type CreateSnapshotInput = {
+  id: string;
+  userAccountId: string;
+  provider: Provider;
+  product: Product;
+  surface: Surface | "aggregate";
+  poolKey: string;
+  windowKey: string;
+  unit: UsageUnit;
+  used: number | null;
+  limit: number | null;
+  resetAt: string | null;
+  lastUpdatedAt: string;
+  confidence: UsageConfidence;
+  undercountRisk: UndercountRisk;
+};
+
+export function createSnapshotFromQuotaPoll(input: CreateSnapshotInput): UsageSnapshot {
+  const remaining =
+    input.used === null || input.limit === null ? null : Math.max(input.limit - input.used, 0);
+
+  const utilization =
+    input.used === null || input.limit === null ? null : input.used / input.limit;
+
+  return {
+    ...input,
+    remaining,
+    utilization,
+    staleReason: null
+  };
+}
+```
+
+Create `packages/core/src/fixtures.ts`:
+
+```ts
+import { createSnapshotFromQuotaPoll } from "./snapshots";
+
+export function createClaudeCodeFixtureSnapshot() {
+  return createSnapshotFromQuotaPoll({
+    id: "snap_claude_fixture",
+    userAccountId: "fixture_user",
+    provider: "anthropic",
+    product: "claude_code",
+    surface: "cli",
+    poolKey: "anthropic_claude_subscription",
+    windowKey: "five_hour",
+    unit: "utilization",
+    used: 62,
+    limit: 100,
+    resetAt: "2026-05-04T15:00:00.000Z",
+    lastUpdatedAt: "2026-05-04T10:00:00.000Z",
+    confidence: "verified",
+    undercountRisk: "possible"
+  });
+}
+```
+
+Create `packages/core/src/fixture-files.ts`:
+
+```ts
+import { createClaudeCodeFixtureSnapshot } from "./fixtures";
+
+export const claudeCodeFixtureSnapshotJson = JSON.stringify(
+  createClaudeCodeFixtureSnapshot(),
+  null,
+  2
+);
+```
+
+Update `packages/core/src/index.ts`:
+
+```ts
+export * from "./types";
+export * from "./schemas";
+export * from "./staleness";
+export * from "./snapshots";
+export * from "./fixtures";
+export * from "./fixture-files";
+```
+
+- [ ] **Step 4: Run tests**
+
+Run:
+
+```bash
+pnpm --filter @whatthetoken/core test -- snapshots.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Run core checks**
+
+Run:
+
+```bash
+pnpm --filter @whatthetoken/core typecheck
+pnpm --filter @whatthetoken/core test
+```
+
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add packages/core/src/snapshots.ts packages/core/src/fixtures.ts packages/core/src/fixture-files.ts packages/core/src/index.ts packages/core/src/__tests__/snapshots.test.ts
+git commit -m "feat(core): derive usage snapshots"
+```
+
+## Task 5: SwiftUI Mac App Shell With Fixture Card
+
+**Files:**
+- Create: `apps/mac/Package.swift`
+- Create: `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift`
+- Create: `apps/mac/Sources/WhatTheTokenMac/Models/UsageSnapshot.swift`
+- Create: `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift`
+- Create: `apps/mac/Sources/WhatTheTokenMac/Views/StatusCardView.swift`
+- Create: `apps/mac/Sources/WhatTheTokenMac/Views/ContentView.swift`
+- Create: `apps/mac/Sources/WhatTheTokenMac/Resources/usage-snapshot.fixture.json`
+- Test: `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift`
+
+- [ ] **Step 1: Write failing Swift tests**
+
+Create `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift`:
+
+```swift
+import Testing
+@testable import WhatTheTokenMac
+
+@Test func loadsFixtureSnapshotWithoutSensitiveContent() throws {
+    let snapshot = try StatusViewModel.loadFixtureSnapshot()
+
+    #expect(snapshot.product == "claude_code")
+    #expect(snapshot.confidence == "verified")
+    #expect(snapshot.remaining == 38)
+    #expect(snapshot.staleReason == nil)
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run:
+
+```bash
+cd apps/mac
+swift test
+```
+
+Expected: FAIL because the Swift package and app code do not exist yet.
+
+- [ ] **Step 3: Add Swift package**
+
+Create `apps/mac/Package.swift`:
+
+```swift
+// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+    name: "WhatTheTokenMac",
+    platforms: [
+        .macOS(.v14)
+    ],
+    products: [
+        .executable(name: "WhatTheTokenMac", targets: ["WhatTheTokenMac"])
+    ],
+    targets: [
+        .executableTarget(
+            name: "WhatTheTokenMac",
+            resources: [
+                .process("Resources")
+            ]
+        ),
+        .testTarget(
+            name: "WhatTheTokenMacTests",
+            dependencies: ["WhatTheTokenMac"]
+        )
+    ]
+)
+```
+
+- [ ] **Step 4: Add Swift models and fixture**
+
+Create `apps/mac/Sources/WhatTheTokenMac/Models/UsageSnapshot.swift`:
+
+```swift
+import Foundation
+
+struct UsageSnapshot: Codable, Equatable, Sendable {
+    let id: String
+    let userAccountId: String
+    let provider: String
+    let product: String
+    let surface: String
+    let poolKey: String
+    let windowKey: String
+    let unit: String
+    let used: Double?
+    let limit: Double?
+    let remaining: Double?
+    let utilization: Double?
+    let resetAt: String?
+    let lastUpdatedAt: String
+    let confidence: String
+    let undercountRisk: String
+    let staleReason: String?
+}
+```
+
+Create `apps/mac/Sources/WhatTheTokenMac/Resources/usage-snapshot.fixture.json`:
+
+```json
+{
+  "id": "snap_claude_fixture",
+  "userAccountId": "fixture_user",
+  "provider": "anthropic",
+  "product": "claude_code",
+  "surface": "cli",
+  "poolKey": "anthropic_claude_subscription",
+  "windowKey": "five_hour",
+  "unit": "utilization",
+  "used": 62,
+  "limit": 100,
+  "remaining": 38,
+  "utilization": 0.62,
+  "resetAt": "2026-05-04T15:00:00.000Z",
+  "lastUpdatedAt": "2026-05-04T10:00:00.000Z",
+  "confidence": "verified",
+  "undercountRisk": "possible",
+  "staleReason": null
+}
+```
+
+- [ ] **Step 5: Add view model**
+
+Create `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift`:
+
+```swift
+import Foundation
+import Observation
+
+@Observable
+final class StatusViewModel {
+    var snapshots: [UsageSnapshot]
+
+    init(snapshots: [UsageSnapshot] = []) {
+        self.snapshots = snapshots
+    }
+
+    static func loadFixtureSnapshot() throws -> UsageSnapshot {
+        guard let url = Bundle.module.url(forResource: "usage-snapshot.fixture", withExtension: "json") else {
+            throw FixtureError.missingFixture
+        }
+
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(UsageSnapshot.self, from: data)
+    }
+
+    static func fixture() -> StatusViewModel {
+        do {
+            return StatusViewModel(snapshots: [try loadFixtureSnapshot()])
+        } catch {
+            return StatusViewModel(snapshots: [])
+        }
+    }
+}
+
+enum FixtureError: Error {
+    case missingFixture
+}
+```
+
+- [ ] **Step 6: Add SwiftUI views**
+
+Create `apps/mac/Sources/WhatTheTokenMac/Views/StatusCardView.swift`:
+
+```swift
+import SwiftUI
+
+struct StatusCardView: View {
+    let snapshot: UsageSnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(.headline)
+                Spacer()
+                Text(snapshot.confidence.capitalized)
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.secondary.opacity(0.14))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+
+            Text(primaryMetric)
+                .font(.system(size: 28, weight: .semibold))
+
+            ProgressView(value: snapshot.utilization ?? 0)
+                .progressViewStyle(.linear)
+
+            Text("Updated \(snapshot.lastUpdatedAt)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .frame(width: 320, alignment: .leading)
+    }
+
+    private var title: String {
+        "\(snapshot.provider.capitalized) / \(snapshot.product.replacingOccurrences(of: "_", with: " "))"
+    }
+
+    private var primaryMetric: String {
+        guard let remaining = snapshot.remaining else {
+            return "Usage observed"
+        }
+
+        switch snapshot.unit {
+        case "utilization":
+            return "\(Int(remaining))% remaining"
+        case "credits":
+            return "\(remaining.formatted()) credits remaining"
+        case "tokens":
+            return "\(Int(remaining)) tokens remaining"
+        case "requests":
+            return "\(Int(remaining)) requests remaining"
+        case "messages":
+            return "\(Int(remaining)) messages remaining"
+        default:
+            return "\(remaining.formatted()) remaining"
+        }
+    }
+}
+```
+
+Create `apps/mac/Sources/WhatTheTokenMac/Views/ContentView.swift`:
+
+```swift
+import SwiftUI
+
+struct ContentView: View {
+    let viewModel: StatusViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if viewModel.snapshots.isEmpty {
+                Text("No usage signal")
+                    .font(.headline)
+                    .padding()
+            } else {
+                ForEach(viewModel.snapshots, id: \.id) { snapshot in
+                    StatusCardView(snapshot: snapshot)
+                }
+            }
+        }
+        .padding()
+    }
+}
+```
+
+Create `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift`:
+
+```swift
+import SwiftUI
+
+@main
+struct WhatTheTokenApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView(viewModel: .fixture())
+        }
+    }
+}
+```
+
+- [ ] **Step 7: Run Swift tests**
+
+Run:
+
+```bash
+cd apps/mac
+swift test
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Build Swift app**
+
+Run:
+
+```bash
+cd apps/mac
+swift build
+```
+
+Expected: PASS on macOS with Swift 6 toolchain. If the local toolchain is older, lower `swift-tools-version` only after confirming available Swift version with `swift --version`.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add apps/mac
+git commit -m "feat(mac): render fixture usage status"
+```
+
+## Task 6: Mac Fixture Contract Test
+
+**Files:**
+- Test: `packages/core/src/__tests__/mac-fixture-contract.test.ts`
+- Modify: `apps/mac/Sources/WhatTheTokenMac/Resources/usage-snapshot.fixture.json`
+
+- [ ] **Step 1: Write failing contract test**
+
+Create `packages/core/src/__tests__/mac-fixture-contract.test.ts`:
+
+```ts
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { usageSnapshotSchema } from "../schemas";
+
+describe("Mac fixture contract", () => {
+  it("keeps the SwiftUI fixture valid against the shared snapshot schema", () => {
+    const testDir = dirname(fileURLToPath(import.meta.url));
+    const fixturePath = resolve(
+      testDir,
+      "../../../../apps/mac/Sources/WhatTheTokenMac/Resources/usage-snapshot.fixture.json"
+    );
+
+    const fixture = JSON.parse(readFileSync(fixturePath, "utf8"));
+    const parsed = usageSnapshotSchema.parse(fixture);
+
+    expect(parsed.product).toBe("claude_code");
+    expect(parsed.poolKey).toBe("anthropic_claude_subscription");
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify contract**
+
+Run:
+
+```bash
+pnpm --filter @whatthetoken/core test -- mac-fixture-contract.test.ts
+```
+
+Expected: PASS. If this fails, fix the Swift fixture JSON or shared schema before continuing.
+
+- [ ] **Step 3: Run all core tests**
+
+Run:
+
+```bash
+pnpm --filter @whatthetoken/core test
+```
+
+Expected: PASS.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add packages/core/src/__tests__/mac-fixture-contract.test.ts apps/mac/Sources/WhatTheTokenMac/Resources/usage-snapshot.fixture.json
+git commit -m "test(core): validate Mac fixture contract"
+```
+
+## Task 7: Privacy And Contract Documentation
+
+**Files:**
+- Create: `docs/architecture/data-contract.md`
+- Create: `docs/architecture/privacy-boundaries.md`
+- Modify: `docs/architecture/tech-stack-and-development-approach.md`
+
+- [ ] **Step 1: Write data contract doc**
+
+Create `docs/architecture/data-contract.md`:
+
+```md
+# Data Contract
+
+The product uses provider/product/surface as separate fields.
+
+Every usage snapshot must include:
+
+- provider
+- product
+- surface
+- poolKey
+- windowKey
+- unit
+- confidence
+- freshness
+- undercount risk
+
+Allowed units:
+
+- messages
+- requests
+- tokens
+- credits
+- utilization
+
+The shared TypeScript schemas in `packages/core/src/schemas.ts` are the source of truth for event and snapshot shape during Phase 1.
+```
+
+- [ ] **Step 2: Write privacy boundaries doc**
+
+Create `docs/architecture/privacy-boundaries.md`:
+
+```md
+# Privacy Boundaries
+
+WhatTheToken must never collect:
+
+- prompts
+- completions
+- conversation content
+- conversation URLs
+- cookies
+- auth headers
+- bearer tokens
+- provider session tokens
+- browser request bodies
+
+Allowed usage data:
+
+- provider
+- product
+- surface
+- model key when detectable
+- event type
+- count, utilization, request, token, or credit amount
+- observed timestamp
+- device identifier
+- confidence level
+- source/parser version
+- sync/error status
+
+Any future change to these boundaries requires an ADR.
+```
+
+- [ ] **Step 3: Run documentation grep**
+
+Run:
+
+```bash
+rg -n "prompt|completion|cookie|token|auth header|session" docs packages apps
+```
+
+Expected: Any matches are in privacy rules, tests that reject sensitive fields, or source references. There should be no fixture containing real prompt/response/session content.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add docs/architecture
+git commit -m "docs: define data and privacy boundaries"
+```
+
+## Task 8: Codex CLI Local Signal Feasibility Spike
+
+**Files:**
+- Create: `docs/research/codex-cli-local-signal-spike.md`
+
+- [ ] **Step 1: Create research directory**
+
+Run:
+
+```bash
+mkdir -p docs/research
+```
+
+Expected: directory exists.
+
+- [ ] **Step 2: Check whether Codex CLI is installed**
+
+Run:
+
+```bash
+if command -v codex >/dev/null 2>&1; then
+  command -v codex
+  codex --version
+  codex --help
+else
+  echo "codex CLI not installed"
+fi
+```
+
+Expected: command output identifies whether Codex CLI exists locally. Absence is an acceptable finding. Do not paste auth tokens, prompts, logs, or session contents into docs.
+
+- [ ] **Step 3: Inspect non-sensitive Codex local metadata locations**
+
+Run these only if the paths exist:
+
+```bash
+if [ -d "$HOME/.codex" ]; then
+  ls -la "$HOME/.codex"
+  find "$HOME/.codex" -maxdepth 2 -type f \( -name "*.json" -o -name "*.toml" -o -name "*.yaml" -o -name "*.yml" -o -name "*.sqlite" -o -name "*.db" \)
+else
+  echo "~/.codex does not exist"
+fi
+```
+
+Expected: identify candidate config or usage metadata files. Do not print file contents yet unless the filename and purpose are clearly non-sensitive. If unsure, record the filename only.
+
+- [ ] **Step 4: Write findings**
+
+Create `docs/research/codex-cli-local-signal-spike.md`:
+
+```md
+# Codex CLI Local Signal Spike
+
+Date: 2026-05-04
+
+## Goal
+
+Determine whether WhatTheToken can observe useful Codex CLI consumption signals locally without collecting prompts, responses, cookies, bearer tokens, auth headers, or provider session tokens.
+
+## Commands Run
+
+- `which codex`
+- `codex --version`
+- `codex --help`
+- `ls -la ~/.codex`
+- `find ~/.codex -maxdepth 2 -type f \( ... \)`
+
+## Findings
+
+Record:
+
+- Whether Codex CLI is installed.
+- Version.
+- Relevant subcommands.
+- Candidate local metadata files by path only.
+- Whether any candidate appears safe to parse.
+
+## Sensitive Data Review
+
+Record whether any inspected path appears likely to contain:
+
+- prompts
+- responses
+- auth credentials
+- session tokens
+- conversation content
+
+Do not copy sensitive contents into this document.
+
+## Recommendation
+
+Choose one:
+
+- Safe to implement local Codex observer next.
+- Needs manual user permission and redaction review.
+- Not viable locally; use another surface first.
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add docs/research/codex-cli-local-signal-spike.md
+git commit -m "docs: record Codex CLI signal spike"
+```
+
+## Task 9: Claude Code Local Signal Feasibility Spike
+
+**Files:**
+- Create: `docs/research/claude-code-local-signal-spike.md`
+
+- [ ] **Step 1: Check whether Claude Code is installed**
+
+Run:
+
+```bash
+if command -v claude >/dev/null 2>&1; then
+  command -v claude
+  claude --version
+  claude --help
+else
+  echo "Claude Code CLI not installed"
+fi
+```
+
+Expected: command output identifies whether Claude Code exists locally. Absence is an acceptable finding.
+
+- [ ] **Step 2: Check non-secret credential presence without reading values**
+
+Run:
+
+```bash
+security find-generic-password -s "Claude Code-credentials"
+```
+
+Expected: command may show metadata or may fail if the Keychain item is absent. Do not run `security find-generic-password -g`; that can print secret material.
+
+- [ ] **Step 3: Inspect non-sensitive Claude local metadata locations**
+
+Run these only if the paths exist:
+
+```bash
+if [ -d "$HOME/.claude" ]; then
+  ls -la "$HOME/.claude"
+  find "$HOME/.claude" -maxdepth 2 -type f \( -name "*.json" -o -name "*.toml" -o -name "*.yaml" -o -name "*.yml" -o -name "*.sqlite" -o -name "*.db" \)
+else
+  echo "~/.claude does not exist"
+fi
+```
+
+Expected: identify candidate config or usage metadata files. Do not print file contents yet unless the filename and purpose are clearly non-sensitive. If unsure, record the filename only.
+
+- [ ] **Step 4: Write findings**
+
+Create `docs/research/claude-code-local-signal-spike.md`:
+
+```md
+# Claude Code Local Signal Spike
+
+Date: 2026-05-04
+
+## Goal
+
+Determine whether WhatTheToken can observe useful Claude Code subscription or usage signals locally without collecting prompts, responses, cookies, bearer tokens, auth headers, provider session tokens, or Keychain secret values.
+
+## Commands Run
+
+- `which claude`
+- `claude --version`
+- `claude --help`
+- `security find-generic-password -s "Claude Code-credentials"`
+- `ls -la ~/.claude`
+- `find ~/.claude -maxdepth 2 -type f \( ... \)`
+
+## Findings
+
+Record:
+
+- Whether Claude Code is installed.
+- Version.
+- Relevant subcommands.
+- Whether the Keychain item exists.
+- Candidate local metadata files by path only.
+- Whether Claude Code exposes a safe status command.
+
+## Sensitive Data Review
+
+Record whether any inspected path appears likely to contain:
+
+- prompts
+- responses
+- auth credentials
+- session tokens
+- conversation content
+- Keychain secret values
+
+Do not copy sensitive contents into this document.
+
+## Recommendation
+
+Choose one:
+
+- Safe to implement Claude Code usage poller next.
+- Needs manual user permission and redaction review.
+- Not viable locally; use another surface first.
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add docs/research/claude-code-local-signal-spike.md
+git commit -m "docs: record Claude Code signal spike"
+```
+
+## Task 10: Full Phase 1 Verification
+
+**Files:**
+- No new files.
+
+- [ ] **Step 1: Run TypeScript checks**
+
+Run:
+
+```bash
+pnpm check
+```
+
+Expected: PASS.
+
+- [ ] **Step 2: Run Swift checks**
+
+Run:
+
+```bash
+cd apps/mac
+swift test
+swift build
+```
+
+Expected: PASS.
+
+- [ ] **Step 3: Run privacy grep**
+
+Run:
+
+```bash
+rg -n "prompt|completion|cookie|bearer|auth header|session token|conversation" packages apps
+```
+
+Expected: No matches except test strings that intentionally verify sensitive fields are rejected.
+
+- [ ] **Step 4: Review working tree**
+
+Run:
+
+```bash
+git status --short
+```
+
+Expected: clean working tree after commits, or only intentional uncommitted planning docs if commits were skipped by instruction.
+
+## Phase 1 Completion Criteria
+
+Phase 1 is complete when:
+
+- `packages/core` has schema, stale detection, and snapshot derivation tests passing.
+- The SwiftUI Mac app compiles and renders one fixture-backed usage card.
+- Codex CLI and Claude Code feasibility spikes are documented.
+- The fixture contains no sensitive user data.
+- The tech stack and development approach doc exists.
+- Privacy boundaries are documented.
+- The implementation still excludes Supabase, web dashboard, browser extension, iOS, payments, and production analytics.

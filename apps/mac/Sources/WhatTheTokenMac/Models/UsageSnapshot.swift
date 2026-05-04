@@ -18,4 +18,5 @@ struct UsageSnapshot: Codable, Equatable, Sendable {
     let confidence: String
     let undercountRisk: String
     let staleReason: String?
+    let source: ConnectorSource
 }

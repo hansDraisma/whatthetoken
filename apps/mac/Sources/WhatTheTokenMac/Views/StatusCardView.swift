@@ -23,6 +23,14 @@ struct StatusCardView: View {
             ProgressView(value: snapshot.utilization ?? 0)
                 .progressViewStyle(.linear)
 
+            Text(StatusCardCopy.sourceLine(for: snapshot))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text(StatusCardCopy.riskLine(for: snapshot))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             Text("Updated \(snapshot.lastUpdatedAt)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -53,6 +61,25 @@ struct StatusCardView: View {
             return "\(Int(remaining)) messages remaining"
         default:
             return "\(remaining.formatted()) remaining"
+        }
+    }
+}
+
+enum StatusCardCopy {
+    static func sourceLine(for snapshot: UsageSnapshot) -> String {
+        "\(snapshot.confidence.capitalized) by \(snapshot.source.label)"
+    }
+
+    static func riskLine(for snapshot: UsageSnapshot) -> String {
+        switch snapshot.undercountRisk {
+        case "none":
+            return "No undercount risk"
+        case "possible":
+            return "Undercount possible"
+        case "likely":
+            return "Undercount likely"
+        default:
+            return "Undercount risk unknown"
         }
     }
 }

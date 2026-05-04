@@ -12,7 +12,7 @@ The product promise is:
 
 ## Context
 
-The current product direction is developer-first and local-first. Claude Code and Codex are the first priority products, with ChatGPT and Gemini browser counters later. The repo already has:
+The current product direction is developer-first and local-first. Claude Code is the first implementation target; Codex is the next developer priority after its local metadata and redaction review. ChatGPT and Gemini browser counters come later. The repo already has:
 
 - shared `UsageEvent` and `UsageSnapshot` schemas in `packages/core`
 - a fixture-backed SwiftUI Mac status surface
@@ -43,7 +43,7 @@ The user should see one product with multiple connected sources, not separate da
 Surfaces display status. They should not define provider-specific collection behavior.
 
 - Chrome extension: primary compact dashboard, browser assistant ingestor, connector onboarding.
-- Mac connector: local Claude Code and Codex ingestor, optional menu bar status surface.
+- Mac connector: local Claude Code ingestor now, Codex ingestor later after redaction review, optional menu bar status surface.
 - Web dashboard: account, device, diagnostics, and larger status history surface after sync exists.
 
 ### Ingestors
@@ -51,7 +51,7 @@ Surfaces display status. They should not define provider-specific collection beh
 Ingestors collect signals and produce sanitized snapshots.
 
 - Claude Code local connector: uses local Claude Code credential in memory to poll Anthropic usage.
-- Codex local connector: observes approved local Codex metadata or invocation state after schema review.
+- Codex local connector: later observes approved local Codex metadata or invocation state only after schema review.
 - Browser extension counters: observe send/model activity on supported provider websites and produce estimated browser snapshots.
 
 ### Shared Store
@@ -117,6 +117,14 @@ Expected useful response fields:
 - `extra_usage.utilization`
 
 Because this endpoint is undocumented, the connector must isolate the parser, expose parser version and health, and degrade to a stale/broken-source state when the response shape changes.
+
+Current implementation decisions:
+
+- `five_hour`, `seven_day`, `seven_day_opus`, and `seven_day_sonnet` map to `anthropic_claude_subscription` utilization snapshots.
+- Enabled `extra_usage` with `used_credits` and `monthly_limit` maps to an `anthropic_claude_extra_usage` credits snapshot.
+- Disabled or incomplete `extra_usage` records are ignored rather than converted into estimated limits.
+- Claude Code version is provided to the request factory by a version provider, not hardcoded in the connector service.
+- Keychain lookup is isolated behind a command runner with a timeout so local credential access cannot block refresh indefinitely.
 
 ## Unified Status UI
 
@@ -200,6 +208,8 @@ Test layers:
 - parser fixtures for successful full and minimal Anthropic usage responses
 - parser fixtures for missing critical fields
 - mapping tests from Anthropic usage response to `UsageSnapshot`
+- client tests for subscription-window and extra-usage-only success responses
+- credential-store tests using synthetic command output only
 - redaction tests for diagnostics
 - source-state tests for missing credential, invalid token, rate limit, network error, and schema change
 - schema contract tests to ensure synced snapshots contain only allowed fields
@@ -222,6 +232,8 @@ Avoid:
 - "We never access credentials."
 - "Fully private" without explaining what is synced.
 - hiding confidence or freshness in settings.
+
+Reason: the local connector may access provider credentials in memory on the user's device. The accurate trust claim is that credentials stay local and are not uploaded, synced, logged, copied into fixtures, or exposed to the browser extension.
 
 ## Implementation Decisions
 

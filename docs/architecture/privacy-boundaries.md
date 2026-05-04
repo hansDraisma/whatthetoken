@@ -32,6 +32,8 @@ The Mac connector exists to keep provider credentials on the user's device.
 
 For Claude Code, the connector may read the local Claude Code Keychain item with explicit user consent and use the OAuth access token in memory to request usage status from Anthropic. The token must not be uploaded, synced, logged, copied into fixtures, exposed to the Chrome extension, or stored by WhatTheToken.
 
+The current Mac implementation isolates Keychain access behind a local command runner. The runner invokes `/usr/bin/security find-generic-password -s "Claude Code-credentials" -w`, bounds the lookup with a timeout, and returns either command output or a local connector error. The credential parser extracts only `claudeAiOauth.accessToken`; all persisted and synced output remains limited to sanitized snapshot data.
+
 The product benefit is not "we never touch credentials anywhere." The accurate claim is:
 
 > Provider credentials stay local. WhatTheToken syncs only sanitized usage status.
@@ -46,6 +48,7 @@ Ship these controls from the start:
 - no backend storage of provider credentials
 - no Chrome extension access to local Keychain values
 - no local or remote logging of tokens, prompts, responses, or session contents
+- bounded local credential lookup so connector refresh cannot hang indefinitely
 - fixture-based tests only, with synthetic usage data
 - confidence, freshness, and source labels on every status value
 

@@ -25,6 +25,40 @@ Allowed units:
 
 The shared TypeScript schemas in `packages/core/src/schemas.ts` are the source of truth for event and snapshot shape during Phase 1.
 
+## Claude Code Snapshot Mapping
+
+The Mac connector maps Claude Code usage into sanitized `UsageSnapshot` records.
+
+Subscription utilization windows use:
+
+- `provider`: `anthropic`
+- `product`: `claude_code`
+- `surface`: `cli`
+- `poolKey`: `anthropic_claude_subscription`
+- `unit`: `utilization`
+- `limit`: `100`
+- `used`: the provider utilization percentage
+- `remaining`: `max(100 - used, 0)`
+- `confidence`: `verified`
+
+Supported window keys:
+
+- `five_hour`
+- `seven_day`
+- `seven_day_opus`
+- `seven_day_sonnet`
+
+Enabled extra usage credits use:
+
+- `poolKey`: `anthropic_claude_extra_usage`
+- `windowKey`: `monthly_extra_usage`
+- `unit`: `credits`
+- `used`: `extra_usage.used_credits`
+- `limit`: `extra_usage.monthly_limit`
+- `remaining`: `max(limit - used, 0)`
+
+The connector must ignore disabled or incomplete extra-usage credit records rather than inventing a limit.
+
 ## Snapshot Source Metadata
 
 Every `UsageSnapshot` includes sanitized source metadata:

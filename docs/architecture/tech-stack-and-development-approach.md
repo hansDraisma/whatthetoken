@@ -6,7 +6,7 @@ Date: 2026-05-04
 
 WhatTheToken is a Mac-first developer consumption monitor for AI coding tools.
 
-V1 focuses on Codex CLI and Claude Code, then expands to browser assistants and other developer tools. The product should expose data to other touchpoints later, but those future surfaces must not force premature cross-platform desktop compromises.
+V1 starts with Claude Code because it has the clearest verified local usage path. Codex remains a high-priority developer product, but its connector comes after a dedicated local metadata and redaction review. Browser assistants and other developer tools expand the same shared status model later.
 
 ## Tech Stack
 
@@ -72,7 +72,7 @@ Avoid claims that are too broad:
 Phase 1 should create:
 
 - `packages/core`: TypeScript schemas and quota logic.
-- `apps/mac`: SwiftUI status app shell with a fixture-backed first quota card.
+- `apps/mac`: SwiftUI status app shell plus the first Claude Code local connector boundary.
 - `docs`: implementation notes, ADRs, and operating rules.
 
 Phase 1 should not create:
@@ -85,3 +85,17 @@ Phase 1 should not create:
 - Production analytics.
 
 Those are valuable, but they are not needed to prove the first Mac-visible developer quota/status signal.
+
+## Current Claude Connector Boundary
+
+The Mac app owns Claude-specific ingestion code under `apps/mac/Sources/WhatTheTokenMac/Claude`.
+
+The connector is responsible for:
+
+- reading the Claude Code Keychain credential locally only after opt-in
+- using the OAuth token in memory to request Anthropic usage
+- passing a detected or injected Claude Code version into the usage request
+- mapping `five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`, and enabled `extra_usage` credit data into sanitized snapshots
+- returning structured connector states for missing credentials, invalid tokens, rate limits, network errors, and schema changes
+
+Codex should follow the same connector/source model later, but no Codex files, auth state, prompts, responses, command history, shell snapshots, or session contents should be parsed before the Codex redaction review is complete.

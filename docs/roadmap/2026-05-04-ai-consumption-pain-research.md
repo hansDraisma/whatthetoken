@@ -280,7 +280,8 @@ The confidence model is not optional. It is the trust model.
 Build a Mac-first developer quota monitor:
 
 - SwiftUI menu bar app.
-- Local ingestors for Codex CLI and Claude Code first.
+- Claude Code local ingestor first.
+- Codex local ingestor later, only after a metadata and redaction review identifies a safe signal.
 - Shared TypeScript or documented core data contract for the web/extension layer.
 - Provider/product/surface taxonomy.
 - Confidence labels and freshness.
@@ -347,4 +348,3 @@ The top two can be swapped depending on feasibility. If Codex exposes cleaner lo
 - Gemini Apps limits: https://support.google.com/gemini/answer/16275805
 - Gemini CLI quotas: https://google-gemini.github.io/gemini-cli/docs/quota-and-pricing.html
 - Windsurf quota-based usage: https://docs.windsurf.com/windsurf/accounts/quota
-

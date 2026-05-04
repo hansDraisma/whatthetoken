@@ -14,7 +14,7 @@ V1 focuses on Codex CLI and Claude Code, then expands to browser assistants and 
 |---|---|---|
 | Mac app | SwiftUI | Best fit for a native menu bar/status app, Keychain, notifications, login items, and future Apple-platform touchpoints |
 | Shared domain core | TypeScript package | Fast TDD loop for quota math, schemas, confidence labels, stale detection, and future web/extension reuse |
-| Package manager | pnpm workspaces | Simple monorepo management for TypeScript packages and future web/extension apps |
+| Package manager | pnpm workspaces pinned with `packageManager: pnpm@10.0.0` | Simple monorepo management for TypeScript packages and future web/extension apps, with deterministic lockfile behavior across parallel worktrees |
 | TypeScript tests | Vitest | Fast unit tests for pure domain logic |
 | Type validation | Zod | Runtime validation for events, snapshots, and ingestor payloads |
 | Web dashboard later | Next.js | Good default for auth/dashboard when sync becomes active scope |
@@ -33,6 +33,13 @@ Use TDD for behavior changes:
 4. Run the focused test and confirm it passes.
 5. Run package-level checks.
 6. Commit a small coherent change.
+
+For workspace-foundation tasks:
+
+1. Verify the package manager before installing dependencies. `pnpm --version` must match the root `packageManager` declaration exactly.
+2. Use Corepack to activate the pinned pnpm version when the local version differs.
+3. Treat `pnpm-lock.yaml` as a reviewed source artifact. Inspect lockfile changes before committing.
+4. Treat root workspace scaffolding as a dependency barrier for parallel Conductor work. Core, Mac, documentation, and provider-spike worktrees should branch from a base that already includes the workspace scaffold.
 
 ## Architecture Rules
 
@@ -61,4 +68,3 @@ Phase 1 should not create:
 - Production analytics.
 
 Those are valuable, but they are not needed to prove the first Mac-visible developer quota/status signal.
-

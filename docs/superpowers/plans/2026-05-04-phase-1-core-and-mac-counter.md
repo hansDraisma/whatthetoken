@@ -55,11 +55,27 @@ Create or modify these files:
 
 ## Task 1: Root Workspace Foundation
 
+**Purpose:** Establish the monorepo contract that all later TypeScript, Swift, documentation, and research worktrees build on. This task is a dependency barrier: do not start Task 2 or any parallel worktrees until this task is merged or otherwise available as the base for those worktrees.
+
 **Files:**
 - Create: `package.json`
 - Create: `pnpm-workspace.yaml`
 - Create: `tsconfig.base.json`
 - Modify: `.gitignore`
+- Create: `pnpm-lock.yaml`
+
+**Non-goals:**
+- Do not create `packages/core`, `apps/mac`, provider ingestion code, app code, or documentation beyond the root workspace files listed above.
+- Do not add Supabase, Next.js, browser extension tooling, analytics, or build orchestration.
+- Do not commit unrelated formatting, generated files, local tool output, or machine-specific IDE metadata.
+
+**Acceptance criteria:**
+- `pnpm --version` is checked before install and must equal `10.0.0`, matching `packageManager: pnpm@10.0.0`; any mismatch is resolved with Corepack before continuing.
+- `pnpm install` creates or updates only the expected workspace dependency files, especially `pnpm-lock.yaml`.
+- `pnpm check` is run and its exact output is captured in the worker summary.
+- A `pnpm check` failure is acceptable only when it is caused by the intentional absence of package-level workspace scripts/packages at this stage. Any install, lockfile, TypeScript configuration, or unexpected script failure blocks Task 2.
+- `git status --short` shows only the intentional Task 1 files before commit.
+- Later parallel worktrees branch from a base that includes this task.
 
 - [ ] **Step 1: Write root workspace files**
 
@@ -125,7 +141,27 @@ DerivedData/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 ```
 
-- [ ] **Step 2: Install workspace dependencies**
+- [ ] **Step 2: Verify package-manager availability**
+
+Run:
+
+```bash
+pnpm --version
+```
+
+Expected: `pnpm --version` prints exactly `10.0.0`, matching `packageManager: pnpm@10.0.0`.
+
+If pnpm is missing or prints any other version, prefer Corepack:
+
+```bash
+corepack enable
+corepack prepare pnpm@10.0.0 --activate
+pnpm --version
+```
+
+Record the final `pnpm --version` output in the worker summary. Do not proceed if pnpm cannot be made available at exactly `10.0.0`.
+
+- [ ] **Step 3: Install workspace dependencies**
 
 Run:
 
@@ -135,7 +171,15 @@ pnpm install
 
 Expected: lockfile created successfully.
 
-- [ ] **Step 3: Run root check and capture expected initial failure**
+Review the resulting file set:
+
+```bash
+git status --short
+```
+
+Expected: only Task 1 files are new or modified. `pnpm-lock.yaml` should be the only generated dependency artifact. If `pnpm install` creates unrelated files or changes documentation/source files, stop and investigate before continuing.
+
+- [ ] **Step 4: Run root check and classify the result**
 
 Run:
 
@@ -143,14 +187,29 @@ Run:
 pnpm check
 ```
 
-Expected: this may fail because no workspace package exists yet. If it fails only due to no package-level scripts, continue to Task 2.
+Expected: this may fail because no workspace package exists yet. Capture the exact output in the worker summary.
 
-- [ ] **Step 4: Commit**
+Continue only if the failure is limited to the expected empty-workspace/no-package-scripts state. Stop if the failure points to package-manager setup, dependency resolution, lockfile corruption, TypeScript config parse errors, or any unexpected script behavior.
+
+- [ ] **Step 5: Final pre-commit review**
+
+Run:
+
+```bash
+git status --short
+git diff -- package.json pnpm-workspace.yaml tsconfig.base.json .gitignore pnpm-lock.yaml
+```
+
+Expected: only the root workspace contract files and `pnpm-lock.yaml` are staged or unstaged. The diff should not include package/app code, provider research, credentials, local logs, IDE state, or generated build outputs.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git add package.json pnpm-workspace.yaml tsconfig.base.json .gitignore pnpm-lock.yaml
 git commit -m "chore: scaffold workspace"
 ```
+
+After commit, hand off this branch as the base for Task 2, Task 5, Task 7, Task 8, and Task 9 worktrees. Do not let downstream worktrees start from a base that lacks this commit.
 
 ## Task 2: Core Package Schemas
 

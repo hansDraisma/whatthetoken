@@ -633,6 +633,12 @@ git commit -m "feat(core): add usage schemas"
 
 ## Task 3: Staleness Logic
 
+**Status:** Complete in `f45177b` (`feat(core): add staleness evaluation`) and reverified on 2026-05-04.
+
+**Verification evidence:**
+- `pnpm --filter @whatthetoken/core test -- staleness.test.ts` passed with 4 test files and 14 tests.
+- `pnpm check` passed.
+
 **Files:**
 - Create: `packages/core/src/staleness.ts`
 - Test: `packages/core/src/__tests__/staleness.test.ts`
@@ -797,6 +803,11 @@ git commit -m "feat(core): add staleness evaluation"
 ```
 
 ## Task 4: Snapshot Derivation
+
+**Status:** Complete in `ac6acff` (`feat(core): derive usage snapshots`) and reverified on 2026-05-04.
+
+**Verification evidence:**
+- `pnpm check` passed with core schema, staleness, snapshot, and Mac fixture contract tests.
 
 **Files:**
 - Create: `packages/core/src/snapshots.ts`
@@ -1620,6 +1631,13 @@ git commit -m "test(mac): cover fixture card display"
 
 ## Task 6: Mac Fixture Contract Test
 
+**Status:** Complete in `98dfc24` (`test(core): validate Mac fixture contract`) and reverified on 2026-05-04.
+
+**Verification evidence:**
+- `pnpm check` passed with the Mac fixture contract test included.
+- `cd apps/mac && swift test` passed with 5 Swift tests.
+- `cd apps/mac && swift build` passed.
+
 **Files:**
 - Test: `packages/core/src/__tests__/mac-fixture-contract.test.ts`
 - Modify: `apps/mac/Sources/WhatTheTokenMac/Resources/usage-snapshot.fixture.json`
@@ -1680,6 +1698,13 @@ git commit -m "test(core): validate Mac fixture contract"
 ```
 
 ## Task 7: Privacy And Contract Documentation
+
+**Status:** Complete in `3d8e7d9` (`docs: define data and privacy boundaries`) and expanded through the dedicated Task 7 plan in `5eb1d3b` and `5174627`.
+
+**Verification evidence:**
+- `docs/superpowers/specs/2026-05-04-task-7-privacy-contract-documentation-design.md` defines the documentation requirements.
+- `docs/superpowers/plans/2026-05-04-task-7-privacy-contract-documentation.md` defines the dedicated implementation plan.
+- `docs/architecture/data-contract.md`, `docs/architecture/privacy-boundaries.md`, `docs/architecture/tech-stack-and-development-approach.md`, and `docs/agent/operating-rules.md` are present and linked.
 
 **Files:**
 - Create: `docs/architecture/data-contract.md`
@@ -1772,6 +1797,10 @@ git commit -m "docs: define data and privacy boundaries"
 ```
 
 ## Task 8: Codex CLI Local Signal Feasibility Spike
+
+**Status:** Complete in `b45d08f` (`docs: record Codex CLI signal spike`).
+
+**Finding:** Local Codex paths likely contain useful metadata, but the next safe Codex step requires explicit redaction review before reading contents.
 
 **Files:**
 - Create: `docs/research/codex-cli-local-signal-spike.md`
@@ -1877,6 +1906,10 @@ git commit -m "docs: record Codex CLI signal spike"
 ```
 
 ## Task 9: Claude Code Local Signal Feasibility Spike
+
+**Status:** Complete in `8b421de` (`docs: record Claude Code signal spike`).
+
+**Finding:** Claude Code is installed and the `Claude Code-credentials` Keychain item exists, but the CLI exposes no safe quota/status command. `~/.claude/policy-limits.json` is the most promising local filename and still needs narrow redaction review before implementation uses it.
 
 **Files:**
 - Create: `docs/research/claude-code-local-signal-spike.md`
@@ -1986,6 +2019,15 @@ git commit -m "docs: record Claude Code signal spike"
 
 ## Task 10: Full Phase 1 Verification
 
+**Status:** Verified on 2026-05-04 after rebasing onto `origin/main`.
+
+**Verification evidence:**
+- `pnpm check` passed.
+- `cd apps/mac && swift test` passed with 5 Swift tests.
+- `cd apps/mac && swift build` passed.
+- `rg -n "prompt|completion|cookie|bearer|auth header|session token|conversation" packages apps docs` was reviewed. Matches are privacy rules, research notes, roadmap/spec text, or tests that intentionally reject sensitive fields; no fixture or app resource contains real sensitive provider data.
+- `git status --short` was clean before this plan update.
+
 **Files:**
 - No new files.
 
@@ -2042,3 +2084,20 @@ Phase 1 is complete when:
 - The tech stack and development approach doc exists.
 - Privacy boundaries are documented.
 - The implementation still excludes Supabase, web dashboard, browser extension, iOS, payments, and production analytics.
+
+## Claude Code Implementation Readiness
+
+The dedicated Claude Code local connector spec and implementation plan now exist:
+
+- `docs/superpowers/specs/2026-05-04-local-connector-trust-design.md`
+- `docs/superpowers/plans/2026-05-04-local-connector-trust.md`
+
+The implementation is present in `apps/mac/Sources/WhatTheTokenMac/Claude`, `apps/mac/Sources/WhatTheTokenMac/Connectors`, and the connector-source additions in `packages/core`.
+
+Pending before live local testing:
+
+- A developer-only smoke harness now exists behind the explicit `--claude-connector-smoke` flag and invokes `ClaudeConnectorService` with `ClaudeConnectorSettings(isEnabled: true)`.
+- The first live smoke was run locally on 2026-05-04 with `CLAUDE_CODE_VERSION=2.1.126`. It returned four sanitized snapshot summary lines and did not print tokens, authorization headers, or raw provider JSON. Automated tests must continue using fixtures and mocks, not a real Keychain credential or live Anthropic response.
+- Product wiring now uses an explicit `Connect Claude Code` path. App startup injects connector dependencies but does not refresh Claude, run the CLI version command, read Keychain credentials, or call Anthropic until the user connects.
+- Follow-up hardening added restricted-path Claude executable resolution, duplicate-connect protection, tested setup copy, and a bounded local GUI launch smoke on 2026-05-05.
+- Do not inspect `~/.claude/policy-limits.json` for this connector slice. The implemented path uses the Claude Code Keychain credential and Anthropic OAuth usage endpoint; local metadata inspection remains a separate Codex/Claude research task.

@@ -108,4 +108,31 @@ The connector is responsible for:
 - mapping `five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`, and enabled `extra_usage` credit data into sanitized snapshots
 - returning structured connector states for missing credentials, invalid tokens, rate limits, network errors, and schema changes
 
+## Claude Connector Product Opt-In
+
+The Mac app now starts with a live `StatusViewModel` and an explicit `Connect Claude Code` action instead of fixture snapshots. App startup injects the Claude connector dependencies but does not refresh the connector, read the Keychain item, run `claude --version`, or call Anthropic.
+
+The user-initiated connect action is the first product path that may refresh Claude Code usage. During refresh, the app can read the installed Claude CLI version locally, read the Claude Code Keychain item locally, call the Anthropic usage endpoint with the OAuth token in memory, and render only sanitized `UsageSnapshot` values plus connector status copy.
+
+The Claude CLI version resolver checks the launched app's `PATH` and common local install paths such as `~/.local/bin/claude`, `/opt/homebrew/bin/claude`, and `/usr/local/bin/claude`, because packaged Mac apps may start with a restricted environment. Duplicate connect attempts while a refresh is already checking are ignored so one user action cannot start overlapping provider refreshes.
+
+The connector setup titles and trust message live in a tested copy helper so product-facing opt-in language stays consistent across disconnected, checking, connected, unavailable, and error states.
+
+Automated tests use stub refreshers and version-command runners. They must not call the live Claude CLI, read Keychain credentials, or call Anthropic. A bounded local GUI launch smoke can be run manually with `swift run WhatTheTokenMac` to verify the app starts and renders without triggering connector refresh.
+
+## Claude Connector Smoke Testing
+
+The Mac app includes a developer-only Claude connector smoke path behind the explicit `--claude-connector-smoke` flag. It is for local manual verification only and must not run in CI because it can read the local Claude Code Keychain item and call Anthropic's usage endpoint.
+
+Before running the smoke command, set `CLAUDE_CODE_VERSION` from the installed Claude CLI version. If the variable is missing, the command exits before credential access or networking.
+
+Example:
+
+```bash
+cd apps/mac
+CLAUDE_CODE_VERSION="$(claude --version | awk '{print $1}')" swift run WhatTheTokenMac --claude-connector-smoke
+```
+
+Expected output is limited to sanitized status and snapshot summary lines. It must not print the OAuth token, authorization header, raw provider response, local file contents, prompts, responses, or session data.
+
 Codex should follow the same connector/source model later, but no Codex files, auth state, prompts, responses, command history, shell snapshots, or session contents should be parsed before the Codex redaction review is complete.

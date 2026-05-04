@@ -1513,3 +1513,31 @@ Type consistency:
 - TypeScript uses `ConnectorState`; Swift uses `ConnectorSourceState`.
 - Both contracts use `ConnectorSource` fields: `connector`, `state`, `label`, `parserVersion`, `deviceId`.
 - Snapshot source metadata is named `source` in both TypeScript and Swift.
+
+## Post-Rebase Status
+
+Rebased into `origin/main` on 2026-05-04. The implementation commits are present:
+
+- Task 1: `ff5f06f` (`feat(core): add connector source metadata`)
+- Task 2: `a4a8355` (`feat(mac): mirror connector source metadata`)
+- Task 3: `0c48304` (`feat(mac): map Claude usage snapshots`)
+- Task 4: `b69c4ea` (`feat(mac): add Claude credential boundary`)
+- Task 5: `8256de6` (`feat(mac): add Claude usage client`)
+- Task 6: `f7335ad` (`feat(mac): orchestrate Claude connector refresh`)
+- Task 7: `bec2ffe` (`feat(mac): show connector provenance on status cards`)
+- Task 8: `788b201` (`docs: document connector source contract`)
+- Hardening and plan alignment: `755ed7b` and `ff1907f`
+
+Fresh verification after rebase:
+
+- `pnpm check` passed with 4 TypeScript test files and 16 tests.
+- `cd apps/mac && swift test` passed with 28 Swift tests.
+- `cd apps/mac && swift build` passed.
+- Privacy grep matches are limited to deny-list docs, source-boundary docs, implementation fields such as `accessToken`, and synthetic test values.
+
+Pending before live Claude Code testing:
+
+- A developer-only local smoke harness now exists behind the explicit `--claude-connector-smoke` flag. It invokes `ClaudeConnectorService` with the real `MacOSClaudeCredentialStore` and `ClaudeUsageClient`, prints sanitized status/snapshot lines, and does not print tokens or raw provider JSON.
+- Live smoke was run manually on 2026-05-04 with Claude Code `2.1.126` and an existing local `Claude Code-credentials` Keychain item.
+- Live output mapped to four sanitized `UsageSnapshot` summary lines: `five_hour`, `seven_day`, `seven_day_sonnet`, and `monthly_extra_usage`. The output did not print the OAuth token, authorization header, or raw provider JSON.
+- After smoke testing, the Mac app product path was decided as an explicit connector setup flow. The app starts disconnected, shows `Connect Claude Code`, and does not refresh on launch. Duplicate connect attempts while checking are ignored. A bounded local GUI smoke on 2026-05-05 launched the app for five seconds without an immediate startup/render crash.

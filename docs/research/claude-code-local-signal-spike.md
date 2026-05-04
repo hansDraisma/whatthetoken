@@ -57,4 +57,21 @@ Implementation must keep the Claude Code OAuth token local to the Mac connector 
 
 The first implementation maps Claude Code utilization windows (`five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`) and enabled `extra_usage` credits into sanitized snapshots. Credential access is isolated behind a local command runner with a timeout so Keychain lookup failures do not block refresh indefinitely.
 
+Manual smoke verification is available through the Mac app executable:
+
+```bash
+cd apps/mac
+CLAUDE_CODE_VERSION="$(claude --version | awk '{print $1}')" swift run WhatTheTokenMac --claude-connector-smoke
+```
+
+The smoke path is developer-only and local-only. It requires `CLAUDE_CODE_VERSION` before credential access or networking and prints only sanitized connector status plus snapshot summaries. It must not be added to CI because CI must not depend on real Keychain credentials or live Anthropic responses.
+
+The first local smoke run was completed on 2026-05-04 with Claude Code `2.1.126`. It returned sanitized summaries for `five_hour`, `seven_day`, `seven_day_sonnet`, and `monthly_extra_usage`. The output did not print the OAuth token, authorization header, raw provider JSON, prompts, responses, session data, or local file contents.
+
+The product wiring now exposes Claude Code through an explicit Mac app opt-in path. The app starts disconnected, shows `Connect Claude Code`, and does not read the Claude Code Keychain item, run `claude --version`, or call Anthropic until the user chooses to connect. Successful refresh results render only sanitized snapshots through the existing status cards; unavailable states render structured connector status copy.
+
+The product path resolves the Claude executable from `PATH` plus common local install paths so Finder-launched app sessions can still detect locally installed Claude Code. While a refresh is checking, additional connect attempts are ignored to avoid overlapping provider requests and stale completion races.
+
+The opt-in UI copy is covered by Swift tests for every connector setup state. A bounded local GUI smoke was run with `swift run WhatTheTokenMac`; the process launched and stayed alive for five seconds before being terminated cleanly, which verifies startup/render does not immediately crash or trigger the smoke command path.
+
 Codex remains deferred to the roadmap until its local metadata and redaction review identifies a safe signal source.

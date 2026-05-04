@@ -70,6 +70,10 @@ When a connector needs a local provider credential or token to retrieve usage st
 
 For Claude Code, the Mac connector may read the local Claude Code Keychain item with explicit user consent and use the OAuth access token in memory to request usage status from Anthropic. The current implementation isolates Keychain access behind a local command runner. The runner invokes `/usr/bin/security find-generic-password -s "Claude Code-credentials" -w`, bounds the lookup with a timeout, and returns either command output or a local connector error. The credential parser extracts only `claudeAiOauth.accessToken`; all persisted and synced output remains limited to sanitized snapshot data.
 
+The product UI starts disconnected and must not read Claude credentials on launch. The `Connect Claude Code` action is the first product path that may refresh the Claude connector. App startup may construct connector dependencies, but it must not call the refresher, run `claude --version`, invoke the Keychain command, or call Anthropic until the user chooses to connect. While a refresh is already checking, duplicate connect attempts are ignored so repeated user actions cannot start overlapping provider requests.
+
+The developer-only Claude smoke command must follow the same boundary. It requires `CLAUDE_CODE_VERSION` before it reads credentials or calls Anthropic, runs only when explicitly invoked with `--claude-connector-smoke`, and prints only sanitized connector state plus snapshot summaries. The smoke command must not print tokens, authorization headers, raw provider JSON, local file contents, prompts, responses, session data, or sensitive local paths.
+
 Diagnostics must redact provider credentials, tokens, sensitive local paths, and raw provider payloads.
 
 The product benefit is not "we never touch credentials anywhere." The accurate claim is:
@@ -110,6 +114,9 @@ Ship these controls from the start:
 - no Chrome extension access to local Keychain values
 - no local or remote logging of tokens, prompts, responses, or session contents
 - bounded local credential lookup so connector refresh cannot hang indefinitely
+- product UI starts disconnected and refreshes Claude only after `Connect Claude Code`
+- duplicate connect attempts do not start overlapping Claude refreshes
+- developer-only smoke testing stays local/manual and prints sanitized status only
 - fixture-based tests only, with synthetic usage data
 - confidence, freshness, and source labels on every status value
 

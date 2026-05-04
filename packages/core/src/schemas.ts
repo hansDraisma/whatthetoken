@@ -109,6 +109,22 @@ export const usageSnapshotSchema = z
         message: "utilization must be null when used or limit is unknown"
       });
     }
+
+    if (snapshot.confidence === "stale" && snapshot.staleReason === null) {
+      context.addIssue({
+        code: "custom",
+        path: ["staleReason"],
+        message: "staleReason is required when confidence is stale"
+      });
+    }
+
+    if (snapshot.confidence !== "stale" && snapshot.staleReason !== null) {
+      context.addIssue({
+        code: "custom",
+        path: ["staleReason"],
+        message: "staleReason must be null unless confidence is stale"
+      });
+    }
   });
 
 export type UsageEvent = z.infer<typeof usageEventSchema>;

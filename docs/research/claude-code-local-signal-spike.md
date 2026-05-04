@@ -48,3 +48,9 @@ No file contents were printed or copied. The Keychain command omitted `-g`, so n
 Needs manual user permission and redaction review.
 
 The next safe step is a narrow metadata inspection that reads only top-level keys from `~/.claude/policy-limits.json` and any documented Claude Code status output, while explicitly avoiding Keychain secret values, history, sessions, projects, paste cache, shell snapshots, and session environment files.
+
+## Implementation Follow-Up
+
+The Claude Code local connector plan is documented in `docs/superpowers/plans/2026-05-04-local-connector-trust.md`.
+
+Implementation must keep the Claude Code OAuth token local to the Mac connector process. Tests use synthetic credentials and fixture responses only. Synced and displayed data is limited to sanitized `UsageSnapshot` records with connector source metadata.

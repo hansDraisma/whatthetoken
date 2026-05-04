@@ -22,6 +22,33 @@ export const surfaceSchema = z.enum([
 export const confidenceSchema = z.enum(["verified", "observed", "estimated", "stale"]);
 export const usageUnitSchema = z.enum(["messages", "requests", "tokens", "credits", "utilization"]);
 export const undercountRiskSchema = z.enum(["none", "possible", "likely"]);
+export const connectorSchema = z.enum([
+  "mac_connector",
+  "chrome_extension",
+  "web_dashboard",
+  "manual_fixture"
+]);
+export const connectorStateSchema = z.enum([
+  "connected",
+  "not_connected",
+  "missing_credentials",
+  "permission_denied",
+  "token_invalid",
+  "rate_limited",
+  "network_error",
+  "schema_changed",
+  "stale"
+]);
+
+export const snapshotSourceSchema = z
+  .object({
+    connector: connectorSchema,
+    state: connectorStateSchema,
+    label: z.string().min(1),
+    parserVersion: z.string().min(1),
+    deviceId: z.string().min(1)
+  })
+  .strict();
 
 export const attributionSchema = z
   .object({
@@ -69,7 +96,8 @@ export const usageSnapshotSchema = z
     lastUpdatedAt: z.string().datetime(),
     confidence: confidenceSchema,
     undercountRisk: undercountRiskSchema,
-    staleReason: z.string().min(1).nullable()
+    staleReason: z.string().min(1).nullable(),
+    source: snapshotSourceSchema
   })
   .strict()
   .superRefine((snapshot, context) => {

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createSnapshotFromQuotaPoll } from "../snapshots";
 
+const macConnectorSource = {
+  connector: "mac_connector",
+  state: "connected",
+  label: "Mac connector",
+  parserVersion: "test-parser-v1",
+  deviceId: "device_mac_01"
+} as const;
+
 describe("createSnapshotFromQuotaPoll", () => {
   it("creates a verified Claude Code utilization snapshot", () => {
     const snapshot = createSnapshotFromQuotaPoll({
@@ -17,12 +25,15 @@ describe("createSnapshotFromQuotaPoll", () => {
       resetAt: "2026-05-04T15:00:00.000Z",
       lastUpdatedAt: "2026-05-04T10:00:00.000Z",
       confidence: "verified",
-      undercountRisk: "possible"
+      undercountRisk: "possible",
+      source: macConnectorSource
     });
 
     expect(snapshot.remaining).toBe(38);
     expect(snapshot.utilization).toBe(0.62);
     expect(snapshot.staleReason).toBeNull();
+    expect(snapshot.source.connector).toBe("mac_connector");
+    expect(snapshot.source.state).toBe("connected");
   });
 
   it("supports observed Codex credit usage without a known hard limit", () => {
@@ -40,7 +51,8 @@ describe("createSnapshotFromQuotaPoll", () => {
       resetAt: null,
       lastUpdatedAt: "2026-05-04T10:00:00.000Z",
       confidence: "observed",
-      undercountRisk: "possible"
+      undercountRisk: "possible",
+      source: macConnectorSource
     });
 
     expect(snapshot.remaining).toBeNull();

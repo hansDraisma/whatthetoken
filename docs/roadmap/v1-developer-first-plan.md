@@ -26,6 +26,7 @@ V1 is developer-first and ingestion-first:
 
 - Local-first ingestion: collect usage signals on the user's device where the authenticated session or local client state already exists.
 - Minimal cloud: sync sanitized events and derived snapshots, not prompts, conversations, cookies, auth headers, or provider session tokens.
+- Local credential boundary: provider credentials may be used by a local connector with consent, but they must not be uploaded to the backend, exposed to the browser extension, or copied into diagnostics.
 - Provenance is mandatory: every number must be labeled as `verified`, `observed`, `estimated`, or `stale`.
 - Data contract before UI: shared event and snapshot types come before dashboards.
 - Pure core logic: quota windows, deduplication, stale detection, and snapshot derivation live in a shared `packages/core` package.
@@ -263,6 +264,13 @@ Proposed flow:
 3. Product shows first local quota/status card.
 4. User creates account only when they want sync, history, alerts, or multiple devices.
 
+Security framing:
+
+- The Chrome extension and Mac connector should feel like connectors for one product, not separate products.
+- The Mac connector is the secure path for Claude Code and Codex signals because it can use local device state without sending provider credentials to WhatTheToken.
+- The unified UI should show all providers together regardless of which connector produced the signal.
+- Frontend copy should lead with the trust promise: provider credentials stay on the user's device; WhatTheToken syncs only usage status.
+
 ## Monetization Assumption
 
 Do not optimize v1 around pricing, but keep the shape compatible with freemium.
@@ -363,6 +371,10 @@ Goal: make the product reliable enough for paid beta.
 - Add parser health checks.
 - Add provider rot smoke checks.
 - Add support diagnostics export.
+- Add signed/notarized connector distribution and signed auto-updates.
+- Add local encrypted connector cache if connector state needs persistence.
+- Evaluate optional end-to-end encryption for synced usage snapshots.
+- Run a security review of local credential handling and diagnostic exports.
 - Add onboarding polish.
 - Add pricing experiment.
 

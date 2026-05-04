@@ -50,6 +50,23 @@ For workspace-foundation tasks:
 - Model budgets and pools, not just message counts.
 - Never collect prompts, responses, conversation content, cookies, bearer tokens, auth headers, or provider session tokens.
 
+## Frontend Trust Messaging
+
+When frontend work starts, make secure local collection part of the primary product language rather than buried help text.
+
+Use copy in this direction:
+
+- "Provider credentials stay on your device."
+- "WhatTheToken syncs only usage status."
+- "Claude Code and Codex can be connected through the Mac connector for higher-confidence local tracking."
+- "Estimated browser counters are labeled separately from verified local signals."
+
+Avoid claims that are too broad:
+
+- Do not say "we never access credentials"; the local connector may access them in memory.
+- Do not say "fully private" without explaining what is and is not synced.
+- Do not hide confidence labels behind tooltips or settings screens.
+
 ## Phase 1 Stack Boundary
 
 Phase 1 should create:

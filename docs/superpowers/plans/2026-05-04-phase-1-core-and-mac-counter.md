@@ -997,9 +997,9 @@ git commit -m "feat(core): derive usage snapshots"
 - `pnpm --filter @whatthetoken/core test -- mac-fixture-contract.test.ts` passed with 4 test files and 13 tests.
 - `pnpm check` passed.
 
-**Reviewed gaps:**
-- Task 5 proves the Swift package builds and the fixture decodes, but it does not assert the rendered card strings. Task 5A adds a small display-model seam so the card title, primary metric, confidence label, and updated label can be tested without snapshot-testing SwiftUI internals.
-- The shipped Swift test name says "WithoutSensitiveContent" but only asserts decoded quota fields. Task 5A renames the test and adds an explicit fixture JSON scan for disallowed sensitive keys.
+**Reviewed gaps closed by Task 5A:**
+- Task 5 proved the Swift package builds and the fixture decodes, but it did not assert the rendered card strings. Task 5A added a small display-model seam so the card title, primary metric, confidence label, updated label, and progress value are tested without snapshot-testing SwiftUI internals.
+- The shipped Swift test name said "WithoutSensitiveContent" but only asserted decoded quota fields. Task 5A renamed the test and added a recursive fixture JSON scan for disallowed sensitive keys.
 
 **Files:**
 - Create: `apps/mac/Package.swift`
@@ -1298,6 +1298,13 @@ git commit -m "feat(mac): render fixture usage status"
 
 ## Task 5A: Mac Status Card Display And Fixture Safety Tests
 
+**Status:** Completed in `4ca44ff` (`test(mac): cover fixture card display`) and hardened in `39a6408` (`test(mac): scan fixture keys recursively`).
+
+**Verification:**
+- `cd apps/mac && swift test` passed with 5 Swift Testing tests.
+- `cd apps/mac && swift build` passed.
+- `pnpm check` passed with 4 core test files and 13 core tests.
+
 **Files:**
 - Create: `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusCardDisplayModel.swift`
 - Modify: `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift`
@@ -1591,7 +1598,7 @@ cd apps/mac
 swift test
 ```
 
-Expected: PASS with the fixture decoding, fixture safety, and display model tests.
+Expected: PASS with five Swift tests covering fixture decoding, recursive fixture safety scanning, nested sensitive-key scan regression coverage, and display model formatting.
 
 - [x] **Step 7: Build Swift app**
 

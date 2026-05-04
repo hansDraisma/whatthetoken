@@ -1,4 +1,4 @@
-import { createSnapshotFromQuotaPoll } from "./snapshots";
+import { createSnapshotFromQuotaPoll } from "./snapshots.js";
 
 export function createClaudeCodeFixtureSnapshot() {
   return createSnapshotFromQuotaPoll({

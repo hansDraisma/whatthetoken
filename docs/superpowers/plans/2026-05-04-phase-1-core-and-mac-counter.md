@@ -230,7 +230,17 @@ After commit, hand off this branch as the base for Task 2, Task 5, Task 7, Task 
 - Create: `packages/core/src/schemas.ts`
 - Test: `packages/core/src/__tests__/schemas.test.ts`
 
-- [ ] **Step 1: Write failing schema tests**
+**Status:** Complete in commit `ade0ea8 feat(core): add usage schemas`, with follow-up review fixes applied in this branch.
+
+**Review follow-up evidence:**
+- `usageEventSchema.count` rejects fractional event counts.
+- `@whatthetoken/core` has a `build` script and explicit package exports for emitted `dist` files.
+- Internal runtime imports use `.js` specifiers so the emitted ESM package can be imported by Node.
+- `pnpm --filter @whatthetoken/core build` passed.
+- `node --input-type=module -e "import('@whatthetoken/core')..."` passed from `packages/core` after build.
+- `pnpm check` passed with 4 test files and 14 tests.
+
+- [x] **Step 1: Write failing schema tests**
 
 Create `packages/core/src/__tests__/schemas.test.ts`:
 
@@ -290,6 +300,30 @@ describe("usage schemas", () => {
     ).toThrow();
   });
 
+  it("rejects fractional event counts", () => {
+    expect(() =>
+      usageEventSchema.parse({
+        id: "evt_fractional",
+        userAccountId: "user_01",
+        deviceId: "device_mac_01",
+        providerAccountId: "openai_personal",
+        provider: "openai",
+        product: "codex",
+        surface: "cli",
+        eventType: "message_sent",
+        modelKey: "gpt-5.3-codex",
+        count: 0.5,
+        observedAt: "2026-05-04T10:00:00.000Z",
+        confidence: "observed",
+        sourceVersion: "codex-cli-local-v1",
+        attribution: {
+          os: "macos",
+          canMissOtherDevices: true
+        }
+      })
+    ).toThrow();
+  });
+
   it("accepts a pool-aware Claude Code snapshot", () => {
     const parsed = usageSnapshotSchema.parse({
       id: "snap_01",
@@ -341,7 +375,7 @@ describe("usage schemas", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -351,7 +385,7 @@ pnpm --filter @whatthetoken/core test -- schemas.test.ts
 
 Expected: FAIL because `@whatthetoken/core`, schemas, and test config do not exist yet.
 
-- [ ] **Step 3: Add package config**
+- [x] **Step 3: Add package config**
 
 Create `packages/core/package.json`:
 
@@ -363,7 +397,14 @@ Create `packages/core/package.json`:
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "tsc --noEmit"
@@ -405,7 +446,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: Add schema implementation**
+- [x] **Step 4: Add schema implementation**
 
 Create `packages/core/src/types.ts`:
 
@@ -483,7 +524,7 @@ export const usageEventSchema = z
     surface: surfaceSchema,
     eventType: z.enum(["message_sent", "agent_run_started", "agent_run_finished", "quota_polled"]),
     modelKey: z.string().min(1).nullable(),
-    count: z.number().nonnegative(),
+    count: z.number().int().nonnegative(),
     observedAt: z.string().datetime(),
     confidence: confidenceSchema,
     sourceVersion: z.string().min(1),
@@ -558,11 +599,11 @@ export type UsageSnapshot = z.infer<typeof usageSnapshotSchema>;
 Create `packages/core/src/index.ts`:
 
 ```ts
-export * from "./types";
-export * from "./schemas";
+export * from "./types.js";
+export * from "./schemas.js";
 ```
 
-- [ ] **Step 5: Run schema tests**
+- [x] **Step 5: Run schema tests**
 
 Run:
 
@@ -573,7 +614,7 @@ pnpm --filter @whatthetoken/core test -- schemas.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Run core typecheck**
+- [x] **Step 6: Run core typecheck**
 
 Run:
 
@@ -722,9 +763,9 @@ export function evaluateStaleness(input: EvaluateStalenessInput): EvaluateStalen
 Update `packages/core/src/index.ts`:
 
 ```ts
-export * from "./types";
-export * from "./schemas";
-export * from "./staleness";
+export * from "./types.js";
+export * from "./schemas.js";
+export * from "./staleness.js";
 ```
 
 - [ ] **Step 4: Run tests**
@@ -873,7 +914,7 @@ export function createSnapshotFromQuotaPoll(input: CreateSnapshotInput): UsageSn
 Create `packages/core/src/fixtures.ts`:
 
 ```ts
-import { createSnapshotFromQuotaPoll } from "./snapshots";
+import { createSnapshotFromQuotaPoll } from "./snapshots.js";
 
 export function createClaudeCodeFixtureSnapshot() {
   return createSnapshotFromQuotaPoll({
@@ -898,7 +939,7 @@ export function createClaudeCodeFixtureSnapshot() {
 Create `packages/core/src/fixture-files.ts`:
 
 ```ts
-import { createClaudeCodeFixtureSnapshot } from "./fixtures";
+import { createClaudeCodeFixtureSnapshot } from "./fixtures.js";
 
 export const claudeCodeFixtureSnapshotJson = JSON.stringify(
   createClaudeCodeFixtureSnapshot(),
@@ -910,12 +951,12 @@ export const claudeCodeFixtureSnapshotJson = JSON.stringify(
 Update `packages/core/src/index.ts`:
 
 ```ts
-export * from "./types";
-export * from "./schemas";
-export * from "./staleness";
-export * from "./snapshots";
-export * from "./fixtures";
-export * from "./fixture-files";
+export * from "./types.js";
+export * from "./schemas.js";
+export * from "./staleness.js";
+export * from "./snapshots.js";
+export * from "./fixtures.js";
+export * from "./fixture-files.js";
 ```
 
 - [ ] **Step 4: Run tests**

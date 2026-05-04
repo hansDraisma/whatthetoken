@@ -77,7 +77,15 @@ Create or modify these files:
 - `git status --short` shows only the intentional Task 1 files before commit.
 - Later parallel worktrees branch from a base that includes this task.
 
-- [ ] **Step 1: Write root workspace files**
+**Status:** Complete in commit `4d90c89 chore: scaffold workspace`.
+
+**Verification evidence:**
+- `pnpm --version` printed `10.0.0`.
+- `pnpm install` completed with the lockfile already up to date.
+- `pnpm check` passed after dependencies were installed.
+- `git status --short` was clean before this documentation correction.
+
+- [x] **Step 1: Write root workspace files**
 
 Create `package.json`:
 
@@ -141,7 +149,7 @@ DerivedData/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 ```
 
-- [ ] **Step 2: Verify package-manager availability**
+- [x] **Step 2: Verify package-manager availability**
 
 Run:
 
@@ -161,7 +169,7 @@ pnpm --version
 
 Record the final `pnpm --version` output in the worker summary. Do not proceed if pnpm cannot be made available at exactly `10.0.0`.
 
-- [ ] **Step 3: Install workspace dependencies**
+- [x] **Step 3: Install workspace dependencies**
 
 Run:
 
@@ -179,7 +187,7 @@ git status --short
 
 Expected: only Task 1 files are new or modified. `pnpm-lock.yaml` should be the only generated dependency artifact. If `pnpm install` creates unrelated files or changes documentation/source files, stop and investigate before continuing.
 
-- [ ] **Step 4: Run root check and classify the result**
+- [x] **Step 4: Run root check and classify the result**
 
 Run:
 
@@ -191,7 +199,7 @@ Expected: this may fail because no workspace package exists yet. Capture the exa
 
 Continue only if the failure is limited to the expected empty-workspace/no-package-scripts state. Stop if the failure points to package-manager setup, dependency resolution, lockfile corruption, TypeScript config parse errors, or any unexpected script behavior.
 
-- [ ] **Step 5: Final pre-commit review**
+- [x] **Step 5: Final pre-commit review**
 
 Run:
 
@@ -202,7 +210,7 @@ git diff -- package.json pnpm-workspace.yaml tsconfig.base.json .gitignore pnpm-
 
 Expected: only the root workspace contract files and `pnpm-lock.yaml` are staged or unstaged. The diff should not include package/app code, provider research, credentials, local logs, IDE state, or generated build outputs.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add package.json pnpm-workspace.yaml tsconfig.base.json .gitignore pnpm-lock.yaml

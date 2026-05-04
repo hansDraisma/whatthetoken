@@ -1,2 +1,11 @@
 .superpowers/
 .DS_Store
+node_modules/
+dist/
+coverage/
+.turbo/
+.pnpm-store/
+.build/
+DerivedData/
+*.xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/

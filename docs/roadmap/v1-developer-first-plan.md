@@ -313,6 +313,8 @@ Goal: render one useful Claude Code quota/status signal by the end of week 2.
 - Implement data contract.
 - Implement confidence/stale helpers.
 - Implement the Claude Code local connector path.
+- Map Claude Code subscription windows and enabled extra-usage credits into sanitized snapshots.
+- Keep Keychain access local, testable, and bounded so credential lookup cannot block refresh indefinitely.
 - Render a minimal local SwiftUI card for Claude Code.
 - Add focused tests for core logic.
 
@@ -321,6 +323,7 @@ Exit criteria:
 - Claude Code shows a verified or stale status from sanitized local connector data.
 - Tests cover the core data transformation path.
 - No sensitive data is collected.
+- Connector states distinguish missing credentials, invalid token, rate limit, network error, and schema change.
 
 ### Phase 2: Codex Local Metadata Review
 
@@ -404,11 +407,12 @@ Exit criteria:
 
 ## Immediate Next Step
 
-Execute the Claude Code local connector implementation plan.
+Continue from the Claude Code connector implementation into product wiring and installer/onboarding design.
 
 Next steps:
 
-1. Implement `docs/superpowers/plans/2026-05-04-local-connector-trust.md`.
-2. Keep Codex out of implementation until its local metadata/redaction review is complete.
-3. Run validation interviews in parallel with the Claude connector build.
-4. Use the Claude implementation to validate the connector trust message before adding more providers.
+1. Wire the Claude connector service into an explicit opt-in UI path.
+2. Design the user-friendly Mac connector install/update flow for the future Chrome-first onboarding experience.
+3. Keep Codex out of implementation until its local metadata/redaction review is complete.
+4. Run validation interviews in parallel with Claude connector product wiring.
+5. Use the Claude implementation to validate the connector trust message before adding more providers.

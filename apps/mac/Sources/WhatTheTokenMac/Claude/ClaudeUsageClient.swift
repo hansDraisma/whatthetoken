@@ -26,7 +26,7 @@ enum ClaudeUsageRequestFactory {
     }
 }
 
-struct ClaudeUsageClient: Sendable {
+struct ClaudeUsageClient: ClaudeUsageFetching, Sendable {
     private let loader: ClaudeURLLoading
 
     init(loader: ClaudeURLLoading = URLSession.shared) {

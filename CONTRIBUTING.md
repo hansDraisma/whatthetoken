@@ -21,6 +21,10 @@ cd apps/mac
 swift test
 ```
 
+## CI
+
+The GitHub Actions test workflow runs on pull requests, pushes to `main`, and manual dispatch from the Actions tab. CI must remain synthetic: do not add live provider credentials, Keychain access, Codex app-server access, cookies, browser state, or provider network calls to the workflow.
+
 ## Package Boundaries
 
 `packages/core` owns portable schemas, confidence labels, snapshot helpers, and staleness logic.

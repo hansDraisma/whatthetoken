@@ -2,6 +2,15 @@
 
 Date: 2026-05-04
 
+Status: historical context.
+
+The current canonical execution roadmap is `docs/roadmap/development-roadmap.md`.
+The current open-source strategy and business model is `docs/roadmap/open-source-strategy-and-business-model.md`.
+
+Use this document for original V1 framing only. Do not use its older phase assumptions as the current implementation order.
+
+This document predates the completed Claude Code and Codex connector work. Where it conflicts with `docs/roadmap/development-roadmap.md`, the canonical roadmap wins.
+
 ## Positioning
 
 WhatTheToken helps developers avoid AI quota surprises across the coding agents and assistants they actively use.
@@ -31,6 +40,7 @@ V1 is developer-first and ingestion-first:
 - Provenance is mandatory: every number must be labeled as `verified`, `observed`, `estimated`, or `stale`.
 - Data contract before UI: shared event and snapshot types come before dashboards.
 - Pure core logic: quota windows, deduplication, stale detection, and snapshot derivation live in a shared `packages/core` package.
+- Open-source trust posture: the local app, shared core, and connector boundaries should be auditable; official builds should be signed and notarized.
 - Extension trust posture: open-source the browser extension; backend can remain closed.
 - Lean process: one operating rules document and a small number of ADRs before implementation.
 - Budget-aware model: track quota pools, credit balances, model multipliers, reset windows, and paid-overage state where available.
@@ -274,145 +284,42 @@ Security framing:
 - The unified UI should show all providers together regardless of which connector produced the signal.
 - Frontend copy should lead with the trust promise: provider credentials stay on the user's device; WhatTheToken syncs only usage status.
 
-## Monetization Assumption
+## Current Plan
 
-Do not optimize v1 around pricing, but keep the shape compatible with freemium.
+The original V1 framing in this file remains useful:
 
-Likely model:
+- developer-first wedge
+- local-first ingestion
+- confidence labels
+- provider/product/surface taxonomy
+- non-negotiable privacy rules
+- Mac-first direction
+- validation questions
+- provider rot strategy
 
-- Free: one or two local providers, local-only status.
-- Paid: multi-provider sync, history, alerts, widgets/mobile later, and advanced diagnostics.
+The implementation order has changed because Claude Code and Codex connector work already exists. Current execution now continues from the repo state documented in `docs/roadmap/development-roadmap.md`.
 
-Pricing should not be finalized until validation interviews and beta usage reveal frequency of pain.
+Current strategic decisions:
 
-## Roadmap
+- The local app is open source.
+- The license is Apache-2.0.
+- Internal V0 is the private working Mac app at the end of Stage 4 in `docs/roadmap/development-roadmap.md`.
+- Public V1 is the public repo plus free signed/notarized DMG at the end of Stage 5 in `docs/roadmap/development-roadmap.md`.
+- There is no Public V1 trial, license key, paid DMG, or local-provider paywall.
+- Sponsorship is acceptable.
+- Hosted sync, team visibility, managed reliability, and support are the future revenue candidates.
 
-### Phase 0: Design And Validation
+Current differentiators:
 
-Goal: settle scope before implementation.
+- Trust/provenance-first tracking.
+- Best-tool-right-now recommendations after research validation.
+- Pace and burn-rate prediction after rolling-window model validation.
+- Cross-provider planning.
+- Privacy and auditability.
+- Team or multi-device sync later.
+- Developer-agent integrations later.
 
-- Write this developer-first v1 plan.
-- Write `docs/agent/operating-rules.md`.
-- Write ADR 0001 for local-first minimal-data ingestion.
-- Write ADR 0002 for confidence labels.
-- Interview five target developers.
-- Decide first two ingestors based on validation.
+See:
 
-Exit criteria:
-
-- V1 scope accepted.
-- First provider/product/surface pair selected.
-- Trust model accepted.
-
-### Phase 1: Core And First Visible Counter
-
-Goal: render one useful Claude Code quota/status signal by the end of week 2.
-
-- Scaffold monorepo.
-- Create `packages/core`.
-- Implement data contract.
-- Implement confidence/stale helpers.
-- Implement the Claude Code local connector path.
-- Map Claude Code subscription windows and enabled extra-usage credits into sanitized snapshots.
-- Keep Keychain access local, testable, and bounded so credential lookup cannot block refresh indefinitely.
-- Render a minimal local SwiftUI card for Claude Code.
-- Add focused tests for core logic.
-
-Exit criteria:
-
-- Claude Code shows a verified or stale status from sanitized local connector data.
-- Tests cover the core data transformation path.
-- No sensitive data is collected.
-- Connector states distinguish missing credentials, invalid token, rate limit, network error, and schema change.
-
-### Phase 2: Codex Local Metadata Review
-
-Goal: determine whether Codex can be safely tracked locally without collecting prompts, responses, auth files, shell snapshots, or session contents.
-
-- Inspect only Codex-owned schema metadata and top-level keys where safe.
-- Document allowed and denied Codex paths.
-- Decide whether Codex can produce `observed` or `verified` snapshots.
-- Write a Codex-specific implementation plan only after the redaction review passes.
-
-Exit criteria:
-
-- A Codex ADR or research note identifies a safe local signal source.
-- No prompt, response, command output, auth, shell snapshot, or session content is read into tests, fixtures, logs, or docs.
-- Codex remains out of implementation until this exit criteria is met.
-
-### Phase 3: Second Developer Ingestor
-
-Goal: prove multi-tool developer value after the Codex review identifies a safe signal.
-
-- Add Codex local connector if Phase 2 finds an approved local signal.
-- Normalize Claude Code and Codex into the same `UsageEvent` and `UsageSnapshot` model.
-- Add undercount/stale states.
-- Add basic diagnostics.
-
-Exit criteria:
-
-- The UI shows Claude Code plus one second developer tool with distinct provenance labels.
-- Parser/ingestor failures are visible to the user.
-
-### Phase 4: Sync And Account Layer
-
-Goal: make it a real product without compromising trust.
-
-- Add Supabase Auth.
-- Add device registration.
-- Add sanitized event/snapshot sync.
-- Add web dashboard for account, devices, and provider status.
-- Add RLS policies and migration tests.
-
-Exit criteria:
-
-- User can connect a device and see synced status in web.
-- Backend stores no prompts, conversations, cookies, or tokens.
-
-### Phase 5: Browser Extension Counters
-
-Goal: expand from coding agents to browser assistants.
-
-- Add ChatGPT web estimated counter.
-- Add Gemini web estimated counter.
-- Add model detection and send detection.
-- Add clear undercount warnings.
-- Add fixture tests for DOM parsers.
-
-Exit criteria:
-
-- ChatGPT and Gemini show estimated status with clear caveats.
-- Extension remains minimal-permission and open-source.
-
-### Phase 6: Beta Hardening
-
-Goal: make the product reliable enough for paid beta.
-
-- Add error reporting without sensitive data.
-- Add parser health checks.
-- Add provider rot smoke checks.
-- Add support diagnostics export.
-- Add signed/notarized connector distribution and signed auto-updates.
-- Add local encrypted connector cache if connector state needs persistence.
-- Evaluate optional end-to-end encryption for synced usage snapshots.
-- Run a security review of local credential handling and diagnostic exports.
-- Add onboarding polish.
-- Add pricing experiment.
-
-Exit criteria:
-
-- Beta users can self-diagnose stale/broken tracking.
-- The team can detect parser breakage quickly.
-- Payment scope is defined.
-
-## Immediate Next Step
-
-Continue from the Claude Code connector implementation into product wiring and installer/onboarding design.
-
-Next steps:
-
-1. Wire the Claude connector service into an explicit opt-in UI path.
-2. Design the user-friendly Mac connector install/update flow for the future Chrome-first onboarding experience.
-3. Keep Codex out of implementation until its local metadata/redaction review is complete.
-4. Run validation interviews in parallel with Claude connector product wiring.
-5. Use the Claude implementation to validate the connector trust message before adding more providers.
+- `docs/roadmap/development-roadmap.md`
+- `docs/roadmap/open-source-strategy-and-business-model.md`

@@ -138,6 +138,10 @@ Hosted sync, team dashboards, and managed reliability are later tracks. They may
 
 ### Stage 0: Pre-Public Foundation
 
+Stage spec: `docs/superpowers/specs/2026-05-05-stage-0-pre-public-foundation-design.md`
+
+Implementation plan: `docs/superpowers/plans/2026-05-05-stage-0-pre-public-foundation.md`
+
 Goal: make the project safe to publish later and understandable to contributors before wider distribution.
 
 Why now: the connectors already exist. The next risk is trust, not ingestion.

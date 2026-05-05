@@ -5,6 +5,9 @@ import Testing
 private let rowDisplayFixedNow = ISO8601DateFormatter().date(from: "2026-05-05T09:44:00Z")!
 
 private func rowDisplaySnapshot(
+    provider: String = "anthropic",
+    product: String = "claude_code",
+    surface: String = "cli",
     windowKey: String = "five_hour",
     poolKey: String = "anthropic_claude_subscription",
     unit: String = "utilization",
@@ -15,14 +18,15 @@ private func rowDisplaySnapshot(
     resetAt: String? = "2026-05-05T13:00:00Z",
     confidence: String = "verified",
     undercountRisk: String = "none",
-    staleReason: String? = nil
+    staleReason: String? = nil,
+    display: UsageSnapshotDisplay? = nil
 ) -> UsageSnapshot {
     UsageSnapshot(
         id: "s_\(windowKey)",
         userAccountId: "u",
-        provider: "anthropic",
-        product: "claude_code",
-        surface: "cli",
+        provider: provider,
+        product: product,
+        surface: surface,
         poolKey: poolKey,
         windowKey: windowKey,
         unit: unit,
@@ -35,6 +39,7 @@ private func rowDisplaySnapshot(
         confidence: confidence,
         undercountRisk: undercountRisk,
         staleReason: staleReason,
+        display: display,
         source: ConnectorSource(
             connector: "mac_connector",
             state: .connected,
@@ -125,6 +130,92 @@ private func rowDisplaySnapshot(
     #expect(row.heroTintsRed == true)
     #expect(row.showsBar == false)
     #expect(row.statusWord == "Empty")
+}
+
+@Test func codexRowsUseDisplayLabelsFromConnectorMetadata() {
+    let aggregatePrimary = StatusRowDisplayModel(
+        snapshot: rowDisplaySnapshot(
+            provider: "openai",
+            product: "codex",
+            surface: "aggregate",
+            windowKey: "primary_rolling_300m",
+            poolKey: "openai_codex_codex_d4cde064",
+            display: UsageSnapshotDisplay(poolLabel: nil, windowLabel: "5 hour usage limit")
+        ),
+        sectionDefault: nil,
+        now: rowDisplayFixedNow
+    )
+    let aggregateWeekly = StatusRowDisplayModel(
+        snapshot: rowDisplaySnapshot(
+            provider: "openai",
+            product: "codex",
+            surface: "aggregate",
+            windowKey: "secondary_rolling_10080m",
+            poolKey: "openai_codex_codex_d4cde064",
+            display: UsageSnapshotDisplay(poolLabel: nil, windowLabel: "Weekly usage limit")
+        ),
+        sectionDefault: nil,
+        now: rowDisplayFixedNow
+    )
+    let modelPrimary = StatusRowDisplayModel(
+        snapshot: rowDisplaySnapshot(
+            provider: "openai",
+            product: "codex",
+            surface: "aggregate",
+            windowKey: "primary_rolling_300m",
+            poolKey: "openai_codex_codex_bengalfox_316417ff",
+            display: UsageSnapshotDisplay(poolLabel: "GPT-5.3-Codex-Spark", windowLabel: "5 hour usage limit")
+        ),
+        sectionDefault: nil,
+        now: rowDisplayFixedNow
+    )
+    let modelWeekly = StatusRowDisplayModel(
+        snapshot: rowDisplaySnapshot(
+            provider: "openai",
+            product: "codex",
+            surface: "aggregate",
+            windowKey: "secondary_rolling_10080m",
+            poolKey: "openai_codex_codex_bengalfox_316417ff",
+            display: UsageSnapshotDisplay(poolLabel: "GPT-5.3-Codex-Spark", windowLabel: "Weekly usage limit")
+        ),
+        sectionDefault: nil,
+        now: rowDisplayFixedNow
+    )
+
+    #expect(aggregatePrimary.name == "5 hour usage limit")
+    #expect(aggregateWeekly.name == "Weekly usage limit")
+    #expect(modelPrimary.name == "GPT-5.3-Codex-Spark 5 hour usage limit")
+    #expect(modelWeekly.name == "GPT-5.3-Codex-Spark Weekly usage limit")
+}
+
+@Test func codexCreditsDisplayAsDashboardBalanceRow() {
+    let row = StatusRowDisplayModel(
+        snapshot: rowDisplaySnapshot(
+            provider: "openai",
+            product: "codex",
+            surface: "aggregate",
+            windowKey: "credits_remaining",
+            poolKey: "openai_codex_credits",
+            unit: "credits",
+            used: nil,
+            limit: nil,
+            remaining: 0,
+            utilization: nil,
+            resetAt: nil,
+            confidence: "observed",
+            undercountRisk: "possible",
+            display: UsageSnapshotDisplay(poolLabel: "Codex", windowLabel: "Credits remaining")
+        ),
+        sectionDefault: nil,
+        now: rowDisplayFixedNow
+    )
+
+    #expect(row.name == "Credits remaining")
+    #expect(row.heroText == "0")
+    #expect(row.echoText == nil)
+    #expect(row.showsBar == false)
+    #expect(row.heroTintsRed == false)
+    #expect(row.showsStatus == false)
 }
 
 @Test func badgeAddedWhenUndercountLikelyDivergesFromSection() {

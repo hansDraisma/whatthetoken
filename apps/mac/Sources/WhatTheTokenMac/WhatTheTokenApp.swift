@@ -8,6 +8,9 @@ struct WhatTheTokenApp: App {
         } else {
             MacAppLauncher.configureForInteractiveLaunch()
         }
+        if CodexConnectorSmokeCommand.shouldRun(arguments: CommandLine.arguments) {
+            CodexConnectorSmokeCommand.startCommandLineSmoke()
+        }
     }
 
     var body: some Scene {

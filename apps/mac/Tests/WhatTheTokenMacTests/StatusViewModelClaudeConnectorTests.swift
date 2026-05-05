@@ -255,6 +255,7 @@ private extension UsageSnapshot {
             confidence: "verified",
             undercountRisk: "possible",
             staleReason: nil,
+            display: nil,
             source: .claude(state: .connected)
         )
     }

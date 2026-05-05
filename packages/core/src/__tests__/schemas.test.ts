@@ -143,6 +143,78 @@ describe("usage schemas", () => {
     expect(parsed.source.parserVersion).toBe("claude-code-oauth-usage-v1");
   });
 
+  it("accepts optional snapshot display metadata", () => {
+    const parsed = usageSnapshotSchema.parse({
+      id: "snap_openai_codex_codex_bengalfox_primary_device",
+      userAccountId: "local_user",
+      provider: "openai",
+      product: "codex",
+      surface: "aggregate",
+      poolKey: "openai_codex_codex_bengalfox_1234",
+      windowKey: "primary_rolling_300m",
+      unit: "utilization",
+      used: 0,
+      limit: 100,
+      remaining: 100,
+      utilization: 0,
+      resetAt: "2026-05-05T18:00:00.000Z",
+      lastUpdatedAt: "2026-05-05T13:00:00.000Z",
+      confidence: "observed",
+      undercountRisk: "possible",
+      staleReason: null,
+      display: {
+        poolLabel: "GPT-5.3-Codex-Spark",
+        windowLabel: "5 hour usage limit"
+      },
+      source: {
+        connector: "mac_connector",
+        state: "connected",
+        label: "Mac connector",
+        parserVersion: "codex-app-server-rate-limits-v1",
+        deviceId: "local_mac"
+      }
+    });
+
+    expect(parsed.display?.poolLabel).toBe("GPT-5.3-Codex-Spark");
+    expect(parsed.display?.windowLabel).toBe("5 hour usage limit");
+  });
+
+  it("accepts credits snapshots with a remaining balance and no total limit", () => {
+    const parsed = usageSnapshotSchema.parse({
+      id: "snap_openai_codex_credits_local_mac",
+      userAccountId: "local_user",
+      provider: "openai",
+      product: "codex",
+      surface: "aggregate",
+      poolKey: "openai_codex_credits",
+      windowKey: "credits_remaining",
+      unit: "credits",
+      used: null,
+      limit: null,
+      remaining: 0,
+      utilization: null,
+      resetAt: null,
+      lastUpdatedAt: "2026-05-05T13:00:00.000Z",
+      confidence: "observed",
+      undercountRisk: "possible",
+      staleReason: null,
+      display: {
+        poolLabel: "Codex",
+        windowLabel: "Credits remaining"
+      },
+      source: {
+        connector: "mac_connector",
+        state: "connected",
+        label: "Mac connector",
+        parserVersion: "codex-app-server-rate-limits-v1",
+        deviceId: "local_mac"
+      }
+    });
+
+    expect(parsed.remaining).toBe(0);
+    expect(parsed.display?.windowLabel).toBe("Credits remaining");
+  });
+
   it("rejects source metadata that contains credential material", () => {
     expect(() =>
       usageSnapshotSchema.parse({

@@ -44,6 +44,7 @@ struct StatusRowDisplayModel: Equatable, Sendable {
     let statusWord: String
     let heroTintsRed: Bool
     let showsBar: Bool
+    let showsStatus: Bool
     let badges: [StatusRowBadge]
     let staleReason: String?
 
@@ -53,6 +54,7 @@ struct StatusRowDisplayModel: Equatable, Sendable {
         now: Date
     ) {
         let state = StatusUsageState(snapshot: snapshot)
+        let balanceOnly = Self.isBalanceOnly(snapshot: snapshot)
         id = snapshot.id
         name = Self.windowName(for: snapshot)
         resetHint = StatusRowCopy.resetHint(resetAt: snapshot.resetAt, now: now)
@@ -61,13 +63,24 @@ struct StatusRowDisplayModel: Equatable, Sendable {
         progressValue = Self.progressValue(snapshot: snapshot)
         self.state = state
         statusWord = StatusRowCopy.statusWord(state: state)
-        heroTintsRed = state == .critical || state == .empty
+        heroTintsRed = !balanceOnly && (state == .critical || state == .empty)
         showsBar = Self.showsBar(snapshot: snapshot)
+        showsStatus = !balanceOnly
         badges = Self.badges(snapshot: snapshot, sectionDefault: sectionDefault)
         staleReason = snapshot.staleReason
     }
 
     private static func windowName(for snapshot: UsageSnapshot) -> String {
+        if let windowLabel = snapshot.display?.windowLabel {
+            if let poolLabel = snapshot.display?.poolLabel,
+               !poolLabel.isEmpty,
+               poolLabel != "Codex" {
+                return "\(poolLabel) \(windowLabel)"
+            }
+
+            return windowLabel
+        }
+
         if snapshot.provider == "anthropic",
            snapshot.product == "claude_code" {
             switch snapshot.windowKey {
@@ -112,6 +125,13 @@ struct StatusRowDisplayModel: Equatable, Sendable {
             return false
         }
         return limit > 0
+    }
+
+    private static func isBalanceOnly(snapshot: UsageSnapshot) -> Bool {
+        snapshot.unit == "credits"
+            && snapshot.used == nil
+            && snapshot.limit == nil
+            && snapshot.remaining != nil
     }
 
     private static func badges(

@@ -112,17 +112,25 @@ Required fields:
 | `confidence` | Allowed confidence value |
 | `undercountRisk` | Allowed undercount risk value |
 | `staleReason` | Non-empty string or `null` |
+| `display` | Optional strict display metadata object |
 | `source` | Strict sanitized source metadata object |
 
 Snapshot math rules:
 
 - When `used` and `limit` are known, `remaining` must equal `max(limit - used, 0)`.
 - When `used` and `limit` are known, `utilization` must equal `used / limit`.
-- When `used` or `limit` is unknown, `remaining` must be `null`.
+- When `used` or `limit` is unknown, `remaining` must be `null` unless the snapshot is a remaining-only `credits` balance.
 - When `used` or `limit` is unknown, `utilization` must be `null`.
 - `limit` must be positive when known.
 - `used` and `remaining` must never be negative.
 - Fractional usage measurements belong in snapshot fields such as `used`, not in event `count`.
+
+Optional `display` metadata may include:
+
+- `poolLabel`: sanitized provider display label for the quota pool, such as a Codex model limit name.
+- `windowLabel`: sanitized provider or connector display label for the quota window, such as "5 hour usage limit".
+
+Display metadata is presentation-only. Consumers must continue to use `poolKey` and `windowKey` as stable identifiers.
 
 ## Snapshot Source Metadata
 
@@ -169,6 +177,44 @@ Enabled extra usage credits use:
 - `remaining`: `max(limit - used, 0)`
 
 The connector must ignore disabled or incomplete extra-usage credit records rather than inventing a limit.
+
+## Codex Snapshot Mapping
+
+The Mac connector maps Codex app-server rate-limit buckets into sanitized `UsageSnapshot` records after explicit user opt-in.
+
+Rate-limit windows use:
+
+- `provider`: `openai`
+- `product`: `codex`
+- `surface`: `aggregate`
+- `poolKey`: `openai_codex_<sanitized-limit-id>_<stable-hash>`
+- `windowKey`: `primary_rolling_<minutes>m`, `secondary_rolling_<minutes>m`, or `<prefix>_window_unknown`
+- `unit`: `utilization`
+- `limit`: `100`
+- `used`: `primary.usedPercent` or `secondary.usedPercent`
+- `remaining`: `max(100 - used, 0)`
+- `confidence`: `observed` until live validation proves the app-server bucket is authoritative aggregate provider usage
+- `undercountRisk`: `possible` until live validation proves the bucket cannot miss Codex surfaces
+
+When present, Codex display metadata uses:
+
+- `display.poolLabel`: `limitName` from the app-server bucket, trimmed and ignored when empty. Aggregate `codex` buckets usually leave this unset.
+- `display.windowLabel`: derived from `windowDurationMins`, currently `5 hour usage limit` for `300`, `Weekly usage limit` for `10080`, and generic hour/minute labels for other durations.
+
+Credit balance snapshots use:
+
+- `poolKey`: `openai_codex_credits`
+- `windowKey`: `credits_remaining`
+- `unit`: `credits`
+- `used`: `null`
+- `limit`: `null`
+- `remaining`: numeric `credits.balance`
+- `display.poolLabel`: `Codex`
+- `display.windowLabel`: `Credits remaining`
+
+If `credits.balance` is missing, non-numeric, negative, or `credits.unlimited == true`, the connector must not emit a Codex credits snapshot. This avoids presenting an unavailable balance as a quota-empty state.
+
+The connector decodes only sanitized rate-limit fields from the app-server response: `limitId`, `limitName`, `planType`, `primary`, `secondary`, `credits`, and `rateLimitReachedType`. It does not store raw JSON-RPC envelopes.
 
 ## Contract Ownership
 

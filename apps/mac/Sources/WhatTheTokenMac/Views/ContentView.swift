@@ -23,6 +23,24 @@ struct ContentView: View {
                 .disabled(viewModel.connectorState == .checking)
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                Text(CodexConnectorSetupCopy.title(for: viewModel.codexConnectorState))
+                    .font(.headline)
+
+                Text(CodexConnectorSetupCopy.trustMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    Task {
+                        await viewModel.connectCodex()
+                    }
+                } label: {
+                    Label("Connect Codex", systemImage: "link")
+                }
+                .disabled(viewModel.codexConnectorState == .checking)
+            }
+
             Divider()
 
             if viewModel.snapshots.isEmpty {
@@ -30,7 +48,9 @@ struct ContentView: View {
                     .font(.headline)
                     .padding()
             } else {
-                StatusSectionView(snapshots: viewModel.snapshots)
+                ForEach(viewModel.snapshotSections) { section in
+                    StatusSectionView(snapshots: section.snapshots)
+                }
             }
         }
         .padding()

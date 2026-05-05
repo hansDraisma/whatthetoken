@@ -14,6 +14,9 @@ private let sectionMacConnector = ConnectorSource(
 
 private func sectionDisplaySnapshot(
     windowKey: String,
+    provider: String = "anthropic",
+    product: String = "claude_code",
+    surface: String = "cli",
     poolKey: String = "anthropic_claude_subscription",
     unit: String = "utilization",
     remaining: Double?,
@@ -26,9 +29,9 @@ private func sectionDisplaySnapshot(
     UsageSnapshot(
         id: "s_\(windowKey)",
         userAccountId: "u",
-        provider: "anthropic",
-        product: "claude_code",
-        surface: "cli",
+        provider: provider,
+        product: product,
+        surface: surface,
         poolKey: poolKey,
         windowKey: windowKey,
         unit: unit,
@@ -41,6 +44,7 @@ private func sectionDisplaySnapshot(
         confidence: confidence,
         undercountRisk: undercountRisk,
         staleReason: nil,
+        display: nil,
         source: source
     )
 }
@@ -58,7 +62,30 @@ private func sectionDisplaySnapshot(
     #expect(section.brandTitle == "Anthropic · Claude Code")
     #expect(section.trustLine == "Verified by Mac connector · \(expected)")
     #expect(section.rows.count == 3)
-    #expect(section.compareURL.absoluteString == "https://claude.ai/settings/usage")
+    #expect(section.compareLink?.title == "Compare in Claude →")
+    #expect(section.compareLink?.url.absoluteString == "https://claude.ai/settings/usage")
+}
+
+@Test func codexSectionLinksToCodexUsageDashboard() {
+    let snapshots = [
+        sectionDisplaySnapshot(
+            windowKey: "primary_rolling_300m",
+            provider: "openai",
+            product: "codex",
+            surface: "aggregate",
+            poolKey: "openai_codex_codex_abcd1234",
+            remaining: 71,
+            utilization: 0.29,
+            confidence: "observed",
+            undercountRisk: "possible"
+        )
+    ]
+
+    let section = StatusSectionDisplayModel(snapshots: snapshots, now: sectionDisplayFixedNow)
+
+    #expect(section.brandTitle == "Openai · Codex")
+    #expect(section.compareLink?.title == "Open Codex usage →")
+    #expect(section.compareLink?.url.absoluteString == "https://chatgpt.com/codex/settings/usage")
 }
 
 @Test func sectionUsesLatestUpdatedTimeForTrustLine() {

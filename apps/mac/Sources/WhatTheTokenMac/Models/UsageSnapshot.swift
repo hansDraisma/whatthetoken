@@ -1,5 +1,10 @@
 import Foundation
 
+struct UsageSnapshotDisplay: Codable, Equatable, Sendable {
+    let poolLabel: String?
+    let windowLabel: String?
+}
+
 struct UsageSnapshot: Codable, Equatable, Sendable {
     let id: String
     let userAccountId: String
@@ -18,5 +23,6 @@ struct UsageSnapshot: Codable, Equatable, Sendable {
     let confidence: String
     let undercountRisk: String
     let staleReason: String?
+    let display: UsageSnapshotDisplay?
     let source: ConnectorSource
 }

@@ -27,6 +27,7 @@ private func rowCopySnapshot(
         confidence: "verified",
         undercountRisk: "none",
         staleReason: nil,
+        display: nil,
         source: ConnectorSource(
             connector: "mac_connector",
             state: .connected,

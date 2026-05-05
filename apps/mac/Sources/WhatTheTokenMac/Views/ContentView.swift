@@ -30,9 +30,7 @@ struct ContentView: View {
                     .font(.headline)
                     .padding()
             } else {
-                ForEach(viewModel.snapshots, id: \.id) { snapshot in
-                    StatusCardView(snapshot: snapshot)
-                }
+                StatusSectionView(snapshots: viewModel.snapshots)
             }
         }
         .padding()

@@ -120,6 +120,21 @@ The connector setup titles and trust message live in a tested copy helper so pro
 
 Automated tests use stub refreshers and version-command runners. They must not call the live Claude CLI, read Keychain credentials, or call Anthropic. A bounded local GUI launch smoke can be run manually with `swift run WhatTheTokenMac` to verify the app starts and renders without triggering connector refresh.
 
+## Local Mac App Run
+
+Run the Mac app locally through Swift Package Manager:
+
+```bash
+cd apps/mac
+swift run WhatTheTokenMac
+```
+
+The SwiftPM target is a Mach-O executable, not an `.app` bundle. The app explicitly sets a regular foreground activation policy on interactive launch so the window appears when run from a terminal. The `--claude-connector-smoke` path intentionally skips foreground activation and remains command-line-only.
+
+For deterministic fixture UI checks, temporarily change `ContentView(viewModel: .live())` in `WhatTheTokenApp.swift` to `ContentView(viewModel: .fixture())`, run the command above, then restore `.live()` before committing.
+
+The usage section renders sanitized Claude Code snapshots as one row-based section. The section hoists uniform trust metadata, uses local time for updated/reset copy, refreshes reset hints every minute in the UI, and does not perform a background provider refresh.
+
 ## Claude Connector Smoke Testing
 
 The Mac app includes a developer-only Claude connector smoke path behind the explicit `--claude-connector-smoke` flag. It is for local manual verification only and must not run in CI because it can read the local Claude Code Keychain item and call Anthropic's usage endpoint.

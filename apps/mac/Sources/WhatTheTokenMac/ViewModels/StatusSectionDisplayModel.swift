@@ -3,20 +3,20 @@ import Foundation
 struct StatusSectionDisplayModel: Sendable {
     let brandTitle: String?
     let trustLine: String?
-    let compareURL: URL
+    let compareLink: StatusSectionCompareLink?
     let rows: [StatusRowDisplayModel]
 
     init(snapshots: [UsageSnapshot], now: Date) {
-        compareURL = URL(string: "https://claude.ai/settings/usage")!
-
         guard let first = snapshots.first else {
             brandTitle = nil
             trustLine = nil
+            compareLink = nil
             rows = []
             return
         }
 
         brandTitle = Self.brandTitle(provider: first.provider, product: first.product)
+        compareLink = Self.compareLink(provider: first.provider, product: first.product)
 
         let confidences = Set(snapshots.map(\.confidence))
         let labels = Set(snapshots.map(\.source.label))
@@ -52,6 +52,24 @@ struct StatusSectionDisplayModel: Sendable {
         return "\(provider.capitalized) · \(productWord)"
     }
 
+    private static func compareLink(provider: String, product: String) -> StatusSectionCompareLink? {
+        if provider == "anthropic" && product == "claude_code" {
+            return StatusSectionCompareLink(
+                title: "Compare in Claude →",
+                url: URL(string: "https://claude.ai/settings/usage")!
+            )
+        }
+
+        if provider == "openai" && product == "codex" {
+            return StatusSectionCompareLink(
+                title: "Open Codex usage →",
+                url: URL(string: "https://chatgpt.com/codex/settings/usage")!
+            )
+        }
+
+        return nil
+    }
+
     private static func updatedLabel(snapshots: [UsageSnapshot]) -> String? {
         let latest = snapshots
             .compactMap { parseISODate($0.lastUpdatedAt) }
@@ -85,4 +103,9 @@ struct StatusSectionDisplayModel: Sendable {
             counts[lhs, default: 0] < counts[rhs, default: 0]
         } ?? values.first ?? ""
     }
+}
+
+struct StatusSectionCompareLink: Equatable, Sendable {
+    let title: String
+    let url: URL
 }

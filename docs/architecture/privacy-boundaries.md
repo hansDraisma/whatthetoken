@@ -80,7 +80,13 @@ The product benefit is not "we never touch credentials anywhere." The accurate c
 
 > Provider credentials stay local. WhatTheToken syncs only sanitized usage status.
 
-This lets users get higher-confidence Claude Code and future Codex status without pasting provider tokens into a website, granting backend access to provider accounts, or creating separate provider credentials just to see subscription usage.
+This lets users get higher-confidence Claude Code and Codex status without pasting provider tokens into a website, granting backend access to provider accounts, or creating separate provider credentials just to see subscription usage.
+
+For Codex, the Mac connector does not read a Codex credential file or own a Codex credential store. After explicit user opt-in, it starts or connects to the local Codex app-server and requests `account/rateLimits/read`. Codex authentication stays inside Codex/app-server; WhatTheToken decodes only sanitized rate-limit metadata and discards the raw JSON-RPC response after parsing.
+
+Codex executable discovery is not credential discovery. The resolver checks the launched app's `PATH` plus common local install paths such as `~/.local/bin/codex`, `/opt/homebrew/bin/codex`, and `/usr/local/bin/codex` so a Finder-launched app can find the local Codex binary. It must not inspect Codex config files, auth files, shell history, sessions, prompts, responses, or app-server logs while locating the executable.
+
+The developer-only Codex smoke command must follow the same boundary. It requires `CODEX_CONNECTOR_SMOKE=1` before starting Codex app-server, runs only when explicitly invoked with `--codex-connector-smoke`, and prints only sanitized connector state plus snapshot summaries. It must not print account email, tokens, authorization values, raw JSON-RPC envelopes, raw app-server logs, prompts, responses, command output, local paths, task titles, task summaries, or token-shaped strings.
 
 ## Local Ingestor Rules
 

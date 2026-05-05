@@ -2,6 +2,13 @@ import Foundation
 
 enum StatusRowCopy {
     static func heroText(snapshot: UsageSnapshot, state: StatusUsageState) -> String {
+        if snapshot.unit == "credits",
+           snapshot.used == nil,
+           snapshot.limit == nil,
+           let remaining = snapshot.remaining {
+            return formatted(remaining)
+        }
+
         if state == .empty {
             return emptyHero(unit: snapshot.unit)
         }

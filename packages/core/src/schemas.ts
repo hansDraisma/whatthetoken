@@ -50,6 +50,13 @@ export const snapshotSourceSchema = z
   })
   .strict();
 
+export const snapshotDisplaySchema = z
+  .object({
+    poolLabel: z.string().min(1).optional(),
+    windowLabel: z.string().min(1).optional()
+  })
+  .strict();
+
 export const attributionSchema = z
   .object({
     deviceName: z.string().min(1).optional(),
@@ -97,6 +104,7 @@ export const usageSnapshotSchema = z
     confidence: confidenceSchema,
     undercountRisk: undercountRiskSchema,
     staleReason: z.string().min(1).nullable(),
+    display: snapshotDisplaySchema.optional(),
     source: snapshotSourceSchema
   })
   .strict()
@@ -122,11 +130,18 @@ export const usageSnapshotSchema = z
       }
     }
 
-    if ((snapshot.used === null || snapshot.limit === null) && snapshot.remaining !== null) {
+    const isCreditsBalance =
+      snapshot.unit === "credits" && snapshot.used === null && snapshot.limit === null;
+
+    if (
+      (snapshot.used === null || snapshot.limit === null) &&
+      snapshot.remaining !== null &&
+      !isCreditsBalance
+    ) {
       context.addIssue({
         code: "custom",
         path: ["remaining"],
-        message: "remaining must be null when used or limit is unknown"
+        message: "remaining must be null when used or limit is unknown unless unit is credits"
       });
     }
 

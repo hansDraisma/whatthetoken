@@ -6,7 +6,7 @@ Date: 2026-05-04
 
 WhatTheToken is a Mac-first developer consumption monitor for AI coding tools.
 
-V1 starts with Claude Code because it has the clearest verified local usage path. Codex remains a high-priority developer product, but its connector comes after a dedicated local metadata and redaction review. Browser assistants and other developer tools expand the same shared status model later.
+V1 starts with Claude Code and Codex because both now have explicit local connector paths that can return sanitized quota status after user opt-in. Browser assistants and other developer tools expand the same shared status model later.
 
 ## Tech Stack
 
@@ -82,7 +82,7 @@ Avoid claims that are too broad:
 Phase 1 should create:
 
 - `packages/core`: TypeScript schemas and quota logic.
-- `apps/mac`: SwiftUI status app shell plus the first Claude Code local connector boundary.
+- `apps/mac`: SwiftUI status app shell plus Claude Code and Codex local connector boundaries.
 - `docs`: implementation notes, ADRs, and operating rules.
 
 Phase 1 should not create:
@@ -120,6 +120,31 @@ The connector setup titles and trust message live in a tested copy helper so pro
 
 Automated tests use stub refreshers and version-command runners. They must not call the live Claude CLI, read Keychain credentials, or call Anthropic. A bounded local GUI launch smoke can be run manually with `swift run WhatTheTokenMac` to verify the app starts and renders without triggering connector refresh.
 
+## Current Codex Connector Boundary
+
+The Mac app owns Codex-specific ingestion code under `apps/mac/Sources/WhatTheTokenMac/Codex`.
+
+The connector is responsible for:
+
+- starting the local Codex app-server only after opt-in
+- sending JSON-RPC 2.0 initialization plus `account/rateLimits/read`
+- decoding only rate-limit fields such as `limitId`, `limitName`, `primary`, `secondary`, `planType`, `rateLimitReachedType`, and `credits`
+- mapping returned buckets into sanitized `UsageSnapshot` records with `provider: openai`, `product: codex`, `surface: aggregate`, and `unit: utilization` or `credits`
+- deriving Codex row labels from app-server fields instead of hardcoding current model names
+- returning structured connector states for missing login, app-server launch failure, transport failure, and schema changes
+
+The connector must not parse `~/.codex` files, conversation/session/history stores, shell snapshots, prompts, responses, task titles, task summaries, auth files, cookies, or local command output. Codex authentication stays inside Codex/app-server; WhatTheToken does not own a Codex credential store.
+
+## Codex Connector Product Opt-In
+
+The Mac app starts with an explicit `Connect Codex` action. App startup injects Codex connector dependencies but does not start Codex app-server, read Codex auth state, or request rate limits until the user chooses to connect.
+
+The user-initiated connect action is the first product path that may start Codex app-server. During refresh, the app can launch the local Codex executable, call the app-server rate-limit method over stdio, and render only sanitized snapshots plus connector status copy. If app-server reports auth failure, product copy directs the user to sign in to Codex locally with `codex login`.
+
+The Codex executable resolver checks the launched app's `PATH` and common local install paths such as `~/.local/bin/codex`, `/opt/homebrew/bin/codex`, and `/usr/local/bin/codex`, because packaged Mac apps may start with a restricted environment. If no executable can be found or started, the connector reports `permission_denied` without exposing local paths in UI or smoke output. Duplicate connect attempts while a refresh is already checking are ignored so one user action cannot start overlapping app-server reads.
+
+Automated tests use stub app-server transports and rate-limit fetchers. They must not call live Codex, start app-server, inspect `~/.codex`, or depend on a signed-in OpenAI account. Local live validation stays behind the manual smoke command below.
+
 ## Local Mac App Run
 
 Run the Mac app locally through Swift Package Manager:
@@ -129,11 +154,11 @@ cd apps/mac
 swift run WhatTheTokenMac
 ```
 
-The SwiftPM target is a Mach-O executable, not an `.app` bundle. The app explicitly sets a regular foreground activation policy on interactive launch so the window appears when run from a terminal. The `--claude-connector-smoke` path intentionally skips foreground activation and remains command-line-only.
+The SwiftPM target is a Mach-O executable, not an `.app` bundle. The app explicitly sets a regular foreground activation policy on interactive launch so the window appears when run from a terminal. The `--claude-connector-smoke` and `--codex-connector-smoke` paths intentionally skip foreground activation and remain command-line-only.
 
 For deterministic fixture UI checks, temporarily change `ContentView(viewModel: .live())` in `WhatTheTokenApp.swift` to `ContentView(viewModel: .fixture())`, run the command above, then restore `.live()` before committing.
 
-The usage section renders sanitized Claude Code snapshots as one row-based section. The section hoists uniform trust metadata, uses local time for updated/reset copy, refreshes reset hints every minute in the UI, and does not perform a background provider refresh.
+The usage area renders one row-based section per provider/product pair, so Claude Code and Codex snapshots do not share a mixed card. Each section hoists uniform trust metadata, uses local time for updated/reset copy, refreshes reset hints every minute in the UI, and does not perform a background provider refresh.
 
 ## Claude Connector Smoke Testing
 
@@ -150,4 +175,34 @@ CLAUDE_CODE_VERSION="$(claude --version | awk '{print $1}')" swift run WhatTheTo
 
 Expected output is limited to sanitized status and snapshot summary lines. It must not print the OAuth token, authorization header, raw provider response, local file contents, prompts, responses, or session data.
 
-Codex should follow the same connector/source model later, but no Codex files, auth state, prompts, responses, command history, shell snapshots, or session contents should be parsed before the Codex redaction review is complete.
+## Codex Connector Smoke Testing
+
+The Mac app includes a developer-only Codex connector smoke path behind the explicit `--codex-connector-smoke` flag. It is for local manual verification only and must not run in CI because it starts the local Codex app-server and depends on the user's local Codex login state.
+
+Before running the smoke command, set `CODEX_CONNECTOR_SMOKE=1`. If the variable is missing, the command exits before starting Codex app-server.
+
+Example:
+
+```bash
+cd apps/mac
+CODEX_CONNECTOR_SMOKE=1 swift run WhatTheTokenMac --codex-connector-smoke
+```
+
+Expected output is limited to sanitized status and snapshot summary lines. It must not print account email, tokens, authorization values, raw JSON-RPC envelopes, raw app-server logs, prompts, responses, command output, local paths, task titles, task summaries, or token-shaped strings.
+
+Successful local smoke currently proves only the signed-in account's Codex app-server shape. Keep Codex snapshots at `confidence: observed` and `undercountRisk: possible` until product validation confirms these buckets are authoritative across Codex surfaces. ChatGPT remains out of scope for the Codex connector unless the app-server returns unambiguous ChatGPT-specific buckets.
+
+## Connector Verification Commands
+
+Use focused tests first, then package-level verification:
+
+```bash
+cd apps/mac
+swift test --filter Codex
+swift test
+
+cd ../..
+pnpm --filter @whatthetoken/core test
+```
+
+Run live smoke commands manually only on a developer machine with explicit opt-in environment variables. Do not add live Claude, live Codex, Keychain, or app-server dependencies to CI.

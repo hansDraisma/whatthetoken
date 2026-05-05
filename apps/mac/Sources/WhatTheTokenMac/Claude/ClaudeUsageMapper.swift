@@ -98,6 +98,7 @@ enum ClaudeUsageMapper {
             confidence: "verified",
             undercountRisk: "possible",
             staleReason: nil,
+            display: nil,
             source: source
         )
     }
@@ -136,6 +137,7 @@ enum ClaudeUsageMapper {
             confidence: "verified",
             undercountRisk: "possible",
             staleReason: nil,
+            display: nil,
             source: source
         )
     }

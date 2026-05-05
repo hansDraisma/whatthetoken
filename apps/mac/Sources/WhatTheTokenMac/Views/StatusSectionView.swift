@@ -52,8 +52,10 @@ struct StatusSectionView: View {
 
             Spacer(minLength: 16)
 
-            Link("Compare in Claude →", destination: model.compareURL)
-                .font(.caption)
+            if let compareLink = model.compareLink {
+                Link(compareLink.title, destination: compareLink.url)
+                    .font(.caption)
+            }
         }
     }
 }
@@ -103,14 +105,16 @@ private struct StatusRowView: View {
                     .tint(color(for: row.state))
             }
 
-            HStack(spacing: 4) {
-                Circle()
-                    .frame(width: 6, height: 6)
-                    .foregroundStyle(color(for: row.state))
+            if row.showsStatus {
+                HStack(spacing: 4) {
+                    Circle()
+                        .frame(width: 6, height: 6)
+                        .foregroundStyle(color(for: row.state))
 
-                Text(row.statusWord)
-                    .font(.caption)
-                    .foregroundStyle(color(for: row.state))
+                    Text(row.statusWord)
+                        .font(.caption)
+                        .foregroundStyle(color(for: row.state))
+                }
             }
 
             if let staleReason = row.staleReason {

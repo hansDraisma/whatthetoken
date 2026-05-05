@@ -28,6 +28,7 @@ import Testing
         confidence: "verified",
         undercountRisk: "possible",
         staleReason: nil,
+        display: nil,
         source: source
     )
     let refresher = StubClaudeConnectorRefresher(result: .success(ClaudeConnectorResult(

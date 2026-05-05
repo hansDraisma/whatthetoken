@@ -1,0 +1,160 @@
+import Foundation
+import Testing
+@testable import WhatTheTokenMac
+
+private let sectionDisplayFixedNow = ISO8601DateFormatter().date(from: "2026-05-05T09:44:00Z")!
+
+private let sectionMacConnector = ConnectorSource(
+    connector: "mac_connector",
+    state: .connected,
+    label: "Mac connector",
+    parserVersion: "v1",
+    deviceId: "d"
+)
+
+private func sectionDisplaySnapshot(
+    windowKey: String,
+    poolKey: String = "anthropic_claude_subscription",
+    unit: String = "utilization",
+    remaining: Double?,
+    utilization: Double? = nil,
+    confidence: String = "verified",
+    undercountRisk: String = "none",
+    source: ConnectorSource = sectionMacConnector,
+    lastUpdatedAt: String = "2026-05-05T09:44:00.000Z"
+) -> UsageSnapshot {
+    UsageSnapshot(
+        id: "s_\(windowKey)",
+        userAccountId: "u",
+        provider: "anthropic",
+        product: "claude_code",
+        surface: "cli",
+        poolKey: poolKey,
+        windowKey: windowKey,
+        unit: unit,
+        used: nil,
+        limit: 100,
+        remaining: remaining,
+        utilization: utilization,
+        resetAt: nil,
+        lastUpdatedAt: lastUpdatedAt,
+        confidence: confidence,
+        undercountRisk: undercountRisk,
+        staleReason: nil,
+        source: source
+    )
+}
+
+@Test func sectionWithUniformTrustHoistsLine() {
+    let snapshots = [
+        sectionDisplaySnapshot(windowKey: "five_hour", remaining: 87, utilization: 0.13),
+        sectionDisplaySnapshot(windowKey: "seven_day", remaining: 27, utilization: 0.73),
+        sectionDisplaySnapshot(windowKey: "seven_day_sonnet", remaining: 95, utilization: 0.05)
+    ]
+
+    let section = StatusSectionDisplayModel(snapshots: snapshots, now: sectionDisplayFixedNow)
+    let expected = localUpdatedLabel(for: "2026-05-05T09:44:00.000Z")
+
+    #expect(section.brandTitle == "Anthropic · Claude Code")
+    #expect(section.trustLine == "Verified by Mac connector · \(expected)")
+    #expect(section.rows.count == 3)
+    #expect(section.compareURL.absoluteString == "https://claude.ai/settings/usage")
+}
+
+@Test func sectionUsesLatestUpdatedTimeForTrustLine() {
+    let snapshots = [
+        sectionDisplaySnapshot(
+            windowKey: "five_hour",
+            remaining: 87,
+            utilization: 0.13,
+            lastUpdatedAt: "2026-05-05T09:43:00.000Z"
+        ),
+        sectionDisplaySnapshot(
+            windowKey: "seven_day",
+            remaining: 27,
+            utilization: 0.73,
+            lastUpdatedAt: "2026-05-05T09:45:00Z"
+        )
+    ]
+
+    let section = StatusSectionDisplayModel(snapshots: snapshots, now: sectionDisplayFixedNow)
+    let expected = localUpdatedLabel(for: "2026-05-05T09:45:00Z")
+
+    #expect(section.trustLine == "Verified by Mac connector · \(expected)")
+}
+
+@Test func sectionWithDivergentConfidenceOmitsTrustLineAndAddsBadge() {
+    let snapshots = [
+        sectionDisplaySnapshot(windowKey: "five_hour", remaining: 87, utilization: 0.13, confidence: "verified"),
+        sectionDisplaySnapshot(windowKey: "seven_day", remaining: 27, utilization: 0.73, confidence: "inferred")
+    ]
+
+    let section = StatusSectionDisplayModel(snapshots: snapshots, now: sectionDisplayFixedNow)
+
+    #expect(section.trustLine == nil)
+    let weekly = section.rows.first { $0.name == "Weekly · all models" }
+    #expect(weekly?.badges.contains(.inferred) == true)
+}
+
+@Test func verifiedRowInMostlyInferredSectionDoesNotGetInferredBadge() {
+    let snapshots = [
+        sectionDisplaySnapshot(windowKey: "five_hour", remaining: 87, utilization: 0.13, confidence: "inferred"),
+        sectionDisplaySnapshot(windowKey: "seven_day", remaining: 27, utilization: 0.73, confidence: "inferred"),
+        sectionDisplaySnapshot(windowKey: "seven_day_sonnet", remaining: 95, utilization: 0.05, confidence: "verified")
+    ]
+
+    let section = StatusSectionDisplayModel(snapshots: snapshots, now: sectionDisplayFixedNow)
+    let sonnet = section.rows.first { $0.name == "Weekly · Sonnet" }
+
+    #expect(sonnet?.badges.contains(.inferred) == false)
+}
+
+@Test func inferredRowsInMostlyInferredSectionKeepInferredBadge() {
+    let snapshots = [
+        sectionDisplaySnapshot(windowKey: "five_hour", remaining: 87, utilization: 0.13, confidence: "inferred"),
+        sectionDisplaySnapshot(windowKey: "seven_day", remaining: 27, utilization: 0.73, confidence: "inferred"),
+        sectionDisplaySnapshot(windowKey: "seven_day_sonnet", remaining: 95, utilization: 0.05, confidence: "verified")
+    ]
+
+    let section = StatusSectionDisplayModel(snapshots: snapshots, now: sectionDisplayFixedNow)
+    let session = section.rows.first { $0.name == "Current session" }
+    let weekly = section.rows.first { $0.name == "Weekly · all models" }
+
+    #expect(session?.badges.contains(.inferred) == true)
+    #expect(weekly?.badges.contains(.inferred) == true)
+}
+
+@Test func sectionWithOneLikelyRowAddsUndercountBadgeOnlyOnThatRow() {
+    let snapshots = [
+        sectionDisplaySnapshot(windowKey: "five_hour", remaining: 87, utilization: 0.13, undercountRisk: "none"),
+        sectionDisplaySnapshot(windowKey: "seven_day", remaining: 27, utilization: 0.73, undercountRisk: "likely"),
+        sectionDisplaySnapshot(windowKey: "seven_day_sonnet", remaining: 95, utilization: 0.05, undercountRisk: "none")
+    ]
+
+    let section = StatusSectionDisplayModel(snapshots: snapshots, now: sectionDisplayFixedNow)
+    let weekly = section.rows.first { $0.name == "Weekly · all models" }
+    let session = section.rows.first { $0.name == "Current session" }
+
+    #expect(weekly?.badges.contains(.undercountLikely) == true)
+    #expect(session?.badges.isEmpty == true)
+}
+
+@Test func emptySnapshotsProducesNilTrustAndNoRows() {
+    let section = StatusSectionDisplayModel(snapshots: [], now: sectionDisplayFixedNow)
+
+    #expect(section.brandTitle == nil)
+    #expect(section.trustLine == nil)
+    #expect(section.rows.isEmpty)
+}
+
+private func localUpdatedLabel(for isoString: String) -> String {
+    let fractional = ISO8601DateFormatter()
+    fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let plain = ISO8601DateFormatter()
+    plain.formatOptions = [.withInternetDateTime]
+    let date = fractional.date(from: isoString) ?? plain.date(from: isoString)!
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm"
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    return "Updated \(formatter.string(from: date))"
+}

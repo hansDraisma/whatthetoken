@@ -5,6 +5,8 @@ struct WhatTheTokenApp: App {
     init() {
         if ClaudeConnectorSmokeCommand.shouldRun(arguments: CommandLine.arguments) {
             ClaudeConnectorSmokeCommand.startCommandLineSmoke()
+        } else {
+            MacAppLauncher.configureForInteractiveLaunch()
         }
     }
 

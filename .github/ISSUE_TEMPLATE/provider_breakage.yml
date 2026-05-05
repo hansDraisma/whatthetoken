@@ -1,0 +1,67 @@
+name: Provider breakage
+description: Report a connector or provider parser problem without sharing sensitive data.
+title: "[Provider]: "
+labels: ["provider-breakage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste provider tokens, cookies, auth headers, prompts, responses, raw JSON-RPC envelopes, raw provider payloads, app-server logs, raw local database rows, or sensitive local paths.
+  - type: dropdown
+    id: connector
+    attributes:
+      label: Connector
+      options:
+        - Claude Code
+        - Codex
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: product_version
+    attributes:
+      label: Provider app or CLI version
+      description: Use a version string only. Do not paste logs or paths.
+    validations:
+      required: false
+  - type: input
+    id: app_version
+    attributes:
+      label: WhatTheToken version or commit
+    validations:
+      required: true
+  - type: dropdown
+    id: source_state
+    attributes:
+      label: Sanitized source state
+      options:
+        - not_connected
+        - missing_credentials
+        - permission_denied
+        - token_invalid
+        - rate_limited
+        - network_error
+        - schema_changed
+        - stale
+        - connected
+        - unknown
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What changed
+      description: Describe the breakage without raw provider data.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I manually refreshed the connector.
+          required: false
+        - label: I inspected diagnostics and removed sensitive data.
+          required: true
+        - label: I did not paste prompts, responses, credentials, raw provider payloads, or sensitive local paths.
+          required: true

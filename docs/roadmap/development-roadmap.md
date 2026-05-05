@@ -161,7 +161,7 @@ Exit criteria:
 
 - An authorized developer can clone the private repo, understand what the app does, run tests, and understand the privacy boundary.
 - Issue templates are ready to discourage leaking sensitive data once the repo becomes public.
-- CI runs on pull requests without live provider, Keychain, Codex app-server, or network dependencies.
+- CI runs on pull requests, pushes to `main`, and manual dispatch without live provider, Keychain, Codex app-server, or network dependencies.
 - Repo remains private unless Public V1 exit criteria are met.
 
 Verification:

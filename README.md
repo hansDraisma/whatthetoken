@@ -61,6 +61,10 @@ cd apps/mac
 swift test
 ```
 
+## CI
+
+GitHub Actions runs the synthetic test workflow on pull requests, pushes to `main`, and manual dispatch from the Actions tab. The workflow does not require live provider credentials, Keychain access, Codex app-server access, cookies, browser state, or provider network calls.
+
 ## Connector Safety
 
 Live provider checks are manual and opt-in. CI uses synthetic fixtures only.

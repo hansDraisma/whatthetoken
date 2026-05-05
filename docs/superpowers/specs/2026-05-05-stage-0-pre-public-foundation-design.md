@@ -181,7 +181,7 @@ CI should prove that the repository works without live provider access.
 
 Required behavior:
 
-- run on pull requests and pushes to `main`
+- run on pull requests, pushes to `main`, and manual dispatch
 - install pnpm
 - install dependencies with `pnpm install --frozen-lockfile`
 - run `pnpm --filter @whatthetoken/core test`
@@ -220,7 +220,7 @@ Stage 0 mitigations:
 - `SECURITY.md` gives a safe vulnerability reporting path and warns against sharing secrets in issues.
 - `CONTRIBUTING.md` gives concrete connector, fixture, redaction, test, and review rules.
 - Bug and provider breakage issue templates exist and include sensitive-data warnings.
-- CI runs TypeScript core tests and Swift Mac tests without live provider access.
+- CI runs TypeScript core tests and Swift Mac tests on pull requests, pushes to `main`, and manual dispatch without live provider access.
 - Roadmap docs point to this Stage 0 spec and plan.
 - No Stage 0 document claims the repo is public-launch ready.
 - No Stage 0 work starts Stage 1 app bundle or menu bar implementation.

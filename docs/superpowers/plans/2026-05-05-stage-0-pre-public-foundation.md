@@ -140,6 +140,10 @@ swift test
 
 Live provider checks are manual and opt-in. CI uses synthetic fixtures only.
 
+## CI
+
+GitHub Actions runs the synthetic test workflow on pull requests, pushes to `main`, and manual dispatch from the Actions tab. The workflow must not require live provider credentials, Keychain access, Codex app-server access, cookies, browser state, or provider network calls.
+
 Claude Code and Codex connectors must discard raw provider responses after parsing and must never persist copied provider credentials in WhatTheToken storage.
 
 ## Roadmap
@@ -376,6 +380,10 @@ Run Mac tests:
 cd apps/mac
 swift test
 ```
+
+## CI
+
+The GitHub Actions test workflow runs on pull requests, pushes to `main`, and manual dispatch from the Actions tab. CI must remain synthetic: do not add live provider credentials, Keychain access, Codex app-server access, cookies, browser state, or provider network calls to the workflow.
 
 ## Package Boundaries
 
@@ -636,6 +644,7 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
@@ -667,7 +676,7 @@ jobs:
         run: swift test
 ```
 
-This workflow must not require Claude credentials, Codex app-server access, Keychain access, cookies, browser state, or live provider network calls.
+This workflow runs on pull requests, pushes to `main`, and manual dispatch. It must not require Claude credentials, Codex app-server access, Keychain access, cookies, browser state, or live provider network calls.
 
 - [ ] **Step 3: Commit CI workflow**
 

@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a WhatTheToken bug without sharing sensitive data.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste prompts, responses, cookies, auth headers, bearer tokens, provider session tokens, API keys, raw provider payloads, raw local database rows, or sensitive local paths.
+  - type: input
+    id: version
+    attributes:
+      label: WhatTheToken version or commit
+      description: Use the app version or commit hash.
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+    validations:
+      required: false
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the bug without sensitive provider data.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Use sanitized steps only.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: safe_diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Include only redacted diagnostics you have inspected.
+    validations:
+      required: false

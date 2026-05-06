@@ -104,7 +104,7 @@ The app should move beyond:
 
 The stronger workflow is:
 
-> Use Codex for heavy work now. Claude resets in 42 minutes. Gemini is fresh.
+> Use Codex for heavy work now (verified). Claude resets in ~42 minutes (estimated). Gemini is fresh (observed).
 
 This is a hard product problem because provider pools are not fungible. Claude Code rolling-window limits, Codex app-server buckets, Cursor request pools, Copilot plan rules, Gemini limits, and ChatGPT web limits cannot always be compared directly.
 

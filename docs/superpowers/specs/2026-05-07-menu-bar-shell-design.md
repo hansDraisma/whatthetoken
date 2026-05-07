@@ -19,7 +19,7 @@ These are settled. Do not re-litigate during implementation.
 - **Tabs Phase 1:** Codex, Claude. Gemini and Combined are out of scope.
 - **Activation policy:** production runs as `.accessory` (no Dock icon, no Cmd-Tab entry, no Window menu). Bundling sets `LSUIElement = true`; the runtime call is the source of truth in dev.
 - **Settings is a separate window** opened via `Cmd+,` (`SwiftUI.Settings { … }`). Connectors-only on day 1.
-- **Phase 1 connector actions:** `Connect` / `Retry`. **No disconnect, no separate reconnect** until backing model APIs exist.
+- **Phase 1 connector actions in Settings:** `Connect`, `Refresh`, `Retry` (state-driven; see §6 table). **No disconnect, no separate reconnect** until backing model APIs exist.
 - **Chrome:** the popover footer shows "Last updated …" + a refresh icon, plus a `•••` overflow menu containing Settings, About, Quit (and, in DEBUG only, Open Developer Window).
 - **Disconnected tabs are still selectable** and render a compact empty state with a primary "Open Settings" button.
 - **Banner is selected-provider scoped, conditional, and deterministic.** When the active tab's body is `.disconnected`, banner shows `.disconnected`. When the active tab is connected with data, banner severity is derived from the worst-of `StatusUsageState` (`critical > low > healthy`); when data is stale or the provider is in a network/schema error state, banner shows `.stale`. The full evaluation table is in §4. A cross-provider hint is appended to a `.critical` / `.low` banner only when the *other* connected provider is `.connected(_, worst: .healthy)`. Disconnected text broadens to "Connect Claude or Codex in Settings" when both providers are disconnected.
@@ -36,7 +36,7 @@ These are settled. Do not re-litigate during implementation.
 Preserves the existing `Models / ViewModels / Views` discipline.
 
 ```
-Sources/WhatTheTokenMac/
+apps/mac/Sources/WhatTheTokenMac/
   WhatTheTokenApp.swift               // modified: MenuBarExtra + Settings; DEBUG Window(id: "developer")
   MacAppLauncher.swift                // modified: activation-policy aware (.regular | .accessory | noop)
   AppModel.swift                      // NEW: owns shared dependencies
@@ -170,7 +170,6 @@ enum BannerState: Equatable, Sendable {
     case low(text: String)
     case stale(text: String)
     case disconnected(text: String)
-    case healthy(text: String)                  // emitted only with crossProviderHint
 }
 
 struct PopoverFooterState: Equatable, Sendable {
@@ -209,7 +208,7 @@ Snapshot filter predicates match the existing `replaceSnapshots` calls: `provide
 | `.error(.network, _)` or `.error(.schemaChanged, _)`, or any rendered snapshot for the selected provider has `staleReason != nil` | `.stale(text:)` |
 | `.connected(_, worst: .critical)` | `.critical(text:)` |
 | `.connected(_, worst: .low)` | `.low(text:)` |
-| `.connected(_, worst: .healthy)` | `.hidden` (or `.healthy(text:)` only if cross-provider hint applies) |
+| `.connected(_, worst: .healthy)` | `.hidden` |
 | `.connected(_, worst: .empty)` | `.hidden` (the tab content surfaces "no usage to report"; a banner here would be noise) |
 | `.empty` | `.hidden` |
 | `.checking` | `.hidden` (transient; refresh will resolve) |
@@ -305,7 +304,8 @@ func connectClaudeCode() async {
     }
 
     if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
-        snapshots = []
+        // Provider-scoped clear: only Claude's snapshots, not Codex's, must be wiped.
+        replaceSnapshots(matching: { $0.provider == "anthropic" && $0.product == "claude_code" }, with: [])
         connectorState = .missingClaudeCli
         connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
         return
@@ -470,7 +470,7 @@ The popover's `•••` overflow menu adds, in DEBUG builds only, an `Open Dev
 
 ## 9. Testing Plan
 
-### Pure-function tests — `WhatTheTokenMacTests/Presentation/`
+### Pure-function tests — `apps/mac/Tests/WhatTheTokenMacTests/Presentation/`
 
 | Subject | Coverage |
 |---|---|
@@ -491,6 +491,7 @@ The popover's `•••` overflow menu adds, in DEBUG builds only, an `Open Dev
 - `connectClaudeCode_doesNotStamp_onCheckingGuardReentry`.
 - `connectCodex_stampsTimestamp_onNoRefresherPath`.
 - `lastUpdatedAt_isMinOfPerProviderTimestamps`.
+- `connectClaudeCode_missingCLI_preservesCodexSnapshots` — seed `snapshots` with one Claude snapshot and one Codex snapshot; trigger the missing-CLI path; assert the Claude snapshot is gone and the Codex snapshot is unchanged. **(Fixes the existing bug at `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift:52` where `snapshots = []` wipes both providers' rows.)**
 
 ### `PopoverRefreshController` tests
 

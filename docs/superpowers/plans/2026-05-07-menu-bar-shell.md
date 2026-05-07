@@ -555,13 +555,30 @@ Append to `StatusViewModelTests.swift`:
     let vm = StatusViewModel(
         snapshots: [],
         claudeRefresher: claude,
-        claudeVersionProvider: AlwaysOKVersionProvider(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
         codexRefresher: codex
     )
 
     await vm.refreshAll(reason: .manual)
 
     #expect(recorder.calls == ["claude", "codex"])
+}
+
+@MainActor
+@Test func refreshAll_setsBothTimestamps() async {
+    let vm = StatusViewModel(
+        snapshots: [],
+        claudeRefresher: NoopClaudeRefresher(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        codexRefresher: NoopCodexRefresher()
+    )
+    #expect(vm.lastClaudeRefreshAt == nil)
+    #expect(vm.lastCodexRefreshAt == nil)
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(vm.lastClaudeRefreshAt != nil)
+    #expect(vm.lastCodexRefreshAt != nil)
 }
 
 @MainActor
@@ -573,7 +590,7 @@ Append to `StatusViewModelTests.swift`:
     let vm = StatusViewModel(
         snapshots: [],
         claudeRefresher: claude,
-        claudeVersionProvider: AlwaysOKVersionProvider(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
         codexRefresher: codex
     )
 
@@ -630,13 +647,35 @@ final class Counter: @unchecked Sendable {
     func increment() { lock.withLock { _value += 1 } }
 }
 
+private func stubConnectorStatus(product: String) -> ConnectorStatus {
+    ConnectorStatus(
+        product: product,
+        source: ConnectorSource(
+            connector: "test",
+            state: .connected,
+            label: "Test",
+            parserVersion: "v1",
+            deviceId: "test_device"
+        ),
+        message: "ok"
+    )
+}
+
+private func stubClaudeResult() -> ClaudeConnectorResult {
+    ClaudeConnectorResult(snapshots: [], status: stubConnectorStatus(product: "claude_code"))
+}
+
+private func stubCodexResult() -> CodexConnectorResult {
+    CodexConnectorResult(snapshots: [], status: stubConnectorStatus(product: "codex"))
+}
+
 final class RecordingClaudeRefresher: ClaudeConnectorRefreshing, @unchecked Sendable {
     let onRefresh: @Sendable () -> Void
     init(onRefresh: @escaping @Sendable () -> Void = {}) { self.onRefresh = onRefresh }
 
-    func refresh() async throws -> ClaudeConnectorRefreshResult {
+    func refresh() async throws -> ClaudeConnectorResult {
         onRefresh()
-        return .stub()
+        return stubClaudeResult()
     }
 }
 
@@ -644,33 +683,33 @@ final class SlowClaudeRefresher: ClaudeConnectorRefreshing, @unchecked Sendable 
     let counter: Counter
     init(counter: Counter) { self.counter = counter }
 
-    func refresh() async throws -> ClaudeConnectorRefreshResult {
+    func refresh() async throws -> ClaudeConnectorResult {
         counter.increment()
         try? await Task.sleep(nanoseconds: 50_000_000) // 50ms
-        return .stub()
+        return stubClaudeResult()
     }
 }
 
+final class NoopClaudeRefresher: ClaudeConnectorRefreshing, @unchecked Sendable {
+    func refresh() async throws -> ClaudeConnectorResult { stubClaudeResult() }
+}
+
 final class NoopCodexRefresher: CodexConnectorRefreshing, @unchecked Sendable {
-    func refresh() async throws -> CodexConnectorRefreshResult { .stub() }
+    func refresh() async throws -> CodexConnectorResult { stubCodexResult() }
 }
 
 final class RecordingCodexRefresher: CodexConnectorRefreshing, @unchecked Sendable {
     let onRefresh: @Sendable () -> Void
     init(onRefresh: @escaping @Sendable () -> Void = {}) { self.onRefresh = onRefresh }
 
-    func refresh() async throws -> CodexConnectorRefreshResult {
+    func refresh() async throws -> CodexConnectorResult {
         onRefresh()
-        return .stub()
+        return stubCodexResult()
     }
-}
-
-struct AlwaysOKVersionProvider: ClaudeVersionProviding, Sendable {
-    var claudeVersion: String { "1.0.0" }
 }
 ```
 
-If `ClaudeConnectorRefreshResult.stub()` and `CodexConnectorRefreshResult.stub()` factories do not exist yet, inspect the existing connector test files (`ClaudeConnectorServiceTests.swift`, `CodexConnectorServiceTests.swift`) for existing stub factories. If none exist, add minimal stubs in this same `StatusViewModelFakes.swift` extension.
+Note: `StaticClaudeVersionProvider` already lives in `apps/mac/Sources/WhatTheTokenMac/Claude/ClaudeConnectorService.swift`. Use it directly — `StaticClaudeVersionProvider(claudeVersion: "1.0.0")` for an "OK" version, `StaticClaudeVersionProvider(claudeVersion: "unknown")` to drive the missing-CLI path. Do not introduce a new provider fake.
 
 - [ ] **Step 4: Run tests — verify pass**
 
@@ -704,7 +743,7 @@ Append to `StatusViewModelTests.swift`:
     let vm = StatusViewModel(
         snapshots: [],
         claudeRefresher: NoopClaudeRefresher(),
-        claudeVersionProvider: UnknownVersionProvider()
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "unknown")
     )
     #expect(vm.lastClaudeRefreshAt == nil)
     await vm.connectClaudeCode()
@@ -737,7 +776,7 @@ Append to `StatusViewModelTests.swift`:
     let vm = StatusViewModel(
         snapshots: [claudeSnapshot, codexSnapshot],
         claudeRefresher: NoopClaudeRefresher(),
-        claudeVersionProvider: UnknownVersionProvider()
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "unknown")
     )
 
     await vm.connectClaudeCode()
@@ -748,15 +787,17 @@ Append to `StatusViewModelTests.swift`:
 }
 ```
 
-Add to `StatusViewModelFakes.swift`:
+Append to `StatusViewModelFakes.swift`:
 
 ```swift
-struct UnknownVersionProvider: ClaudeVersionProviding, Sendable {
-    var claudeVersion: String { "unknown" }
-}
-
-final class NoopClaudeRefresher: ClaudeConnectorRefreshing, @unchecked Sendable {
-    func refresh() async throws -> ClaudeConnectorRefreshResult { .stub() }
+private func testConnectorSource() -> ConnectorSource {
+    ConnectorSource(
+        connector: "test",
+        state: .connected,
+        label: "Test",
+        parserVersion: "v1",
+        deviceId: "test_device"
+    )
 }
 
 enum UsageSnapshotFixture {
@@ -773,7 +814,7 @@ enum UsageSnapshotFixture {
             used: 0, limit: 100, remaining: 100, utilization: 0.0,
             resetAt: nil, lastUpdatedAt: "2026-05-07T00:00:00Z",
             confidence: "verified", undercountRisk: "none", staleReason: nil,
-            display: nil, source: ConnectorSource(connector: "test", parserVersion: "v1", state: .connected, lastError: nil)
+            display: nil, source: testConnectorSource()
         )
     }
     static func codexSample() -> UsageSnapshot {
@@ -789,13 +830,13 @@ enum UsageSnapshotFixture {
             used: 0, limit: 100, remaining: 100, utilization: 0.0,
             resetAt: nil, lastUpdatedAt: "2026-05-07T00:00:00Z",
             confidence: "verified", undercountRisk: "none", staleReason: nil,
-            display: nil, source: ConnectorSource(connector: "test", parserVersion: "v1", state: .connected, lastError: nil)
+            display: nil, source: testConnectorSource()
         )
     }
 }
 ```
 
-(Adjust `ConnectorSource` initializer to match the actual model — verify with the file at `apps/mac/Sources/WhatTheTokenMac/Models/ConnectorSource.swift`.)
+The `ConnectorSource` initializer signature is `(connector:state:label:parserVersion:deviceId:)` — verified against `apps/mac/Sources/WhatTheTokenMac/Models/ConnectorSource.swift`. `NoopClaudeRefresher` is already defined in the previous fakes block from Task 6 — do not redeclare.
 
 Add a test-only setter to `StatusViewModel.swift` (DEBUG block):
 
@@ -1360,7 +1401,7 @@ Add to `StatusViewModelFakes.swift` (under `UsageSnapshotFixture`):
 
 ```swift
     static func claudeCriticalSample() -> UsageSnapshot {
-        var s = claudeSample()
+        let s = claudeSample()
         // critical < 10% remaining → utilization > 0.90
         return UsageSnapshot(
             id: s.id, userAccountId: s.userAccountId, provider: s.provider, product: s.product,
@@ -1788,7 +1829,7 @@ import Testing
         let vm = StatusViewModel(
             snapshots: [],
             claudeRefresher: NoopClaudeRefresher(),
-            claudeVersionProvider: AlwaysOKVersionProvider(),
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
             codexRefresher: NoopCodexRefresher()
         )
         let controller = PopoverRefreshController(viewModel: vm, sleeper: { _ in })
@@ -1806,7 +1847,7 @@ import Testing
         let vm = StatusViewModel(
             snapshots: [],
             claudeRefresher: NoopClaudeRefresher(),
-            claudeVersionProvider: AlwaysOKVersionProvider(),
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
             codexRefresher: NoopCodexRefresher()
         )
         let controller = PopoverRefreshController(viewModel: vm, sleeper: { _ in })
@@ -1854,17 +1895,21 @@ final class PopoverRefreshController {
     }
 
     func userTappedRefresh() {
-        Task { @MainActor in await viewModel.refreshAll(reason: .manual) }
+        let viewModel = self.viewModel
+        Task { await viewModel.refreshAll(reason: .manual) }
     }
 
     func userTappedRetry() {
-        Task { @MainActor in await viewModel.refreshAll(reason: .retry) }
+        let viewModel = self.viewModel
+        Task { await viewModel.refreshAll(reason: .retry) }
     }
 
     func popoverDidOpen()  { /* implemented in Task 16 */ }
     func popoverDidClose() { /* implemented in Task 16 */ }
 }
 ```
+
+The Task closures capture `viewModel` directly (not `self`) so they're plain Sendable closures whose only cross-actor access is the explicit `await viewModel.refreshAll(...)` hop onto `@MainActor`. `StatusViewModel` is `@MainActor`-isolated, which makes it implicitly `Sendable` for cross-actor reference passing.
 
 - [ ] **Step 4: Run tests — verify pass**
 
@@ -1919,7 +1964,7 @@ extension PopoverRefreshControllerTests {
         let vm = StatusViewModel(
             snapshots: [],
             claudeRefresher: NoopClaudeRefresher(),
-            claudeVersionProvider: AlwaysOKVersionProvider(),
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
             codexRefresher: NoopCodexRefresher()
         )
         let fake = FakeSleeper()
@@ -1950,7 +1995,7 @@ extension PopoverRefreshControllerTests {
         let vm = StatusViewModel(
             snapshots: [],
             claudeRefresher: NoopClaudeRefresher(),
-            claudeVersionProvider: AlwaysOKVersionProvider(),
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
             codexRefresher: NoopCodexRefresher()
         )
         let fake = FakeSleeper()
@@ -1982,7 +2027,8 @@ Replace the placeholder `popoverDidOpen` / `popoverDidClose` and add private hel
 
 ```swift
     func popoverDidOpen() {
-        Task { @MainActor in await viewModel.refreshAll(reason: .popoverOpened) }
+        let viewModel = self.viewModel
+        Task { await viewModel.refreshAll(reason: .popoverOpened) }
         startTimer()
     }
 
@@ -1994,11 +2040,18 @@ Replace the placeholder `popoverDidOpen` / `popoverDidClose` and add private hel
         stopTimer()
         let sleeper = self.sleeper
         let interval = self.interval
-        timerTask = Task { [weak self] in
+        let viewModel = self.viewModel
+        // Controller lifetime equals AppModel lifetime (app-wide singleton),
+        // so a strong viewModel capture is intentional. Capturing `viewModel`
+        // directly rather than `[weak self]` avoids the Swift 6 hazard of
+        // accessing `self?.viewModel` from a non-actor-isolated Task closure;
+        // `@MainActor` on `StatusViewModel` makes the reference Sendable across
+        // actors, while the `await` on `refreshAll` performs the actor hop.
+        timerTask = Task {
             while !Task.isCancelled {
                 await sleeper(interval)
                 if Task.isCancelled { break }
-                await self?.viewModel.refreshAll(reason: .timerTick)
+                await viewModel.refreshAll(reason: .timerTick)
             }
         }
     }
@@ -2042,7 +2095,7 @@ extension PopoverRefreshControllerTests {
         let vm = StatusViewModel(
             snapshots: [],
             claudeRefresher: SlowClaudeRefresher(counter: counter),
-            claudeVersionProvider: AlwaysOKVersionProvider(),
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
             codexRefresher: NoopCodexRefresher()
         )
         let controller = PopoverRefreshController(viewModel: vm, sleeper: { _ in })
@@ -2588,12 +2641,6 @@ struct PopoverFooterView: View {
     let onOpenSettings: () -> Void
     let onOpenDeveloperWindow: (() -> Void)?
 
-    private static let formatter: RelativeDateTimeFormatter = {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .short
-        return f
-    }()
-
     var body: some View {
         HStack(spacing: 4) {
             updatedLabel
@@ -2623,9 +2670,16 @@ struct PopoverFooterView: View {
     }
 
     private var updatedLabel: some View {
+        // Build the formatter inline rather than as a static let.
+        // A `static let` of a non-Sendable Foundation class trips
+        // Swift 6 strict-concurrency diagnostics, and SwiftUI views
+        // are recreated cheaply enough that per-render allocation is
+        // not measurable.
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
         let text: String = {
             guard let date = state.lastUpdatedAt else { return "—" }
-            return "Last updated " + Self.formatter.localizedString(for: date, relativeTo: Date())
+            return "Last updated " + formatter.localizedString(for: date, relativeTo: Date())
         }()
         return Text(text).font(.caption2).foregroundStyle(.secondary)
     }
@@ -2686,7 +2740,7 @@ Create `apps/mac/Sources/WhatTheTokenMac/Views/Popover/PopoverRootView.swift`:
 import SwiftUI
 
 struct PopoverRootView: View {
-    @Bindable var viewModel: StatusViewModel
+    let viewModel: StatusViewModel
     let controller: PopoverRefreshController
     let onOpenSettings: () -> Void
     let onOpenDeveloperWindow: (() -> Void)?
@@ -2806,7 +2860,7 @@ git commit -m "feat(mac): add ConnectorRowView"
 import SwiftUI
 
 struct ConnectorsView: View {
-    @Bindable var viewModel: StatusViewModel
+    let viewModel: StatusViewModel
 
     var body: some View {
         Form {
@@ -2818,7 +2872,10 @@ struct ConnectorsView: View {
                     trustMessage: ClaudeConnectorSetupCopy.trustMessage,
                     actionTitle: claudeActionTitle(for: viewModel.connectorState),
                     isWorking: viewModel.connectorState == .checking,
-                    action: { Task { await viewModel.connectClaudeCode() } }
+                    action: {
+                        let viewModel = self.viewModel
+                        Task { await viewModel.connectClaudeCode() }
+                    }
                 )
 
                 ConnectorRowView(
@@ -2828,7 +2885,10 @@ struct ConnectorsView: View {
                     trustMessage: CodexConnectorSetupCopy.trustMessage,
                     actionTitle: codexActionTitle(for: viewModel.codexConnectorState),
                     isWorking: viewModel.codexConnectorState == .checking,
-                    action: { Task { await viewModel.connectCodex() } }
+                    action: {
+                        let viewModel = self.viewModel
+                        Task { await viewModel.connectCodex() }
+                    }
                 )
             }
         }
@@ -2843,7 +2903,7 @@ struct ConnectorsView: View {
 import SwiftUI
 
 struct SettingsRootView: View {
-    @Bindable var viewModel: StatusViewModel
+    let viewModel: StatusViewModel
 
     var body: some View {
         ConnectorsView(viewModel: viewModel)
@@ -2881,7 +2941,7 @@ git commit -m "feat(mac): add ConnectorsView and SettingsRootView"
 import SwiftUI
 
 struct DeveloperWindowView: View {
-    @Bindable var viewModel: StatusViewModel
+    let viewModel: StatusViewModel
 
     var body: some View {
         ScrollView {
@@ -2895,7 +2955,10 @@ struct DeveloperWindowView: View {
                     state: "\(viewModel.connectorState)",
                     message: viewModel.connectorStatusMessage,
                     timestamp: viewModel.lastClaudeRefreshAt,
-                    action: { Task { await viewModel.connectClaudeCode() } }
+                    action: {
+                        let viewModel = self.viewModel
+                        Task { await viewModel.connectClaudeCode() }
+                    }
                 )
 
                 providerSection(
@@ -2903,7 +2966,10 @@ struct DeveloperWindowView: View {
                     state: "\(viewModel.codexConnectorState)",
                     message: viewModel.codexConnectorStatusMessage,
                     timestamp: viewModel.lastCodexRefreshAt,
-                    action: { Task { await viewModel.connectCodex() } }
+                    action: {
+                        let viewModel = self.viewModel
+                        Task { await viewModel.connectCodex() }
+                    }
                 )
 
                 globalSection
@@ -2936,6 +3002,7 @@ struct DeveloperWindowView: View {
             keyValueRow("isAnyRefreshing", "\(viewModel.isAnyRefreshing)")
             keyValueRow("lastUpdatedAt (min)", viewModel.lastUpdatedAt.map { "\($0)" } ?? "nil")
             Button("Refresh all") {
+                let viewModel = self.viewModel
                 Task { await viewModel.refreshAll(reason: .manual) }
             }
             .buttonStyle(.borderedProminent).controlSize(.small)

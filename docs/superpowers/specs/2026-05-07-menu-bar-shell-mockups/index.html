@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WhatTheToken — Menu Bar Shell Wireframes</title>
+<style>
+  :root {
+    --bg: #1a1a1a;
+    --section-bg: #262629;
+    --pop-bg: #2c2c2e;
+    --pop-border: rgba(255,255,255,0.08);
+    --row-border: rgba(255,255,255,0.05);
+    --text: #f5f5f7;
+    --text-secondary: #a1a1a6;
+    --text-tertiary: #8e8e93;
+    --tab-active: #4a4a4d;
+    --pill-bg: rgba(255,255,255,0.06);
+    --good: #34c759;
+    --good-bg: rgba(52,199,89,0.14);
+    --warn: #f5b339;
+    --warn-bg: #3a2c12;
+    --crit: #ff453a;
+    --crit-bg: #3a1e1c;
+    --info: #0a84ff;
+    --info-bg: #1c2c44;
+    --stale-bg: #2a2a2d;
+    --stale-text: #c7c7cc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  .subtitle { color: var(--text-secondary); font-size: 13px; margin: 0 0 28px; }
+  h2 {
+    font-size: 14px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin: 32px 0 14px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--pop-border);
+  }
+  .frame {
+    background: var(--section-bg);
+    border: 1px solid var(--pop-border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 18px;
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .frame .caption {
+    flex: 1;
+    min-width: 280px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .frame .caption code {
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .frame .caption strong { color: var(--text); font-weight: 600; }
+
+  /* === Menu bar simulation === */
+  .menubar {
+    position: relative;
+    background: rgba(40,40,42,0.85);
+    backdrop-filter: blur(12px);
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 12px;
+    gap: 16px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-bottom: 8px;
+    width: 320px;
+  }
+  .menubar .icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .menubar .icon::before {
+    content: "";
+    display: inline-block;
+    width: 14px; height: 14px;
+    background: var(--text);
+    -webkit-mask: radial-gradient(circle at 50% 50%, transparent 25%, #000 27%, #000 60%, transparent 62%);
+            mask: radial-gradient(circle at 50% 50%, transparent 25%, #000 27%, #000 60%, transparent 62%);
+  }
+  .menubar .clock { color: var(--text); }
+  .arrow {
+    width: 0; height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-bottom: 7px solid var(--pop-bg);
+    margin-left: 22px;
+  }
+
+  /* === Popover === */
+  .pop {
+    width: 320px;
+    background: var(--pop-bg);
+    border-radius: 10px;
+    border: 1px solid var(--pop-border);
+    overflow: hidden;
+    box-shadow: 0 16px 32px rgba(0,0,0,0.32);
+    color: var(--text);
+    font-size: 12px;
+  }
+
+  /* Banner */
+  .banner {
+    padding: 10px 14px;
+    font-size: 11px;
+    line-height: 1.4;
+    border-bottom: 1px solid var(--pop-border);
+  }
+  .banner strong { font-weight: 600; }
+  .banner.crit { background: var(--crit-bg); color: #ff8c84; }
+  .banner.low  { background: var(--warn-bg); color: var(--warn); }
+  .banner.stale { background: var(--stale-bg); color: var(--stale-text); }
+  .banner.disc { background: var(--info-bg); color: #6ab1ff; }
+  .banner .hint { display: block; opacity: 0.85; margin-top: 2px; font-size: 10.5px; }
+
+  /* Tab bar */
+  .tabs {
+    display: flex; gap: 4px;
+    padding: 10px 10px 6px;
+    border-bottom: 1px solid var(--pop-border);
+  }
+  .tab {
+    flex: 1;
+    padding: 5px 0;
+    text-align: center;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .tab.active { background: var(--tab-active); color: var(--text); }
+  .tab .badge {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .badge.crit { background: var(--crit); }
+  .badge.low  { background: var(--warn); }
+
+  /* Snapshot rows */
+  .row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--row-border);
+  }
+  .row .label { color: var(--text); font-size: 11.5px; }
+  .row .label-secondary { color: var(--text-tertiary); font-size: 10px; margin-top: 2px; }
+  .row .pill {
+    font-size: 10px;
+    padding: 3px 9px;
+    border-radius: 99px;
+    background: var(--pill-bg);
+    color: var(--text-secondary);
+  }
+  .pill.good { color: var(--good); background: var(--good-bg); }
+  .pill.low  { color: var(--warn); background: var(--warn-bg); }
+  .pill.crit { color: var(--crit); background: var(--crit-bg); }
+  .pill.muted { color: var(--text-tertiary); }
+
+  /* Empty / disconnected / error tab body */
+  .empty-body {
+    padding: 22px 18px;
+    text-align: center;
+  }
+  .empty-body h3 {
+    margin: 0 0 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .empty-body p {
+    margin: 0 0 16px;
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    line-height: 1.45;
+  }
+  .empty-body .trust {
+    margin-top: 14px;
+    color: var(--text-tertiary);
+    font-size: 10px;
+    line-height: 1.4;
+  }
+  .btn-primary {
+    background: var(--info);
+    color: #fff;
+    border: 0;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn-secondary {
+    background: rgba(255,255,255,0.08);
+    color: var(--text);
+    border: 0;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  /* Footer */
+  .footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 8px 10px 14px;
+    background: rgba(0,0,0,0.18);
+    border-top: 1px solid var(--row-border);
+  }
+  .footer .updated { font-size: 10.5px; color: var(--text-tertiary); }
+  .footer .actions { display: flex; gap: 2px; }
+  .footer .actions button {
+    background: transparent;
+    border: 0;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1;
+  }
+  .footer .actions button:hover { background: rgba(255,255,255,0.08); }
+
+  /* === Settings window === */
+  .winchrome {
+    width: 520px;
+    background: #1f1f22;
+    border-radius: 10px;
+    border: 1px solid var(--pop-border);
+    overflow: hidden;
+    box-shadow: 0 16px 36px rgba(0,0,0,0.4);
+  }
+  .titlebar {
+    height: 32px;
+    background: #2a2a2d;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+    border-bottom: 1px solid var(--pop-border);
+  }
+  .traffic { display: flex; gap: 7px; }
+  .traffic span {
+    width: 12px; height: 12px; border-radius: 50%;
+    display: inline-block;
+  }
+  .traffic .r { background: #ff5f57; }
+  .traffic .y { background: #febc2e; }
+  .traffic .g { background: #28c840; }
+  .titlebar .title {
+    flex: 1; text-align: center;
+    color: var(--text-secondary); font-size: 12px; font-weight: 500;
+  }
+  .winbody { padding: 24px; }
+  .form-section h3 {
+    margin: 0 0 14px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+  .conn-row {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 16px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--pop-border);
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .conn-row .info { flex: 1; }
+  .conn-row .name { font-size: 13px; font-weight: 600; color: var(--text); margin: 0 0 4px; }
+  .conn-row .state { font-size: 11.5px; color: var(--text); margin: 0 0 4px; }
+  .conn-row .detail { font-size: 11px; color: var(--text-secondary); margin: 0 0 6px; }
+  .conn-row .trust { font-size: 10.5px; color: var(--text-tertiary); margin: 0; }
+  .conn-row .right { display: flex; align-items: flex-start; }
+
+  /* === Developer window === */
+  .dev-section {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--pop-border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 12px;
+    font-size: 11.5px;
+  }
+  .dev-section h4 {
+    margin: 0 0 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+  .dev-row {
+    display: flex; justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--row-border);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+  }
+  .dev-row:last-child { border-bottom: none; }
+  .dev-row .k { color: var(--text-secondary); }
+  .dev-row .v { color: var(--text); }
+  .dev-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .dev-snapshot {
+    background: #0e0e10;
+    border: 1px solid var(--pop-border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px;
+    line-height: 1.5;
+    color: #cce0ff;
+    white-space: pre;
+    overflow-x: auto;
+  }
+</style>
+</head>
+<body>
+
+<h1>WhatTheToken — Menu Bar Shell Wireframes</h1>
+<p class="subtitle">Low-fidelity reference for the Phase 1 design at <code>docs/superpowers/specs/2026-05-07-menu-bar-shell-design.md</code>. Layout and information density only — colors approximate; SwiftUI defaults will resolve final tones.</p>
+
+<!-- ============= 1. Both connected, both healthy ============= -->
+<h2 id="popover-healthy">1. Popover — both providers healthy (banner hidden)</h2>
+<div class="frame">
+  <div>
+    <div class="menubar">
+      <span class="icon">WTT</span>
+      <span>Mon May 7</span>
+      <span class="clock">10:24</span>
+    </div>
+    <div class="arrow"></div>
+    <div class="pop">
+      <div class="tabs">
+        <div class="tab active">Codex</div>
+        <div class="tab">Claude Code</div>
+      </div>
+      <div class="row">
+        <div>
+          <div class="label">Weekly</div>
+          <div class="label-secondary">resets in 4 days</div>
+        </div>
+        <div class="pill good">82% remaining</div>
+      </div>
+      <div class="row">
+        <div>
+          <div class="label">5-hour window</div>
+          <div class="label-secondary">resets in 2h 14m</div>
+        </div>
+        <div class="pill good">verified</div>
+      </div>
+      <div class="footer">
+        <span class="updated">Last updated 2 min ago</span>
+        <div class="actions">
+          <button title="Refresh">↻</button>
+          <button title="More">•••</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <strong>State:</strong> both providers connected; <code>worst == .healthy</code> on the active tab.<br><br>
+    Banner is hidden — no actionable information.<br>
+    Snapshot rows reuse the existing <code>StatusSectionView</code>; primary label + secondary detail (reset window) on the left; pill on the right showing remaining + confidence label (<code>verified</code> / <code>observed</code>).<br><br>
+    Footer: <code>"Last updated 2 min ago"</code> on the left; refresh icon and <code>•••</code> overflow on the right.
+  </div>
+</div>
+
+<!-- ============= 2. Active tab critical with cross-provider hint ============= -->
+<h2 id="popover-critical">2. Popover — Claude critical, cross-provider hint to Codex</h2>
+<div class="frame">
+  <div>
+    <div class="menubar">
+      <span class="icon">WTT</span>
+      <span>Mon May 7</span>
+      <span class="clock">14:08</span>
+    </div>
+    <div class="arrow"></div>
+    <div class="pop">
+      <div class="banner crit">
+        <strong>Claude Code is running critically low</strong>
+        <span class="hint">Codex has more room — consider switching new work.</span>
+      </div>
+      <div class="tabs">
+        <div class="tab">Codex</div>
+        <div class="tab active">Claude Code <span class="badge crit"></span></div>
+      </div>
+      <div class="row">
+        <div>
+          <div class="label">Weekly</div>
+          <div class="label-secondary">resets in 6 days</div>
+        </div>
+        <div class="pill crit">4% remaining</div>
+      </div>
+      <div class="row">
+        <div>
+          <div class="label">5-hour window</div>
+          <div class="label-secondary">resets in 38m</div>
+        </div>
+        <div class="pill low">22% remaining</div>
+      </div>
+      <div class="footer">
+        <span class="updated">Last updated 17 sec ago</span>
+        <div class="actions">
+          <button>↻</button>
+          <button>•••</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <strong>State:</strong> active tab is Claude with <code>worst == .critical</code>; Codex is <code>.connected(_, worst: .healthy)</code>.<br><br>
+    Banner shows <code>BannerState.critical</code> with the cross-provider hint appended on a second line. Tab badge dot is the same severity color so the inactive Codex tab can still glance-signal.<br><br>
+    The hint only fires when the <em>other</em> provider is healthy. If Codex were also low/critical/disconnected, the hint line is omitted.
+  </div>
+</div>
+
+<!-- ============= 3. Selected tab disconnected ============= -->
+<h2 id="popover-disconnected">3. Popover — Codex tab selected, disconnected</h2>
+<div class="frame">
+  <div>
+    <div class="menubar">
+      <span class="icon">WTT</span>
+      <span>Mon May 7</span>
+      <span class="clock">10:31</span>
+    </div>
+    <div class="arrow"></div>
+    <div class="pop">
+      <div class="banner disc">
+        Codex is not connected. Open Settings to connect.
+      </div>
+      <div class="tabs">
+        <div class="tab active">Codex</div>
+        <div class="tab">Claude Code</div>
+      </div>
+      <div class="empty-body">
+        <h3>Codex is not connected</h3>
+        <p>Connect Codex in Settings to see remaining usage and rate-limit status.</p>
+        <button class="btn-primary">Open Settings</button>
+        <p class="trust">Codex auth stays inside Codex. WhatTheToken reads only local rate-limit status after you connect.</p>
+      </div>
+      <div class="footer">
+        <span class="updated">Claude Code updated 4 min ago</span>
+        <div class="actions">
+          <button>↻</button>
+          <button>•••</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <strong>State:</strong> selected tab body is <code>.disconnected(.notConnected)</code>; Claude is connected.<br><br>
+    Banner shows <code>BannerState.disconnected</code>. Tab body shows the empty-state card with the existing setup-copy headline (<code>CodexConnectorSetupCopy.title(for:)</code>), a short rationale, an <strong>Open Settings</strong> primary button, and the existing trust message in tertiary text.<br><br>
+    Footer's "Last updated …" text degrades to per-provider when one provider has no timestamp; both connected → "min" semantic from §5.
+  </div>
+</div>
+
+<!-- ============= 4. Network error / stale ============= -->
+<h2 id="popover-stale">4. Popover — network error, stale data</h2>
+<div class="frame">
+  <div>
+    <div class="menubar">
+      <span class="icon">WTT</span>
+      <span>Mon May 7</span>
+      <span class="clock">11:02</span>
+    </div>
+    <div class="arrow"></div>
+    <div class="pop">
+      <div class="banner stale">
+        Usage may be outdated. Refresh to check current limits.
+      </div>
+      <div class="tabs">
+        <div class="tab active">Codex</div>
+        <div class="tab">Claude Code</div>
+      </div>
+      <div class="empty-body" style="text-align:left; padding: 18px;">
+        <h3 style="text-align:center;">Codex usage could not be refreshed</h3>
+        <p style="text-align:center;">Last successful read: 23 min ago. Showing cached values below.</p>
+        <div class="row" style="border-top: 1px solid var(--row-border); border-bottom: none; padding: 10px 0; opacity: 0.7;">
+          <div>
+            <div class="label">Weekly</div>
+            <div class="label-secondary">cached</div>
+          </div>
+          <div class="pill muted">71% remaining</div>
+        </div>
+        <div style="display:flex; justify-content:center; margin-top: 14px;">
+          <button class="btn-secondary">Retry</button>
+        </div>
+      </div>
+      <div class="footer">
+        <span class="updated">Last updated 23 min ago</span>
+        <div class="actions">
+          <button>↻</button>
+          <button>•••</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <strong>State:</strong> active tab body is <code>.error(.network, lastSnapshots: […])</code>.<br><br>
+    Banner is <code>.stale</code>. Tab content shows the error headline, last successful read time, the cached snapshot rows at reduced opacity (signaling unreliability), and a centered <strong>Retry</strong> button that calls <code>refreshAll(reason: .retry)</code>.<br><br>
+    Pills become muted (no severity color) because we don't trust the cached values to reflect current state.
+  </div>
+</div>
+
+<!-- ============= 5. Both providers disconnected ============= -->
+<h2 id="popover-both-disconnected">5. Popover — both providers disconnected (first launch)</h2>
+<div class="frame">
+  <div>
+    <div class="menubar">
+      <span class="icon">WTT</span>
+      <span>Mon May 7</span>
+      <span class="clock">09:12</span>
+    </div>
+    <div class="arrow"></div>
+    <div class="pop">
+      <div class="banner disc">
+        Connect Claude or Codex in Settings.
+      </div>
+      <div class="tabs">
+        <div class="tab active">Codex</div>
+        <div class="tab">Claude Code</div>
+      </div>
+      <div class="empty-body">
+        <h3>No providers connected yet</h3>
+        <p>WhatTheToken reads local provider state after you connect Claude or Codex. Credentials never leave this device.</p>
+        <button class="btn-primary">Open Settings</button>
+      </div>
+      <div class="footer">
+        <span class="updated">—</span>
+        <div class="actions">
+          <button>↻</button>
+          <button>•••</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <strong>State:</strong> first-launch — both providers <code>.notConnected</code>.<br><br>
+    Banner copy is broadened to "Connect Claude or Codex in Settings." The active tab body still renders its own empty state, but the page-level message reinforces it.<br><br>
+    Footer's "Last updated" reads "—" because both timestamps are nil. The refresh button is enabled (refresh of unconnected providers is a no-op that updates timestamps via early-return paths from §5).
+  </div>
+</div>
+
+<!-- ============= 6. Settings window ============= -->
+<h2 id="settings">6. Settings window — Connectors page</h2>
+<div class="frame">
+  <div>
+    <div class="winchrome">
+      <div class="titlebar">
+        <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+        <div class="title">WhatTheToken Settings</div>
+      </div>
+      <div class="winbody">
+        <div class="form-section">
+          <h3>Connectors</h3>
+
+          <div class="conn-row">
+            <div class="info">
+              <p class="name">Claude Code</p>
+              <p class="state">Claude Code connected</p>
+              <p class="detail">Verified. Last refresh 2 min ago.</p>
+              <p class="trust">Reads Claude Code credentials locally only after you connect.</p>
+            </div>
+            <div class="right"><button class="btn-secondary">Refresh</button></div>
+          </div>
+
+          <div class="conn-row">
+            <div class="info">
+              <p class="name">Codex</p>
+              <p class="state">Sign in to Codex locally</p>
+              <p class="detail">No credentials found in the Codex app-server location.</p>
+              <p class="trust">Codex auth stays inside Codex. WhatTheToken reads only local rate-limit status after you connect.</p>
+            </div>
+            <div class="right"><button class="btn-primary">Connect</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <strong>Surface:</strong> SwiftUI <code>Settings { … }</code> scene, opened with <code>Cmd+,</code> or via the popover's <code>•••</code> menu.<br><br>
+    Single-pane, no <code>TabView</code> shell yet. Each row is a <code>ConnectorRowView</code> with four strings: provider name, <strong>stateTitle</strong> from the setup-copy enum, <strong>detail</strong> from <code>connectorStatusMessage</code>, and the trust message.<br><br>
+    Action label varies per setup state: <code>Connect</code> / <code>Retry</code> / <code>Refresh</code> / <code>Checking…</code>. Action calls the per-provider entry directly — not <code>refreshAll</code> — per §5.
+  </div>
+</div>
+
+<!-- ============= 7. Developer window ============= -->
+<h2 id="developer">7. Developer window — DEBUG only</h2>
+<div class="frame">
+  <div>
+    <div class="winchrome" style="width: 600px;">
+      <div class="titlebar">
+        <div class="traffic"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+        <div class="title">WhatTheToken — Developer</div>
+      </div>
+      <div class="winbody">
+        <div style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--text-secondary); margin-bottom: 14px;">
+          Build: DEBUG · Bundle: app.whatthetoken.mac · macOS 14.4
+        </div>
+
+        <div class="dev-section">
+          <h4>Claude Code</h4>
+          <div class="dev-row"><span class="k">setupState</span><span class="v">.connected</span></div>
+          <div class="dev-row"><span class="k">connectorStatusMessage</span><span class="v">"Claude Code connected"</span></div>
+          <div class="dev-row"><span class="k">lastClaudeRefreshAt</span><span class="v">2026-05-07 14:08:42 +0000</span></div>
+          <div class="dev-actions">
+            <button class="btn-secondary">Refresh now</button>
+          </div>
+        </div>
+
+        <div class="dev-section">
+          <h4>Codex</h4>
+          <div class="dev-row"><span class="k">setupState</span><span class="v">.networkError</span></div>
+          <div class="dev-row"><span class="k">connectorStatusMessage</span><span class="v">"Codex usage could not be refreshed"</span></div>
+          <div class="dev-row"><span class="k">lastCodexRefreshAt</span><span class="v">2026-05-07 13:45:11 +0000</span></div>
+          <div class="dev-actions">
+            <button class="btn-secondary">Refresh now</button>
+          </div>
+        </div>
+
+        <div class="dev-section">
+          <h4>Global</h4>
+          <div class="dev-row"><span class="k">isRefreshAllInFlight</span><span class="v">false</span></div>
+          <div class="dev-row"><span class="k">isAnyRefreshing</span><span class="v">false</span></div>
+          <div class="dev-row"><span class="k">lastUpdatedAt (min)</span><span class="v">2026-05-07 13:45:11 +0000</span></div>
+          <div class="dev-actions">
+            <button class="btn-primary">Refresh all</button>
+          </div>
+        </div>
+
+        <div class="dev-section">
+          <h4>Snapshots</h4>
+<div class="dev-snapshot">{
+  "id": "claude_code_weekly_001",
+  "provider": "anthropic",
+  "product": "claude_code",
+  "windowKey": "weekly",
+  "remaining": 824,
+  "limit": 1000,
+  "utilization": 0.176,
+  "confidence": "verified",
+  "lastUpdatedAt": "2026-05-07T14:08:42Z"
+}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">
+    <strong>Surface:</strong> <code>Window(id: "developer")</code> wrapped in <code>#if DEBUG</code>. Not compiled in release. Opened from the popover's <code>•••</code> menu (DEBUG-only item).<br><br>
+    Diagnostic-only: refresh actions and state inspection that are already available in production. No mutating affordances (no credential clear, no fixture toggle, no state injection).<br><br>
+    The header line surfaces build/bundle/OS info so dev-vs-release runs are unmistakable. Per-provider sections show raw setup-state enum, the dynamic <code>connectorStatusMessage</code>, and the per-provider timestamp from §5. Global section exposes the derived state used by the footer. Snapshots section dumps each <code>UsageSnapshot</code> as JSON for inspection.
+  </div>
+</div>
+
+</body>
+</html>

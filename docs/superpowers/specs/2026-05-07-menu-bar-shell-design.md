@@ -566,7 +566,23 @@ Explicit anti-scope, for any future agent reading this spec.
 - Menu-bar-icon badge for unconnected state.
 - Provenance / source-state UI surface in Settings.
 
-## 12. Future Optimizations
+## 12. Visual Reference
+
+Low-fidelity wireframes for the seven canonical states are committed at `2026-05-07-menu-bar-shell-mockups/index.html`. Open in a browser to view.
+
+| Section | State |
+|---|---|
+| `#popover-healthy` | Popover — both providers healthy (banner hidden) |
+| `#popover-critical` | Popover — Claude critical with cross-provider hint to Codex |
+| `#popover-disconnected` | Popover — Codex tab selected, disconnected; Claude connected |
+| `#popover-stale` | Popover — network error; cached snapshots shown muted; Retry button |
+| `#popover-both-disconnected` | Popover — both providers disconnected (first launch) |
+| `#settings` | Settings → Connectors page |
+| `#developer` | Developer window (DEBUG only) |
+
+Wireframes are layout and information-density only. SwiftUI defaults will resolve final colors, type, and spacing during implementation. The wireframes are advisory; if a SwiftUI affordance produces a more idiomatic surface than what's drawn, prefer the SwiftUI shape and update the wireframe.
+
+## 13. Future Optimizations
 
 - **Concurrent provider legs in `refreshAll`** via `async let` — re-validate under the then-current Swift toolchain before promoting; saves `min(Claude, Codex)` of refresh latency.
 - **Menu-bar-icon badge** until at least one provider is connected.

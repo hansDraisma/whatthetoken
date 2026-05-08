@@ -40,13 +40,7 @@ struct PopoverFooterView: View {
     }
 
     private var updatedLabel: some View {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        let text: String = {
-            guard let date = state.lastUpdatedAt else { return "-" }
-            return "Last updated " + formatter.localizedString(for: date, relativeTo: Date())
-        }()
-        return Text(text)
+        Text(state.labelText())
             .font(.caption2)
             .foregroundStyle(.secondary)
     }

@@ -2,11 +2,11 @@ import Foundation
 
 struct ProviderTabModel: Equatable, Sendable {
     enum Body: Equatable, Sendable {
-        case connected(snapshots: [UsageSnapshot], worst: StatusUsageState)
+        case connected(snapshots: [UsageSnapshot], worst: StatusUsageState, isRefreshing: Bool)
         case empty
-        case checking
+        case loading
         case disconnected(reason: DisconnectedReason)
-        case error(kind: ErrorKind, lastSnapshots: [UsageSnapshot])
+        case error(kind: ErrorKind, lastSnapshots: [UsageSnapshot], isRefreshing: Bool)
     }
 
     enum DisconnectedReason: Equatable, Sendable {
@@ -57,12 +57,24 @@ extension ProviderTabModel {
         let body: Body
         switch viewModel.connectorState {
         case .checking:
-            body = .checking
+            if claudeSnapshots.isEmpty {
+                body = .loading
+            } else {
+                body = .connected(
+                    snapshots: claudeSnapshots,
+                    worst: claudeSnapshots.worstUsageState(),
+                    isRefreshing: true
+                )
+            }
         case .connected:
             if claudeSnapshots.isEmpty {
                 body = .empty
             } else {
-                body = .connected(snapshots: claudeSnapshots, worst: claudeSnapshots.worstUsageState())
+                body = .connected(
+                    snapshots: claudeSnapshots,
+                    worst: claudeSnapshots.worstUsageState(),
+                    isRefreshing: false
+                )
             }
         case .notConnected:
             body = .disconnected(reason: .claude(.notConnected))
@@ -75,9 +87,9 @@ extension ProviderTabModel {
         case .rateLimited:
             body = .disconnected(reason: .claude(.rateLimited))
         case .networkError:
-            body = .error(kind: .network, lastSnapshots: claudeSnapshots)
+            body = .error(kind: .network, lastSnapshots: claudeSnapshots, isRefreshing: false)
         case .schemaChanged:
-            body = .error(kind: .schemaChanged, lastSnapshots: claudeSnapshots)
+            body = .error(kind: .schemaChanged, lastSnapshots: claudeSnapshots, isRefreshing: false)
         }
 
         return ProviderTabModel(tab: .claude, body: body)
@@ -92,12 +104,24 @@ extension ProviderTabModel {
         let body: Body
         switch viewModel.codexConnectorState {
         case .checking:
-            body = .checking
+            if codexSnapshots.isEmpty {
+                body = .loading
+            } else {
+                body = .connected(
+                    snapshots: codexSnapshots,
+                    worst: codexSnapshots.worstUsageState(),
+                    isRefreshing: true
+                )
+            }
         case .connected:
             if codexSnapshots.isEmpty {
                 body = .empty
             } else {
-                body = .connected(snapshots: codexSnapshots, worst: codexSnapshots.worstUsageState())
+                body = .connected(
+                    snapshots: codexSnapshots,
+                    worst: codexSnapshots.worstUsageState(),
+                    isRefreshing: false
+                )
             }
         case .notConnected:
             body = .disconnected(reason: .codex(.notConnected))
@@ -106,9 +130,9 @@ extension ProviderTabModel {
         case .permissionDenied:
             body = .disconnected(reason: .codex(.permissionDenied))
         case .networkError:
-            body = .error(kind: .network, lastSnapshots: codexSnapshots)
+            body = .error(kind: .network, lastSnapshots: codexSnapshots, isRefreshing: false)
         case .schemaChanged:
-            body = .error(kind: .schemaChanged, lastSnapshots: codexSnapshots)
+            body = .error(kind: .schemaChanged, lastSnapshots: codexSnapshots, isRefreshing: false)
         }
 
         return ProviderTabModel(tab: .codex, body: body)

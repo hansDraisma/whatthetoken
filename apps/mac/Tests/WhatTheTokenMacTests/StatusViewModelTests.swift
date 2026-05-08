@@ -14,12 +14,12 @@ import Testing
     #expect(snapshot.source.parserVersion == "fixture-v1")
 }
 
-@Test func sectionTrustLineHoistsConfidenceConnectorLabelAndUpdatedTime() throws {
+@Test func sectionTrustLineHoistsConfidenceConnectorLabelOnly() throws {
     let snapshot = try StatusViewModel.loadFixtureSnapshot()
     let section = StatusSectionDisplayModel(snapshots: [snapshot], now: Date())
-    let expected = localUpdatedLabel(for: snapshot.lastUpdatedAt)
 
-    #expect(section.trustLine == "Verified by Fixture · \(expected)")
+    #expect(section.trustLine == "Verified by Fixture")
+    #expect(section.trustLine?.contains("Updated") == false)
 }
 
 @Test func fixtureJSONDoesNotContainSensitiveKeys() throws {
@@ -87,18 +87,6 @@ private func sensitiveKeyMatches(
     return []
 }
 
-private func localUpdatedLabel(for isoString: String) -> String {
-    let fractional = ISO8601DateFormatter()
-    fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let plain = ISO8601DateFormatter()
-    plain.formatOptions = [.withInternetDateTime]
-    let date = fractional.date(from: isoString) ?? plain.date(from: isoString)!
-    let formatter = DateFormatter()
-    formatter.dateFormat = "HH:mm"
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    return "Updated \(formatter.string(from: date))"
-}
-
 @MainActor
 @Test func newViewModel_hasNilTimestamps_andIsNotRefreshing() {
     let vm = StatusViewModel()
@@ -135,6 +123,9 @@ private func localUpdatedLabel(for isoString: String) -> String {
 
 @MainActor
 @Test func refreshAll_runsBothProvidersInOrder() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
     final class CallRecorder: @unchecked Sendable {
         var calls: [String] = []
         func record(_ name: String) { calls.append(name) }
@@ -145,6 +136,7 @@ private func localUpdatedLabel(for isoString: String) -> String {
     let codex = RecordingCodexRefresher { recorder.record("codex") }
     let vm = StatusViewModel(
         snapshots: [],
+        settings: settings,
         claudeRefresher: claude,
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
         codexRefresher: codex
@@ -157,8 +149,12 @@ private func localUpdatedLabel(for isoString: String) -> String {
 
 @MainActor
 @Test func refreshAll_setsBothTimestamps() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
     let vm = StatusViewModel(
         snapshots: [],
+        settings: settings,
         claudeRefresher: NoopClaudeRefresher(),
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
         codexRefresher: NoopCodexRefresher()
@@ -174,12 +170,15 @@ private func localUpdatedLabel(for isoString: String) -> String {
 
 @MainActor
 @Test func refreshAll_dropsOverlappingChromeRefresh() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
     let counter = Counter()
     let claude = SlowClaudeRefresher(counter: counter)
     let codex = NoopCodexRefresher()
 
     let vm = StatusViewModel(
         snapshots: [],
+        settings: settings,
         claudeRefresher: claude,
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
         codexRefresher: codex
@@ -323,4 +322,368 @@ private func localUpdatedLabel(for isoString: String) -> String {
 
     #expect(vm.codexConnectorState == .connected)
     #expect(vm.codexConnectorStatusMessage == "Codex connected")
+}
+
+@MainActor
+@Test func loadPersistedStateAppliesSettingsAndEnabledCachedSnapshots() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache)),
+        now: { ISO8601DateFormatter().date(from: "2026-05-07T00:10:00Z")! }
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.settings.connectors.claudeCode.isEnabled == true)
+    #expect(vm.connectorState == .connected)
+    #expect(vm.snapshots.map(\.id) == [UsageSnapshotFixture.claudeSample().id])
+}
+
+@MainActor
+@Test func loadPersistedStateRestoresCachedRefreshTimestamps() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
+    var cache = SnapshotCache.empty
+    let claudeAt = Date(timeIntervalSince1970: 1_000)
+    let codexAt = Date(timeIntervalSince1970: 2_000)
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: claudeAt)
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: codexAt)
+
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.lastRefreshAt(for: .claude) == claudeAt)
+    #expect(vm.lastRefreshAt(for: .codex) == codexAt)
+    #expect(vm.lastUpdatedAt == claudeAt)
+}
+
+@MainActor
+@Test func loadPersistedStateDoesNotRenderDisabledProviderCache() async {
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.settings.connectors.codex.isEnabled == false)
+    #expect(vm.snapshots.isEmpty)
+    #expect(vm.codexConnectorState == .notConnected)
+}
+
+@MainActor
+@Test func loadPersistedStateRestoresSanitizedErrorStateWithCachedSnapshots() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+    cache.recordFailure(
+        for: .claude,
+        code: .network,
+        message: "Claude Code usage could not be refreshed",
+        now: Date(timeIntervalSince1970: 1_100)
+    )
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache)),
+        now: { Date(timeIntervalSince1970: 1_120) }
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.connectorState == .networkError)
+    #expect(vm.connectorStatusMessage == "Claude Code usage could not be refreshed")
+    #expect(vm.snapshots.map(\.id) == [UsageSnapshotFixture.claudeSample().id])
+}
+
+@MainActor
+@Test func setConnectorEnabledPersistsConsentWithoutRefreshing() async {
+    let settingsStore = InMemoryAppSettingsStore()
+    let refresher = RecordingClaudeRefresher()
+    let vm = StatusViewModel(
+        claudeRefresher: refresher,
+        settingsStore: settingsStore,
+        cacheStore: InMemorySnapshotCacheStore()
+    )
+
+    await vm.setConnector(.claude, enabled: true)
+    let persisted = await settingsStore.load()
+
+    #expect(persisted.connectors.claudeCode.isEnabled == true)
+    #expect(vm.connectorState == .connected)
+    #expect(vm.snapshots.isEmpty)
+}
+
+@MainActor
+@Test func saveSettingsPreservesCheckingStateDuringRefresh() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let counter = Counter()
+    let vm = StatusViewModel(
+        settings: settings,
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0")
+    )
+
+    let task = Task { await vm.refreshAll(reason: .manual) }
+    for _ in 0..<20 {
+        if vm.connectorState == .checking { break }
+        await Task.yield()
+    }
+
+    settings.refresh.autoRefreshEnabled = true
+    await vm.saveSettings(settings)
+
+    #expect(vm.connectorState == .checking)
+
+    task.cancel()
+    _ = await task.value
+}
+
+@MainActor
+@Test func disconnectClearsConsentAndProviderCache() async {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))
+    let cacheStore = InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    let settingsStore = InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
+    let vm = StatusViewModel(settingsStore: settingsStore, cacheStore: cacheStore)
+
+    await vm.loadPersistedState()
+    await vm.disconnect(.codex)
+
+    let persistedSettings = await settingsStore.load()
+    let persistedCache = await cacheStore.load()
+    #expect(persistedSettings.connectors.codex.isEnabled == false)
+    #expect(!persistedCache.snapshots.contains { $0.provider == "openai" })
+    #expect(vm.codexConnectorState == .notConnected)
+}
+
+@MainActor
+@Test func disconnectKeepsConsentWhenCacheWipeCannotBePersisted() async throws {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))
+    let settingsStore = InMemoryAppSettingsStore(data: try JSONEncoder.prettyStable.encode(settings))
+
+    let invalidParent = FileManager.default.temporaryDirectory
+        .appendingPathComponent("whatthetoken-cache-parent-\(UUID().uuidString)")
+    try Data("not a directory".utf8).write(to: invalidParent)
+    defer { try? FileManager.default.removeItem(at: invalidParent) }
+
+    let vm = StatusViewModel(
+        snapshots: [UsageSnapshotFixture.codexSample()],
+        settings: settings,
+        cache: cache,
+        settingsStore: settingsStore,
+        cacheStore: JSONFileSnapshotCacheStore(
+            url: invalidParent.appendingPathComponent("snapshot-cache.json")
+        ),
+        codexConnectorState: .connected,
+        codexConnectorStatusMessage: "Codex connected"
+    )
+
+    await vm.disconnect(.codex)
+    let persistedSettings = await settingsStore.load()
+
+    #expect(vm.settings.connectors.codex.isEnabled == true)
+    #expect(persistedSettings.connectors.codex.isEnabled == true)
+    #expect(vm.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate))
+    #expect(vm.codexConnectorState == .connected)
+}
+
+@MainActor
+@Test func disconnectKeepsConsentWhenSettingsDisableCannotBePersisted() async throws {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))
+    let cacheStore = InMemorySnapshotCacheStore(data: try JSONEncoder.cacheEncoder.encode(cache))
+
+    let invalidParent = FileManager.default.temporaryDirectory
+        .appendingPathComponent("whatthetoken-settings-parent-\(UUID().uuidString)")
+    try Data("not a directory".utf8).write(to: invalidParent)
+    defer { try? FileManager.default.removeItem(at: invalidParent) }
+
+    let vm = StatusViewModel(
+        snapshots: [UsageSnapshotFixture.codexSample()],
+        settings: settings,
+        cache: cache,
+        settingsStore: JSONFileAppSettingsStore(
+            url: invalidParent.appendingPathComponent("settings.json")
+        ),
+        cacheStore: cacheStore,
+        codexConnectorState: .connected,
+        codexConnectorStatusMessage: "Codex connected"
+    )
+
+    await vm.disconnect(.codex)
+    let persistedCache = await cacheStore.load()
+
+    #expect(vm.settings.connectors.codex.isEnabled == true)
+    #expect(vm.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate))
+    #expect(vm.codexConnectorState == .connected)
+    #expect(persistedCache.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate))
+}
+
+@MainActor
+@Test func refreshAllSkipsDisabledConnectors() async {
+    let claudeCounter = Counter()
+    let codexCounter = Counter()
+    let vm = StatusViewModel(
+        claudeRefresher: SlowClaudeRefresher(counter: claudeCounter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        codexRefresher: SlowCodexRefresher(counter: codexCounter)
+    )
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(claudeCounter.value == 0)
+    #expect(codexCounter.value == 0)
+}
+
+@MainActor
+@Test func refreshAllRefreshesOnlyEnabledConnector() async {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    let codexCounter = Counter()
+    let vm = StatusViewModel(
+        settings: settings,
+        codexRefresher: SlowCodexRefresher(counter: codexCounter)
+    )
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(codexCounter.value == 1)
+}
+
+@MainActor
+@Test func successfulRefreshPersistsProviderSnapshotsToCache() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let cacheStore = InMemorySnapshotCacheStore()
+    let vm = StatusViewModel(
+        settings: settings,
+        claudeRefresher: SnapshotClaudeRefresher(snapshots: [UsageSnapshotFixture.claudeLowSample()]),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        cacheStore: cacheStore,
+        now: { Date(timeIntervalSince1970: 2_000) }
+    )
+
+    await vm.refreshAll(reason: .manual)
+    let cache = await cacheStore.load()
+
+    #expect(cache.snapshots.map(\.id) == [UsageSnapshotFixture.claudeLowSample().id])
+    #expect(cache.lastSuccessfulRefreshAtByProvider[CachedProviderID.claude.rawValue] == Date(timeIntervalSince1970: 2_000))
+}
+
+@MainActor
+@Test func failedRefreshKeepsLastKnownGoodSnapshotsAndStoresSanitizedError() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+    let cacheStore = InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    let vm = StatusViewModel(
+        settings: settings,
+        cache: cache,
+        claudeRefresher: ThrowingClaudeRefresher(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        cacheStore: cacheStore,
+        now: { Date(timeIntervalSince1970: 2_000) }
+    )
+
+    await vm.refreshAll(reason: .manual)
+    let persisted = await cacheStore.load()
+
+    #expect(vm.snapshots.map(\.id) == [UsageSnapshotFixture.claudeSample().id])
+    #expect(persisted.lastErrorByProvider[CachedProviderID.claude.rawValue]?.code == .network)
+    #expect(persisted.lastErrorByProvider[CachedProviderID.claude.rawValue]?.message == "Claude Code usage could not be refreshed")
+}
+
+@MainActor
+@Test func popoverOpenRefreshRespectsPersistedBackoff() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.recordFailure(
+        for: .claude,
+        code: .network,
+        message: "Claude Code usage could not be refreshed",
+        now: Date(timeIntervalSince1970: 1_000)
+    )
+    let counter = Counter()
+    let vm = StatusViewModel(
+        settings: settings,
+        cache: cache,
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        now: { Date(timeIntervalSince1970: 1_100) }
+    )
+
+    await vm.refreshAll(reason: .popoverOpened)
+
+    #expect(counter.value == 0)
+}
+
+@MainActor
+@Test func manualRefreshBypassesBackoff() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.recordFailure(
+        for: .claude,
+        code: .network,
+        message: "Claude Code usage could not be refreshed",
+        now: Date(timeIntervalSince1970: 1_000)
+    )
+    let counter = Counter()
+    let vm = StatusViewModel(
+        settings: settings,
+        cache: cache,
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        now: { Date(timeIntervalSince1970: 1_100) }
+    )
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(counter.value == 1)
+}
+
+@MainActor
+@Test func repeatedFailuresProgressBackoffToSixtyMinutes() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let cacheStore = InMemorySnapshotCacheStore()
+    let vm = StatusViewModel(
+        settings: settings,
+        claudeRefresher: ThrowingClaudeRefresher(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        cacheStore: cacheStore,
+        now: { Date(timeIntervalSince1970: 1_000) }
+    )
+
+    await vm.refreshAll(reason: .manual)
+    await vm.refreshAll(reason: .manual)
+    await vm.refreshAll(reason: .manual)
+    let cache = await cacheStore.load()
+    let error = cache.lastErrorByProvider[CachedProviderID.claude.rawValue]
+
+    #expect(error?.consecutiveFailureCount == 3)
+    #expect(error?.nextAutomaticRefreshAt == Date(timeIntervalSince1970: 4_600))
 }

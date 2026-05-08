@@ -104,6 +104,33 @@ final class RecordingCodexRefresher: CodexConnectorRefreshing, @unchecked Sendab
     }
 }
 
+final class SnapshotClaudeRefresher: ClaudeConnectorRefreshing, @unchecked Sendable {
+    let snapshots: [UsageSnapshot]
+
+    init(snapshots: [UsageSnapshot]) {
+        self.snapshots = snapshots
+    }
+
+    func refresh() async throws -> ClaudeConnectorResult {
+        ClaudeConnectorResult(
+            snapshots: snapshots,
+            status: ConnectorStatus(
+                product: "claude_code",
+                source: testConnectorSource(),
+                message: "Claude Code connected"
+            )
+        )
+    }
+}
+
+final class ThrowingClaudeRefresher: ClaudeConnectorRefreshing, @unchecked Sendable {
+    func refresh() async throws -> ClaudeConnectorResult {
+        throw SyntheticStatusViewModelError()
+    }
+}
+
+struct SyntheticStatusViewModelError: Error {}
+
 enum UsageSnapshotFixture {
     static func claudeSample() -> UsageSnapshot {
         UsageSnapshot(

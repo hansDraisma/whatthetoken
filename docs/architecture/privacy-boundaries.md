@@ -88,6 +88,21 @@ Codex executable discovery is not credential discovery. The resolver checks the 
 
 The developer-only Codex smoke command must follow the same boundary. It requires `CODEX_CONNECTOR_SMOKE=1` before starting Codex app-server, runs only when explicitly invoked with `--codex-connector-smoke`, and prints only sanitized connector state plus snapshot summaries. It must not print account email, tokens, authorization values, raw JSON-RPC envelopes, raw app-server logs, prompts, responses, command output, local paths, task titles, task summaries, or token-shaped strings.
 
+## Local Persistence, Refresh, And Disconnect
+
+The Mac app may persist only local app state and sanitized usage status:
+
+- `settings.json`: connector consent, refresh preferences, notification preferences, and menu bar display preferences
+- `snapshot-cache.json`: sanitized usage snapshots, last successful refresh timestamps, and sanitized provider error/backoff state
+
+Both files live in the app's Application Support directory. They must not contain provider credentials, copied OAuth tokens, raw provider payloads, prompts, responses, cookies, auth headers, provider session tokens, raw local database rows, or sensitive local paths.
+
+Connector consent is separate from refresh. Enabling a connector allows future reads for that provider. Manual refresh may run only for enabled connectors. Popover-open refresh is an automatic refresh trigger and must respect provider backoff. Timer-based auto-refresh is optional, off by default, and must run only while the popover is open.
+
+Refresh must preserve previously visible sanitized values when available. The UI may show a small updating indicator, but it must not blank the provider view during a refresh with cached or last-known values. Last-updated copy belongs in the footer; provider section trust lines should not duplicate the timestamp.
+
+Disconnect is the privacy boundary for local retention. Disconnecting a provider must disable future reads and remove that provider's cached usage snapshots from WhatTheToken storage. The app must not present disconnect as complete unless both disabled consent and cache removal are durably written. If a settings or cache write fails, the provider should remain shown as connected so the UI does not claim cached data was removed.
+
 ## Local Ingestor Rules
 
 - Prefer parsing local quota/status files or direct local client signals over inspecting authenticated browser traffic.

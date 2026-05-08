@@ -759,6 +759,31 @@ Append to `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift`:
 }
 
 @MainActor
+@Test func loadPersistedStateRestoresSanitizedErrorStateWithCachedSnapshots() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+    cache.recordFailure(
+        for: .claude,
+        code: .network,
+        message: "Claude Code usage could not be refreshed",
+        now: Date(timeIntervalSince1970: 1_100)
+    )
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache)),
+        now: { Date(timeIntervalSince1970: 1_120) }
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.connectorState == .networkError)
+    #expect(vm.connectorStatusMessage == "Claude Code usage could not be refreshed")
+    #expect(vm.snapshots.map(\.id) == [UsageSnapshotFixture.claudeSample().id])
+}
+
+@MainActor
 @Test func setConnectorEnabledPersistsConsentWithoutRefreshing() async {
     let settingsStore = InMemoryAppSettingsStore()
     let refresher = RecordingClaudeRefresher()
@@ -875,20 +900,26 @@ private func applyCachedSnapshots() {
 }
 
 private func applyConnectorStatesFromSettings() {
-    if settings.connectors.claudeCode.isEnabled {
-        connectorState = snapshots.contains(where: CachedProviderID.claude.snapshotPredicate) ? .connected : .connected
-        connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .connected)
-    } else {
+    if !settings.connectors.claudeCode.isEnabled {
         connectorState = .notConnected
         connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .notConnected)
+    } else if let error = cache.lastErrorByProvider[CachedProviderID.claude.rawValue] {
+        connectorState = error.code == .schemaChanged ? .schemaChanged : .networkError
+        connectorStatusMessage = error.message
+    } else {
+        connectorState = .connected
+        connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .connected)
     }
 
-    if settings.connectors.codex.isEnabled {
-        codexConnectorState = snapshots.contains(where: CachedProviderID.codex.snapshotPredicate) ? .connected : .connected
-        codexConnectorStatusMessage = CodexConnectorSetupCopy.title(for: .connected)
-    } else {
+    if !settings.connectors.codex.isEnabled {
         codexConnectorState = .notConnected
         codexConnectorStatusMessage = CodexConnectorSetupCopy.title(for: .notConnected)
+    } else if let error = cache.lastErrorByProvider[CachedProviderID.codex.rawValue] {
+        codexConnectorState = error.code == .schemaChanged ? .schemaChanged : .networkError
+        codexConnectorStatusMessage = error.message
+    } else {
+        codexConnectorState = .connected
+        codexConnectorStatusMessage = CodexConnectorSetupCopy.title(for: .connected)
     }
 }
 ```
@@ -940,7 +971,7 @@ init(viewModel: StatusViewModel) {
 cd apps/mac && swift test --filter StatusViewModel
 ```
 
-Expected: pass after updating any initializer call sites with default store arguments.
+Expected: pass. If a compile error reports a missing argument in a `StatusViewModel(...)` call, keep that call unchanged and add the missing parameter as a default in the initializer signature from Step 3.
 
 - [ ] **Step 8: Commit**
 
@@ -1077,6 +1108,16 @@ private func refreshClaude(reason: RefreshReason) async {
     guard connectorState != .checking else { return }
     guard reason.isManual || cache.allowsAutomaticRefresh(for: .claude, now: now()) else { return }
 
+    if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
+        replaceSnapshots(matching: CachedProviderID.claude.snapshotPredicate, with: [])
+        cache.removeProvider(.claude)
+        await cacheStore.save(cache)
+        connectorState = .missingClaudeCli
+        connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
+        lastClaudeRefreshAt = now()
+        return
+    }
+
     let previousState = connectorState
     let previousMessage = connectorStatusMessage
     connectorState = .checking
@@ -1180,16 +1221,6 @@ private func requireClaudeRefreshResult() async throws -> ClaudeConnectorResult 
                 product: "claude_code",
                 source: ConnectorSource(connector: "claude_code", state: .notConnected, label: "Claude Code", parserVersion: "unknown", deviceId: "local_mac"),
                 message: "Claude Code is not connected"
-            )
-        )
-    }
-    if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
-        return ClaudeConnectorResult(
-            snapshots: [],
-            status: ConnectorStatus(
-                product: "claude_code",
-                source: ConnectorSource(connector: "claude_code", state: .missingCredentials, label: "Claude Code", parserVersion: "unknown", deviceId: "local_mac"),
-                message: ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
             )
         )
     }
@@ -1465,6 +1496,13 @@ var lastDuration: Duration? {
 }
 ```
 
+Delete the old tests whose assertions depend on the Stage 1 always-on timer:
+
+- `timer_skipsRefresh_ifGenerationChangedDuringSleep`
+- `popoverDidOpen_startsTimerBeforeImmediateRefreshCompletes`
+
+Keep `popoverDidClose_cancelsBeforeNextTick`, but set `settings.refresh.autoRefreshEnabled = true` in that test setup so there is a timer to cancel. Keep `popoverDidClose_cancelsImmediateRefreshBeforeItClaimsFreshness`; it still validates the one-shot popover-open task.
+
 - [ ] **Step 2: Run failing controller tests**
 
 ```bash
@@ -1489,7 +1527,7 @@ Change `startTimer` signature:
 private func startTimer(expectedGeneration expected: Int, interval: Duration)
 ```
 
-Remove the stored `interval` property and the initializer `interval` parameter unless still used by tests.
+Remove the stored `interval` property and the initializer `interval` parameter. Tests should control timing by setting `viewModel.settings.refresh.intervalSeconds`.
 
 - [ ] **Step 4: Run controller tests**
 
@@ -1497,7 +1535,7 @@ Remove the stored `interval` property and the initializer `interval` parameter u
 cd apps/mac && swift test --filter PopoverRefreshControllerTests
 ```
 
-Expected: pass after updating tests that assumed timer always starts.
+Expected: pass with the deleted timer-assumption tests and the updated `popoverDidClose_cancelsBeforeNextTick` setup from Step 1.
 
 - [ ] **Step 5: Commit**
 
@@ -1733,9 +1771,9 @@ Add `StatusViewModel.isRefreshing(_:)`:
 func isRefreshing(_ tab: ProviderTab) -> Bool {
     switch tab {
     case .claude:
-        return connectorState == .checking || isRefreshAllInFlight
+        return connectorState == .checking
     case .codex:
-        return codexConnectorState == .checking || isRefreshAllInFlight
+        return codexConnectorState == .checking
     }
 }
 ```
@@ -1777,7 +1815,7 @@ Add:
 @ViewBuilder
 private func refreshProgressLine(isVisible: Bool) -> some View {
     if isVisible {
-        ProgressView(value: nil)
+        ProgressView()
             .progressViewStyle(.linear)
             .controlSize(.small)
             .frame(height: 2)
@@ -1852,20 +1890,45 @@ Change `ConnectorRowView` properties:
 
 ```swift
 let isEnabled: Bool
+let canDisconnect: Bool
 let onEnabledChange: (Bool) -> Void
 let onDisconnect: () -> Void
 ```
 
-Add controls below trust copy:
+Replace `ConnectorRowView.body` with:
 
 ```swift
-Toggle("Enabled", isOn: Binding(
-    get: { isEnabled },
-    set: onEnabledChange
-))
+var body: some View {
+    HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.headline)
+            Text(stateTitle)
+                .font(.subheadline)
+            if detail != stateTitle {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text(trustMessage)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
 
-Button("Disconnect", role: .destructive, action: onDisconnect)
-    .disabled(!isEnabled && stateTitle.contains("not connected"))
+            Toggle("Enabled", isOn: Binding(
+                get: { isEnabled },
+                set: onEnabledChange
+            ))
+
+            Button("Disconnect", role: .destructive, action: onDisconnect)
+                .disabled(!canDisconnect)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        Button(actionTitle, action: action)
+            .disabled(isWorking || !isEnabled)
+    }
+    .padding(.vertical, 6)
+}
 ```
 
 - [ ] **Step 5: Update settings view call sites**
@@ -1874,6 +1937,7 @@ In `ConnectorsView`, pass Claude values:
 
 ```swift
 isEnabled: viewModel.settings.connectors.claudeCode.isEnabled,
+canDisconnect: viewModel.settings.connectors.claudeCode.isEnabled || viewModel.snapshots.contains(where: CachedProviderID.claude.snapshotPredicate),
 onEnabledChange: { enabled in
     let viewModel = self.viewModel
     Task { await viewModel.setConnector(.claude, enabled: enabled) }
@@ -1884,7 +1948,20 @@ onDisconnect: {
 }
 ```
 
-Pass Codex values using `.codex`.
+Pass Codex values using `.codex`:
+
+```swift
+isEnabled: viewModel.settings.connectors.codex.isEnabled,
+canDisconnect: viewModel.settings.connectors.codex.isEnabled || viewModel.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate),
+onEnabledChange: { enabled in
+    let viewModel = self.viewModel
+    Task { await viewModel.setConnector(.codex, enabled: enabled) }
+},
+onDisconnect: {
+    let viewModel = self.viewModel
+    Task { await viewModel.disconnect(.codex) }
+}
+```
 
 Add a `Section("Refresh")`:
 

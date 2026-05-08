@@ -18,6 +18,7 @@ import Testing
         #expect(settings.notifications.criticalThreshold == 0.10)
         #expect(settings.notifications.providerAlerts.claudeCode.isEnabled == true)
         #expect(settings.notifications.providerAlerts.codex.isEnabled == true)
+        #expect(settings.launchAtLogin.isEnabled == false)
         #expect(settings.menuBar.displayMode == .statusIcon)
     }
 
@@ -57,6 +58,7 @@ import Testing
         #expect(decoded.notifications.criticalThreshold == 0.10)
         #expect(decoded.notifications.providerAlerts.claudeCode.isEnabled == true)
         #expect(decoded.notifications.providerAlerts.codex.isEnabled == true)
+        #expect(decoded.launchAtLogin.isEnabled == false)
     }
 
     @Test func decodesV1SettingsAndPreservesCustomLowThresholdAsWarningThreshold() throws {
@@ -108,6 +110,7 @@ import Testing
         settings.connectors.claudeCode.isEnabled = true
         settings.refresh.autoRefreshEnabled = true
         settings.refresh.intervalSeconds = 600
+        settings.launchAtLogin.isEnabled = true
 
         let data = try JSONEncoder().encode(settings)
         let decoded = try AppSettings.decodeValidated(from: data)
@@ -145,6 +148,27 @@ import Testing
         #expect(!json.contains("session"))
         #expect(!json.contains("prompt"))
         #expect(!json.contains("response"))
+    }
+
+    @Test func decodingOldSchemaDefaultsLaunchAtLogin() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "connectors": {
+            "claudeCode": { "isEnabled": true },
+            "codex": { "isEnabled": false }
+          },
+          "refresh": { "autoRefreshEnabled": true, "intervalSeconds": 600 },
+          "notifications": { "isEnabled": false, "lowThreshold": 0.3, "criticalThreshold": 0.1 },
+          "menuBar": { "displayMode": "statusIcon" }
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try AppSettings.decodeValidated(from: json)
+
+        #expect(decoded.connectors.claudeCode.isEnabled)
+        #expect(decoded.refresh.autoRefreshEnabled)
+        #expect(decoded.launchAtLogin.isEnabled == false)
     }
 
     @Test func memoryStorePersistsLatestValue() async {

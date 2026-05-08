@@ -478,6 +478,7 @@ private func sensitiveKeyMatches(
     settings.connectors.codex.isEnabled = true
     var cache = SnapshotCache.empty
     cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))
+    let settingsStore = InMemoryAppSettingsStore(data: try JSONEncoder.prettyStable.encode(settings))
 
     let invalidParent = FileManager.default.temporaryDirectory
         .appendingPathComponent("whatthetoken-cache-parent-\(UUID().uuidString)")
@@ -488,6 +489,7 @@ private func sensitiveKeyMatches(
         snapshots: [UsageSnapshotFixture.codexSample()],
         settings: settings,
         cache: cache,
+        settingsStore: settingsStore,
         cacheStore: JSONFileSnapshotCacheStore(
             url: invalidParent.appendingPathComponent("snapshot-cache.json")
         ),
@@ -496,8 +498,10 @@ private func sensitiveKeyMatches(
     )
 
     await vm.disconnect(.codex)
+    let persistedSettings = await settingsStore.load()
 
     #expect(vm.settings.connectors.codex.isEnabled == true)
+    #expect(persistedSettings.connectors.codex.isEnabled == true)
     #expect(vm.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate))
     #expect(vm.codexConnectorState == .connected)
 }

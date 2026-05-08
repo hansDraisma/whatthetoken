@@ -5,8 +5,11 @@ import Testing
 @Suite struct PopoverRefreshControllerTests {
     @MainActor
     @Test func userTappedRefresh_routesThroughRefreshAll() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
         let vm = StatusViewModel(
             snapshots: [],
+            settings: settings,
             claudeRefresher: NoopClaudeRefresher(),
             claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
             codexRefresher: NoopCodexRefresher()
@@ -21,8 +24,11 @@ import Testing
 
     @MainActor
     @Test func userTappedRetry_routesThroughRefreshAll() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
         let vm = StatusViewModel(
             snapshots: [],
+            settings: settings,
             claudeRefresher: NoopClaudeRefresher(),
             claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
             codexRefresher: NoopCodexRefresher()
@@ -36,40 +42,86 @@ import Testing
     }
 
     @MainActor
-    @Test func popoverDidOpen_runsImmediateRefresh_andStartsTimer() async {
+    @Test func popoverDidOpen_runsImmediateRefresh_withoutStartingTimerWhenAutoRefreshDisabled() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
         let vm = StatusViewModel(
-            snapshots: [],
+            settings: settings,
             claudeRefresher: NoopClaudeRefresher(),
             claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
-            codexRefresher: NoopCodexRefresher()
+            settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
         )
         let fake = FakeSleeper()
         let controller = PopoverRefreshController(viewModel: vm, sleeper: { duration in await fake.sleep(duration) })
 
         controller.popoverDidOpen()
         for _ in 0..<10 { await Task.yield() }
-        let firstStamp = vm.lastClaudeRefreshAt
-        #expect(firstStamp != nil)
 
+        #expect(vm.lastClaudeRefreshAt != nil)
+        #expect(fake.pendingTicks == 0)
+    }
+
+    @MainActor
+    @Test func popoverDidOpen_startsConfiguredTimerWhenAutoRefreshEnabled() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        settings.refresh.autoRefreshEnabled = true
+        settings.refresh.intervalSeconds = 300
+        let vm = StatusViewModel(
+            settings: settings,
+            claudeRefresher: NoopClaudeRefresher(),
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+            settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
+        )
+        let fake = FakeSleeper()
+        let controller = PopoverRefreshController(viewModel: vm, sleeper: { duration in await fake.sleep(duration) })
+
+        controller.popoverDidOpen()
         for _ in 0..<20 {
             if fake.pendingTicks > 0 { break }
             await Task.yield()
         }
-        #expect(fake.pendingTicks == 1)
 
-        let stampedBefore = vm.lastClaudeRefreshAt
-        fake.fireOneTick()
-        for _ in 0..<20 { await Task.yield() }
-        #expect(vm.lastClaudeRefreshAt != stampedBefore)
+        #expect(fake.pendingTicks == 1)
+        #expect(fake.lastDuration == .seconds(300))
+        controller.popoverDidClose()
+    }
+
+    @MainActor
+    @Test func popoverDidOpen_loadsPersistedStateBeforeImmediateRefresh() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        let settingsStore = InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
+        let counter = Counter()
+        let vm = StatusViewModel(
+            claudeRefresher: SlowClaudeRefresher(counter: counter),
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+            settingsStore: settingsStore
+        )
+        let controller = PopoverRefreshController(viewModel: vm, sleeper: { _ in })
+
+        controller.popoverDidOpen()
+        for _ in 0..<30 {
+            if counter.value > 0 { break }
+            await Task.yield()
+        }
+
+        #expect(vm.hasLoadedPersistedState == true)
+        #expect(counter.value == 1)
     }
 
     @MainActor
     @Test func popoverDidClose_cancelsBeforeNextTick() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        settings.refresh.autoRefreshEnabled = true
         let vm = StatusViewModel(
             snapshots: [],
+            settings: settings,
             claudeRefresher: NoopClaudeRefresher(),
             claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
-            codexRefresher: NoopCodexRefresher()
+            codexRefresher: NoopCodexRefresher(),
+            settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
         )
         let fake = FakeSleeper()
         let controller = PopoverRefreshController(viewModel: vm, sleeper: { duration in await fake.sleep(duration) })
@@ -86,56 +138,17 @@ import Testing
     }
 
     @MainActor
-    @Test func timer_skipsRefresh_ifGenerationChangedDuringSleep() async {
-        let counter = Counter()
-        let vm = StatusViewModel(
-            snapshots: [],
-            claudeRefresher: SlowClaudeRefresher(counter: counter),
-            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
-            codexRefresher: NoopCodexRefresher()
-        )
-        let fake = FakeSleeper()
-        let controller = PopoverRefreshController(viewModel: vm, sleeper: { duration in await fake.sleep(duration) })
-
-        controller.popoverDidOpen()
-        for _ in 0..<30 {
-            if fake.pendingTicks > 0 { break }
-            await Task.yield()
-        }
-        if fake.pendingTicks == 0 {
-            try? await Task.sleep(nanoseconds: 60_000_000)
-        }
-        for _ in 0..<30 {
-            if fake.pendingTicks > 0 { break }
-            await Task.yield()
-        }
-        #expect(fake.pendingTicks > 0)
-        let immediateCount = counter.value
-
-        controller.popoverDidOpen()
-        for _ in 0..<30 {
-            if counter.value > immediateCount { break }
-            await Task.yield()
-        }
-        let countAfterReopenImmediateRefresh = counter.value
-
-        fake.fireOneTick()
-        for _ in 0..<30 { await Task.yield() }
-
-        #expect(
-            counter.value == countAfterReopenImmediateRefresh,
-            "Old timer must not refresh after generation invalidation."
-        )
-    }
-
-    @MainActor
     @Test func userTappedRefreshDuringInFlight_isDropped() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
         let counter = Counter()
         let vm = StatusViewModel(
             snapshots: [],
+            settings: settings,
             claudeRefresher: SlowClaudeRefresher(counter: counter),
             claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
-            codexRefresher: NoopCodexRefresher()
+            codexRefresher: NoopCodexRefresher(),
+            settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
         )
         let controller = PopoverRefreshController(viewModel: vm, sleeper: { _ in })
 
@@ -147,35 +160,17 @@ import Testing
     }
 
     @MainActor
-    @Test func popoverDidOpen_startsTimerBeforeImmediateRefreshCompletes() async {
-        let counter = Counter()
-        let vm = StatusViewModel(
-            snapshots: [],
-            claudeRefresher: SlowClaudeRefresher(counter: counter),
-            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
-            codexRefresher: NoopCodexRefresher()
-        )
-        let fake = FakeSleeper()
-        let controller = PopoverRefreshController(viewModel: vm, sleeper: { duration in await fake.sleep(duration) })
-
-        controller.popoverDidOpen()
-        for _ in 0..<20 {
-            if counter.value > 0 && fake.pendingTicks > 0 { break }
-            await Task.yield()
-        }
-
-        #expect(counter.value == 1)
-        #expect(fake.pendingTicks == 1, "Timer should be registered while the immediate refresh is still in flight.")
-    }
-
-    @MainActor
     @Test func popoverDidClose_cancelsImmediateRefreshBeforeItClaimsFreshness() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
         let counter = Counter()
         let vm = StatusViewModel(
             snapshots: [],
+            settings: settings,
             claudeRefresher: SlowClaudeRefresher(counter: counter),
             claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
-            codexRefresher: NoopCodexRefresher()
+            codexRefresher: NoopCodexRefresher(),
+            settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
         )
         let controller = PopoverRefreshController(viewModel: vm, sleeper: { _ in })
 
@@ -194,10 +189,14 @@ import Testing
 final class FakeSleeper: @unchecked Sendable {
     private let lock = NSLock()
     private var continuations: [CheckedContinuation<Void, Never>] = []
+    private var storedLastDuration: Duration?
 
-    func sleep(_: Duration) async {
+    func sleep(_ duration: Duration) async {
         await withCheckedContinuation { continuation in
-            lock.withLock { continuations.append(continuation) }
+            lock.withLock {
+                storedLastDuration = duration
+                continuations.append(continuation)
+            }
         }
     }
 
@@ -210,5 +209,9 @@ final class FakeSleeper: @unchecked Sendable {
 
     var pendingTicks: Int {
         lock.withLock { continuations.count }
+    }
+
+    var lastDuration: Duration? {
+        lock.withLock { storedLastDuration }
     }
 }

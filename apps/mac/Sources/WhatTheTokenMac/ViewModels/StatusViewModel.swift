@@ -128,8 +128,29 @@ final class StatusViewModel {
         switch provider {
         case .claude:
             nextSettings.connectors.claudeCode.isEnabled = enabled
+            nextSettings.connectors.claudeCode.isPaused = false
         case .codex:
             nextSettings.connectors.codex.isEnabled = enabled
+            nextSettings.connectors.codex.isPaused = false
+        }
+
+        guard await settingsStore.save(nextSettings) else { return false }
+        settings = nextSettings
+        applyCachedSnapshots()
+        applyConnectorStatesFromSettings()
+        return true
+    }
+
+    @discardableResult
+    func setConnector(_ provider: CachedProviderID, paused: Bool) async -> Bool {
+        var nextSettings = settings
+        switch provider {
+        case .claude:
+            guard nextSettings.connectors.claudeCode.isEnabled else { return false }
+            nextSettings.connectors.claudeCode.isPaused = paused
+        case .codex:
+            guard nextSettings.connectors.codex.isEnabled else { return false }
+            nextSettings.connectors.codex.isPaused = paused
         }
 
         guard await settingsStore.save(nextSettings) else { return false }
@@ -156,8 +177,10 @@ final class StatusViewModel {
         switch provider {
         case .claude:
             nextSettings.connectors.claudeCode.isEnabled = false
+            nextSettings.connectors.claudeCode.isPaused = false
         case .codex:
             nextSettings.connectors.codex.isEnabled = false
+            nextSettings.connectors.codex.isPaused = false
         }
 
         var nextCache = cache
@@ -180,6 +203,7 @@ final class StatusViewModel {
         if !settings.connectors.claudeCode.isEnabled {
             var nextSettings = settings
             nextSettings.connectors.claudeCode.isEnabled = true
+            nextSettings.connectors.claudeCode.isPaused = false
             guard await settingsStore.save(nextSettings) else { return }
             settings = nextSettings
             connectorState = .connected
@@ -195,6 +219,7 @@ final class StatusViewModel {
         if !settings.connectors.codex.isEnabled {
             var nextSettings = settings
             nextSettings.connectors.codex.isEnabled = true
+            nextSettings.connectors.codex.isPaused = false
             guard await settingsStore.save(nextSettings) else { return }
             settings = nextSettings
             codexConnectorState = .connected
@@ -215,7 +240,7 @@ final class StatusViewModel {
     }
 
     private func refreshClaude(reason: RefreshReason) async {
-        guard settings.connectors.claudeCode.isEnabled else { return }
+        guard settings.connectors.claudeCode.isEnabled && !settings.connectors.claudeCode.isPaused else { return }
         guard connectorState != .checking else { return }
         guard reason.isManual || cache.allowsAutomaticRefresh(for: .claude, now: now()) else { return }
 
@@ -264,7 +289,7 @@ final class StatusViewModel {
     }
 
     private func refreshCodex(reason: RefreshReason) async {
-        guard settings.connectors.codex.isEnabled else { return }
+        guard settings.connectors.codex.isEnabled && !settings.connectors.codex.isPaused else { return }
         guard codexConnectorState != .checking else { return }
         guard reason.isManual || cache.allowsAutomaticRefresh(for: .codex, now: now()) else { return }
 
@@ -437,7 +462,10 @@ final class StatusViewModel {
     }
 
     private func applyCachedSnapshots() {
-        let evaluated = cache.snapshotsEvaluatingStaleness(now: now())
+        let evaluated = cache.snapshotsEvaluatingStaleness(
+            now: now(),
+            policy: SnapshotStalePolicy.from(settings: settings)
+        )
         snapshots = evaluated.filter { snapshot in
             if CachedProviderID.claude.snapshotPredicate(snapshot) {
                 return settings.connectors.claudeCode.isEnabled
@@ -462,6 +490,9 @@ final class StatusViewModel {
         if !settings.connectors.claudeCode.isEnabled {
             connectorState = .notConnected
             connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .notConnected)
+        } else if settings.connectors.claudeCode.isPaused {
+            connectorState = .connected
+            connectorStatusMessage = "Claude Code paused"
         } else if let error = cache.lastErrorByProvider[CachedProviderID.claude.rawValue] {
             connectorState = error.code == .schemaChanged ? .schemaChanged : .networkError
             connectorStatusMessage = error.message
@@ -473,6 +504,9 @@ final class StatusViewModel {
         if !settings.connectors.codex.isEnabled {
             codexConnectorState = .notConnected
             codexConnectorStatusMessage = CodexConnectorSetupCopy.title(for: .notConnected)
+        } else if settings.connectors.codex.isPaused {
+            codexConnectorState = .connected
+            codexConnectorStatusMessage = "Codex paused"
         } else if let error = cache.lastErrorByProvider[CachedProviderID.codex.rawValue] {
             codexConnectorState = error.code == .schemaChanged ? .schemaChanged : .networkError
             codexConnectorStatusMessage = error.message

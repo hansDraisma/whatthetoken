@@ -89,8 +89,23 @@ struct SnapshotCache: Codable, Equatable, Sendable {
         return now >= next
     }
 
-    func snapshotsEvaluatingStaleness(now: Date, staleAfterMinutes: Int = 60) -> [UsageSnapshot] {
-        snapshots.map { $0.evaluatingStaleness(now: now, staleAfterMinutes: staleAfterMinutes) }
+    func snapshotsEvaluatingStaleness(
+        now: Date,
+        policy: SnapshotStalePolicy = SnapshotStalePolicy(staleAfterMinutes: 60)
+    ) -> [UsageSnapshot] {
+        snapshots.map { $0.evaluatingStaleness(now: now, staleAfterMinutes: policy.staleAfterMinutes) }
+    }
+}
+
+struct SnapshotStalePolicy: Equatable, Sendable {
+    let staleAfterMinutes: Int
+
+    static func from(settings: AppSettings) -> SnapshotStalePolicy {
+        guard settings.refresh.autoRefreshEnabled else {
+            return SnapshotStalePolicy(staleAfterMinutes: 60)
+        }
+        let intervalMinutes = max(settings.refresh.intervalSeconds / 60, 1)
+        return SnapshotStalePolicy(staleAfterMinutes: max(intervalMinutes * 2, 15))
     }
 }
 

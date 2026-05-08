@@ -22,7 +22,7 @@ These are settled. Do not re-litigate during implementation.
 - **Phase 1 connector actions in Settings:** `Connect`, `Refresh`, `Retry` (state-driven; see §6 table). **No disconnect, no separate reconnect** until backing model APIs exist.
 - **Chrome:** the popover footer shows "Last updated …" + a refresh icon, plus a `•••` overflow menu containing Settings, About, Quit (and, in DEBUG only, Open Developer Window).
 - **Disconnected tabs are still selectable** and render a compact empty state with a primary "Open Settings" button.
-- **Banner is selected-provider scoped, conditional, and deterministic.** When the active tab's body is `.disconnected`, banner shows `.disconnected`. When the active tab is connected with data, banner severity is derived from the worst-of `StatusUsageState` (`critical > low > healthy`); when data is stale or the provider is in a network/schema error state, banner shows `.stale`. The full evaluation table is in §4. A cross-provider hint is appended to a `.critical` / `.low` banner only when the *other* connected provider is `.connected(_, worst: .healthy)`. Disconnected text broadens to "Connect Claude or Codex in Settings" when both providers are disconnected.
+- **Banner is selected-provider scoped, conditional, and deterministic.** When the active tab's body is `.disconnected`, banner shows `.disconnected`. When the active tab is connected with data, banner uses the contextual provider-availability model in §14, not raw worst-of every row. When data is stale or the provider is in a network/schema error state, banner shows `.stale`. Disconnected text broadens to "Connect Claude or Codex in Settings" when both providers are disconnected.
 - **Single shared `StatusViewModel`** instance, owned by an `AppModel` that's instantiated once at app startup. `MenuBarExtra`, `Settings`, and (DEBUG) the developer window all read from it.
 - **Single serialized chrome refresh entry** (`StatusViewModel.refreshAll(reason:)`). Manual / popover-open / 30s in-popover timer share one outer in-flight guard. Settings actions bypass `refreshAll` and call provider-specific methods directly; the per-provider `.checking` guards prevent duplicate same-provider calls.
 - **Per-provider stored state** (`lastClaudeRefreshAt`, `lastCodexRefreshAt`). The popover's footer "Last updated …" is **scoped to the selected tab** — it shows that provider's last refresh time, not the older-of-the-two. This avoids the asymmetric-refresh case where the global label would lie ("Claude refreshed 10 min ago, user just connects Codex" → footer must say "just now" on the Codex tab, not "10 minutes ago"). "Last updated" means "the time of the most recent meaningful determination of this provider's state," including local checks like missing CLI.
@@ -204,6 +204,8 @@ Snapshot filter predicates match the existing `replaceSnapshots` calls: `provide
 
 **`BannerState.from(viewModel:selected:)`** — looks at the *selected* tab's `ProviderTabModel.body`. The cases are mutually exclusive (a body is exactly one of these); evaluation order does not matter for correctness.
 
+> §14 supersedes the original connected-row mapping below. Keep the disconnected, checking, empty, and explicit error-body behavior from this table, but use `ProviderAvailability` for `.connected(...)` bodies so optional fallback credits do not make the provider falsely critical.
+
 | Selected tab `body` | Banner |
 |---|---|
 | `.disconnected(_)` | `.disconnected(text:)`. When both providers are `.disconnected`, broaden to "Connect Claude or Codex in Settings." |
@@ -215,11 +217,13 @@ Snapshot filter predicates match the existing `replaceSnapshots` calls: `provide
 | `.empty` | `.hidden` |
 | `.checking` | `.hidden` (transient; refresh will resolve) |
 
-**Cross-provider hint** is appended to a `.critical` or `.low` banner only when the *other* provider's body is `.connected(_, worst: .healthy)`. Format: "Claude is running low — Codex has more room." If the other provider is itself low/critical/disconnected, no hint is appended.
+**Cross-provider hint** is appended to a `.critical` or `.low` banner only when the *other* provider's body is `.connected(_, worst: .healthy)`. Format: "Claude is running low — Codex has more room." If the other provider is itself low/critical/disconnected, no hint is appended. §14 further suppresses this hint for `criticalWithFallback` and `fallbackOnly` copy.
 
 **`PopoverFooterState`**: `lastUpdatedAt = viewModel.lastRefreshAt(for: selected)` (per-tab); `isRefreshing = viewModel.isAnyRefreshing`; `canRefresh = !isRefreshing`. Constructed via `from(viewModel:selected:)`.
 
 ### Banner copy (centralized in a `BannerCopy` enum for future localization)
+
+> §14 supersedes the critical/low strings below for connected providers. The stale and disconnected copy remains valid.
 
 - critical: `"Claude is running critically low"` (+ optional cross-provider hint)
 - low: `"Claude is running low"` (+ optional cross-provider hint)
@@ -479,7 +483,7 @@ The popover's `•••` overflow menu adds, in DEBUG builds only, an `Open Dev
 | Subject | Coverage |
 |---|---|
 | `ProviderTabModel.from(viewModel:tab:)` | One case per `ClaudeConnectorSetupState` (×9) and `CodexConnectorSetupState` (×7). For `.connected`, sub-cases with and without snapshots. |
-| `BannerState.from(viewModel:selected:)` | One assert per `Body` case (table in §4); both-providers-disconnected broadens copy; cross-provider hint fires only when other provider is `.connected(_, worst: .healthy)`; `.hidden` when active tab is healthy and no hint applies; `.hidden` for `.empty` and `.checking`. |
+| `BannerState.from(viewModel:selected:)` | One assert per non-connected `Body` case (table in §4); connected bodies use the contextual provider-availability matrix in §14; both-providers-disconnected broadens copy; cross-provider hint fires only when allowed by §14; `.hidden` when active tab availability is `.available`; `.hidden` for `.empty` and `.checking`. |
 | `PopoverFooterState.from(viewModel:selected:)` | `lastUpdatedAt` is the selected tab's per-provider timestamp (nil/Date); `canRefresh` mirrors `!isAnyRefreshing`. Includes the asymmetric-refresh case (one tab fresh, one stale) to confirm scope-to-selected behavior. |
 | `claudeActionTitle(for:)` / `codexActionTitle(for:)` | One assert per setup-state case (table in §6). |
 
@@ -605,20 +609,27 @@ This addendum corrects a Phase 1 false alarm in the provider banner: fallback cr
 Provider docs describe credits / extra usage as a fallback lane, not the primary included allowance:
 
 - Claude Code usage is governed by plan/session usage limits; Claude extra usage applies after included plan limits are reached and can apply to Claude Code. Sources: [Claude Code usage limits](https://support.claude.com/en/articles/14552983-models-usage-limits-in-claude-code), [Claude extra usage](https://support.claude.com/en/articles/12429409-extra-usage-for-max-20x-plans), [Claude usage bundles](https://support.claude.com/en/articles/14246112-buy-usage-bundles).
-- Codex uses included plan limits first; after plan limits are reached, usage can draw from a credit balance when the plan/workspace supports flexible pricing. Sources: [ChatGPT flexible credits](https://help.openai.com/articles/12642688), [Codex with ChatGPT plan](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan/), [Codex rate card](https://help.openai.com/en/articles/20001106-codex-rate-card%E8%BF%99%E4%B8%AA%E6%96%B0%E6%94%B6%E8%B4%B9%E6%A8%A1%E5%BC%8F%E5%B7%B2%E7%BB%8F%E5%AE%9E%E8%A3%85%E4%BA%86%E5%90%97%EF%BC%9F).
+- Codex uses included plan limits first; after plan limits are reached, usage can draw from a credit balance when the plan/workspace supports flexible pricing. Sources: [ChatGPT flexible credits](https://help.openai.com/articles/12642688), [Codex with ChatGPT plan](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan/), [Codex rate card](https://help.openai.com/en/articles/20001106-codex-rate-card).
 
 Because credits are a fallback lane, zero credits are not inherently critical while included usage is still available.
 
 ### Lanes
 
-Each selected provider is evaluated through two lanes:
+Each selected provider is evaluated through two lanes. Filters are explicit so a future connector adding a new utilization-bearing row cannot silently fold into the wrong lane.
 
 | Lane | Claude snapshots | Codex snapshots |
 |---|---|---|
-| Included quota | `provider == "anthropic"`, `product == "claude_code"`, `poolKey == "anthropic_claude_subscription"` | `provider == "openai"`, `product == "codex"`, `unit == "utilization"` |
+| Included quota | `provider == "anthropic"`, `product == "claude_code"`, `poolKey == "anthropic_claude_subscription"` | `provider == "openai"`, `product == "codex"`, `unit == "utilization"`, **`poolKey != "openai_codex_credits"`** |
 | Fallback credits | `provider == "anthropic"`, `product == "claude_code"`, `poolKey == "anthropic_claude_extra_usage"` | `provider == "openai"`, `product == "codex"`, `poolKey == "openai_codex_credits"` |
 
 Rows outside these lanes are informational for provider availability unless a future connector explicitly classifies them.
+
+### Aggregation
+
+The two lanes aggregate differently:
+
+- **Included lane** — worst-of `StatusUsageState` across all included rows, using the existing ordering `.empty > .critical > .low > .healthy`. This is **lane-scoped**, distinct from `ProviderTabModel.Body.connected(_, worst:)` which spans every snapshot for the provider.
+- **Fallback lane** — tri-state, not severity. The lane is **positive** when at least one fallback row is non-empty, **zero** when every fallback row is empty, **missing** when no fallback row is present at all.
 
 ### Thresholds
 
@@ -632,73 +643,84 @@ Reuse the existing `StatusUsageState` thresholds exactly:
 | `.healthy` | remaining fraction `>= 0.30` |
 | unknown remaining | `.healthy`, matching current behavior |
 
-Within each lane, aggregate with worst-of using the existing ordering: `.empty` > `.critical` > `.low` > `.healthy`.
-
 ### Availability Cases
 
-Provider-level availability is a presentation concept:
+Provider-level availability is a presentation concept derived from snapshots. It does **not** model disconnection or non-snapshot error states; those continue to live on `ProviderTabModel.Body` and are handled by `BannerState` upstream of availability.
 
 ```swift
 enum ProviderAvailability: Equatable, Sendable {
     case available
-    case low
-    case fallbackOnly
-    case critical
+    case low                      // included is below the low threshold
+    case criticalWithFallback     // included is .critical, fallback credits provide a usable path
+    case fallbackOnly             // included is .empty,    fallback credits provide a usable path
+    case critical                 // no usable path remains
     case stale
-    case disconnected
 }
 ```
 
-State precedence is:
+State precedence within `from(snapshots:tab:)` is:
 
-`disconnected > stale > critical > fallbackOnly > low > available`
+`stale > critical > fallbackOnly > criticalWithFallback > low > available`
 
-Disconnected comes from `ProviderTabModel.Body.disconnected`. Stale comes from `ProviderTabModel.Body.error(.network/.schemaChanged, _)` or any selected-provider snapshot with `staleReason != nil`.
+`stale` is produced when any selected-provider snapshot has `staleReason != nil`. `BannerState` continues to handle stale for the `.error(.network)` and `.error(.schemaChanged)` bodies; **`ProviderAvailability` only handles snapshot staleness inside the `.connected` body.** The two paths are disjoint and must not double-detect.
 
-`fallbackOnly` means included usage is exhausted (`.empty`) but fallback credits are available. It is not critical because the provider still has a usable path, but it needs distinct copy from `.low`: "Included usage exhausted. Extra credits available."
+`criticalWithFallback` and `fallbackOnly` both surface as a `BannerState.low` (not a new banner severity) but each carries distinct copy. They are separate enum cases, not one collapsed `.low`, because the banner copy bucket is the user-visible decision and we want the type system to enforce it.
 
 ### Availability Matrix
 
-| Included lane | Fallback lane | Availability | Banner |
-|---|---|---|---|
-| healthy | missing | available | hidden |
-| healthy | zero | available | hidden |
-| healthy | positive | available | hidden |
-| low | missing or zero | low | included usage is running low |
-| low | positive | low | included usage is running low; extra credits available |
-| critical | positive | low | included usage is critically low; extra credits available |
-| critical | missing or zero | critical | included usage is critically low and there is no overflow path |
-| empty | positive | fallbackOnly | included usage exhausted; extra credits available |
-| empty | missing or zero | critical | no included usage headroom or extra credits available |
+| Included lane | Fallback lane | Availability | Banner case | Banner copy |
+|---|---|---|---|---|
+| healthy | missing | `.available` | hidden | — |
+| healthy | zero | `.available` | hidden | — |
+| healthy | positive | `.available` | hidden | — |
+| low | missing or zero | `.low` | `.low` | `BannerCopy.low` (+ optional cross-provider hint) |
+| low | positive | `.low` | `.low` | `BannerCopy.low` (+ optional cross-provider hint) |
+| critical | positive | `.criticalWithFallback` | `.low` | `BannerCopy.criticalLowFallback` |
+| critical | missing or zero | `.critical` | `.critical` | `BannerCopy.critical` (+ optional cross-provider hint) |
+| empty | positive | `.fallbackOnly` | `.low` | `BannerCopy.fallbackOnly` |
+| empty | missing or zero | `.critical` | `.critical` | `BannerCopy.critical` (+ optional cross-provider hint) |
 
-For this table, a fallback lane is **positive** when any fallback credit row has a healthy/low/critical-but-positive state. It is **zero** when all fallback credit rows are `.empty`. It is **missing** when the provider exposes no fallback credit row.
+The `.critical` rows intentionally require no fallback credits: sub-10% (or 0%) included usage with no overflow path should produce a red banner before the hard stop.
 
-The `.critical` row intentionally requires no fallback credits: sub-10% included usage with no overflow path should still produce a red banner before the hard stop. Sub-10% included usage with positive fallback credits is a warning, not `fallbackOnly`, because the provider has not moved to fallback-only operation yet.
+### Canonical Banner Strings
+
+These strings are the source of truth. Implementation must consume these constants verbatim, not paraphrase. `provider.title` interpolates to `"Claude Code"` or `"Codex"` depending on the selected tab.
+
+- `BannerCopy.low(provider:)` → `"\(provider.title) included usage is running low"`
+- `BannerCopy.criticalLowFallback(provider:)` → `"\(provider.title) included usage is critically low. Extra credits available."`
+- `BannerCopy.fallbackOnly(provider:)` → `"\(provider.title) included usage is exhausted. Extra credits available."`
+- `BannerCopy.critical(provider:)` → `"\(provider.title) is out of usable quota"`
+- `BannerCopy.stale` → `"Usage may be outdated. Refresh to check current limits."`
+- `BannerCopy.disconnected(selected:)` → `"\(selected.title) is not connected. Open Settings to connect."`
+- `BannerCopy.disconnectedBoth` → `"Connect Claude or Codex in Settings."`
+- `BannerCopy.hint(otherHealthy:)` → `"\(other.title) has more room — consider switching new work."`
+
+### Cross-Provider Hint Behavior
+
+The cross-provider hint fires only when the *other* provider's body is `.connected(_, worst: .healthy)`.
+
+- `.low` and `.critical` banners: hint may be appended.
+- `.criticalWithFallback` and `.fallbackOnly` banners: hint **not** appended. The fallback copy already conveys that a usable path exists; appending the hint is redundant and risks misleading the user about which provider's path to take.
+- `.stale` and `.disconnected` banners: hint not appended.
 
 ### Credit Row Copy
 
 Credit rows must not say "Out of credits" in v1. That phrase implies a user previously had credits and spent them, which requires persistent history that Phase 1 does not collect.
 
-Use:
-
 | Fallback credits | Included lane context | Hero copy | Severity styling |
 |---|---|---|---|
 | missing | any | no row rendered | none |
-| zero | included available or low | `No extra credits available` | neutral / non-red |
-| zero | included empty or critical | `No extra credits available` | red only because there is no usable fallback |
+| zero | provider availability `.available`, `.low`, `.criticalWithFallback`, or `.fallbackOnly` | `No extra credits available` | neutral / non-red |
+| zero | provider availability `.critical` | `No extra credits available` | red, because there is no usable fallback |
 | positive | any | `<n> credits available` | normal row threshold styling |
+
+Row-level red styling on an empty fallback row is keyed on `ProviderAvailability == .critical`; every other availability state renders the row neutrally regardless of `state == .empty`. Neutral means: no red hero text, no red status dot, and no red progress bar. In the current `StatusRowDisplayModel` shape, this means `heroTintsRed == false`, `showsStatus == false`, and `showsBar == false` for empty fallback rows unless provider availability is `.critical`.
 
 Memory is intentionally deferred. Revisit local persistence such as `hasEverSeenPositiveCredits` only if users report that "No extra credits available" is misleading after they previously bought and spent credits. Any persistence proposal must include account/workspace scoping and privacy review.
 
-### Menu-Bar Icon Alignment
-
-Any menu-bar icon, badge, or future tint that communicates provider health must use the same `ProviderAvailability` model as the banner. The icon must not continue to use old raw worst-row state after this addendum, otherwise the false red alarm moves from the banner to the menu bar.
-
-If the current icon remains a static SF Symbol with no tint/badge, no icon code is required. If a stateful icon is introduced in this branch, it must be backed by `ProviderAvailability`.
-
 ### Required Tests
 
-Add focused tests for both Claude and Codex:
+Lane-classification matrix tests for both Claude and Codex:
 
 | Included lane | Fallback lane | Expected availability |
 |---|---|---|
@@ -706,19 +728,30 @@ Add focused tests for both Claude and Codex:
 | healthy | zero | `.available` |
 | healthy | positive | `.available` |
 | low | zero | `.low` |
-| critical | positive | `.low` |
+| critical | positive | `.criticalWithFallback` |
 | critical | zero | `.critical` |
 | empty | positive | `.fallbackOnly` |
 | empty | missing | `.critical` |
 | empty | zero | `.critical` |
 
-Add stale overlay tests that prove `stale` wins over `.available`, `.low`, `.fallbackOnly`, and `.critical`.
+Stale overlay tests prove `.stale` wins over `.available`, `.low`, `.criticalWithFallback`, `.fallbackOnly`, and `.critical`.
 
-Add banner tests proving:
+Banner tests prove:
 
 - Screenshot case: Claude included usage green plus extra usage credits zero does not render a critical banner.
 - Codex included usage green plus credits zero does not render a critical banner.
-- Included exhausted plus credits positive renders fallback-only copy, not critical copy.
-- Included exhausted plus credits zero renders critical copy.
+- Included `.empty` plus positive fallback renders `BannerCopy.fallbackOnly`, not critical copy.
+- Included `.critical` plus positive fallback renders `BannerCopy.criticalLowFallback`, not plain low copy.
+- Included `.empty` plus zero fallback renders `BannerCopy.critical`.
+- `.fallbackOnly` and `.criticalWithFallback` banners do **not** append the cross-provider hint, even when the other provider is healthy.
+- Cross-provider hint still appends to `.low` and `.critical` when the other provider is healthy.
 
-Add row-copy tests proving zero fallback credits render `No extra credits available`, not `Out of credits`.
+Row-copy and row-styling tests prove:
+
+- Zero fallback credits render `No extra credits available`, never `Out of credits`.
+- Empty fallback rows have `heroTintsRed == false`, `showsStatus == false`, and `showsBar == false` when provider availability is `.available`, `.low`, `.criticalWithFallback`, or `.fallbackOnly`.
+- Empty fallback rows have critical styling only when provider availability is `.critical`.
+
+### Future: Menu-Bar Icon Alignment
+
+If/when a stateful menu-bar icon, badge, or tint is introduced, it must read from `ProviderAvailability`, not raw `worstUsageState`. Today the icon is a static SF Symbol with no state, so no icon change is required by this addendum. See §13.

@@ -10,8 +10,8 @@ import Testing
         #expect(claudeActionTitle(for: .checking) == "Checking...")
     }
 
-    @Test func claude_connected_isRefresh() {
-        #expect(claudeActionTitle(for: .connected) == "Refresh")
+    @Test func claude_connected_isRefreshNow() {
+        #expect(claudeActionTitle(for: .connected) == "Refresh Now")
     }
 
     @Test func claude_networkError_isRetry() {
@@ -42,8 +42,8 @@ import Testing
         #expect(codexActionTitle(for: .notConnected) == "Connect")
     }
 
-    @Test func codex_connected_isRefresh() {
-        #expect(codexActionTitle(for: .connected) == "Refresh")
+    @Test func codex_connected_isRefreshNow() {
+        #expect(codexActionTitle(for: .connected) == "Refresh Now")
     }
 
     @Test func codex_networkError_isRetry() {
@@ -72,9 +72,23 @@ import Testing
 
         #expect(claude.contains("credentials"))
         #expect(claude.contains("claude code storage"))
+        #expect(claude.contains("connect claude code"))
+        #expect(!claude.contains("enable it"))
         #expect(claude.contains("sanitized usage status"))
         #expect(codex.contains("auth"))
         #expect(codex.contains("inside codex"))
+        #expect(codex.contains("connect codex"))
+        #expect(!codex.contains("enable it"))
         #expect(codex.contains("sanitized usage status"))
+    }
+
+    @Test func connectorConnectionActionTitleNamesConnectForDisabledProviders() {
+        #expect(connectorConnectionActionTitle(for: .claude, isEnabled: false) == "Connect Claude Code")
+        #expect(connectorConnectionActionTitle(for: .codex, isEnabled: false) == "Connect Codex")
+    }
+
+    @Test func connectorConnectionActionTitleNamesDisconnectForEnabledProviders() {
+        #expect(connectorConnectionActionTitle(for: .claude, isEnabled: true) == "Disconnect Claude Code...")
+        #expect(connectorConnectionActionTitle(for: .codex, isEnabled: true) == "Disconnect Codex...")
     }
 }

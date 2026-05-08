@@ -1,8 +1,26 @@
 import Foundation
 
 enum ConnectorConsentCopy {
-    static let claude = "Reads Claude Code local usage status only after you enable it. Provider credentials stay in Claude Code storage. WhatTheToken stores only sanitized usage status. Disconnect removes cached Claude Code usage from WhatTheToken."
-    static let codex = "Reads Codex local rate-limit status only after you enable it. Codex auth stays inside Codex. WhatTheToken stores only sanitized usage status. Disconnect removes cached Codex usage from WhatTheToken."
+    static let claude = "Connect Claude Code to read local usage status. Provider credentials stay in Claude Code storage. WhatTheToken stores only sanitized usage status. Disconnect removes cached Claude Code usage from WhatTheToken."
+    static let codex = "Connect Codex to read local rate-limit status. Codex auth stays inside Codex. WhatTheToken stores only sanitized usage status. Disconnect removes cached Codex usage from WhatTheToken."
+}
+
+func connectorConnectionActionTitle(for provider: CachedProviderID, isEnabled: Bool) -> String {
+    if isEnabled {
+        return "Disconnect \(provider.displayName)..."
+    }
+    return "Connect \(provider.displayName)"
+}
+
+extension CachedProviderID {
+    var displayName: String {
+        switch self {
+        case .claude:
+            return "Claude Code"
+        case .codex:
+            return "Codex"
+        }
+    }
 }
 
 func claudeActionTitle(for state: ClaudeConnectorSetupState) -> String {
@@ -12,7 +30,7 @@ func claudeActionTitle(for state: ClaudeConnectorSetupState) -> String {
     case .checking:
         return "Checking..."
     case .connected:
-        return "Refresh"
+        return "Refresh Now"
     case .networkError, .schemaChanged, .rateLimited:
         return "Retry"
     }
@@ -25,7 +43,7 @@ func codexActionTitle(for state: CodexConnectorSetupState) -> String {
     case .checking:
         return "Checking..."
     case .connected:
-        return "Refresh"
+        return "Refresh Now"
     case .networkError, .schemaChanged:
         return "Retry"
     }

@@ -11,8 +11,11 @@ final class StatusViewModel {
     var codexConnectorState: CodexConnectorSetupState
     var codexConnectorStatusMessage: String
     private var cache: SnapshotCache
+    private var notificationState: NotificationState
     private let settingsStore: AppSettingsStore
     private let cacheStore: SnapshotCacheStore
+    private let notificationStateStore: NotificationStateStore
+    private let notificationDelivery: NotificationDelivery
     private let now: @MainActor () -> Date
     private let claudeRefresher: ClaudeConnectorRefreshing?
     private let claudeVersionProvider: ClaudeVersionProviding?
@@ -21,6 +24,7 @@ final class StatusViewModel {
     private(set) var lastCodexRefreshAt: Date?
     private(set) var isRefreshAllInFlight = false
     private(set) var hasLoadedPersistedState = false
+    private var suppressCacheLoadNotifications = false
     var onSettingsChanged: (@MainActor () -> Void)?
 
     var isAnyRefreshing: Bool {
@@ -90,6 +94,9 @@ final class StatusViewModel {
         codexRefresher: CodexConnectorRefreshing? = nil,
         settingsStore: AppSettingsStore = InMemoryAppSettingsStore(),
         cacheStore: SnapshotCacheStore = InMemorySnapshotCacheStore(),
+        notificationState: NotificationState = .empty,
+        notificationStateStore: NotificationStateStore = InMemoryNotificationStateStore(),
+        notificationDelivery: NotificationDelivery = RecordingNotificationDelivery(permissionResult: .denied),
         now: @escaping @MainActor () -> Date = { Date() },
         connectorState: ClaudeConnectorSetupState = .notConnected,
         connectorStatusMessage: String = "Claude Code is not connected",
@@ -104,6 +111,9 @@ final class StatusViewModel {
         self.codexRefresher = codexRefresher
         self.settingsStore = settingsStore
         self.cacheStore = cacheStore
+        self.notificationState = notificationState
+        self.notificationStateStore = notificationStateStore
+        self.notificationDelivery = notificationDelivery
         self.now = now
         self.connectorState = connectorState
         self.connectorStatusMessage = connectorStatusMessage
@@ -114,9 +124,12 @@ final class StatusViewModel {
     func loadPersistedState() async {
         settings = await settingsStore.load()
         cache = await cacheStore.load()
+        notificationState = await notificationStateStore.load()
+        suppressCacheLoadNotifications = await notificationStateStore.didFallbackOnLoad
         applyCachedRefreshTimestamps()
         applyCachedSnapshots()
         applyConnectorStatesFromSettings()
+        await evaluateNotifications(suppressDelivery: true)
         hasLoadedPersistedState = true
     }
 
@@ -282,6 +295,7 @@ final class StatusViewModel {
             lastClaudeRefreshAt = now()
             cache.replaceSnapshots(result.snapshots, for: .claude, at: lastClaudeRefreshAt!)
             _ = await cacheStore.save(cache)
+            await evaluateNotifications(suppressDelivery: false)
         } catch {
             guard !Task.isCancelled else {
                 connectorState = previousState
@@ -321,6 +335,7 @@ final class StatusViewModel {
             lastCodexRefreshAt = now()
             cache.replaceSnapshots(result.snapshots, for: .codex, at: lastCodexRefreshAt!)
             _ = await cacheStore.save(cache)
+            await evaluateNotifications(suppressDelivery: false)
         } catch {
             guard !Task.isCancelled else {
                 codexConnectorState = previousState
@@ -401,7 +416,9 @@ final class StatusViewModel {
 
     static func live(
         settingsStore: AppSettingsStore = InMemoryAppSettingsStore(),
-        cacheStore: SnapshotCacheStore = InMemorySnapshotCacheStore()
+        cacheStore: SnapshotCacheStore = InMemorySnapshotCacheStore(),
+        notificationStateStore: NotificationStateStore = InMemoryNotificationStateStore(),
+        notificationDelivery: NotificationDelivery = UserNotificationDelivery()
     ) -> StatusViewModel {
         let versionProvider = InstalledClaudeVersionProvider()
         return StatusViewModel(
@@ -423,7 +440,9 @@ final class StatusViewModel {
                 now: { ISO8601DateFormatter().string(from: Date()) }
             ),
             settingsStore: settingsStore,
-            cacheStore: cacheStore
+            cacheStore: cacheStore,
+            notificationStateStore: notificationStateStore,
+            notificationDelivery: notificationDelivery
         )
     }
 
@@ -493,6 +512,22 @@ final class StatusViewModel {
         lastCodexRefreshAt = settings.connectors.codex.isEnabled
             ? cache.lastSuccessfulRefreshAtByProvider[CachedProviderID.codex.rawValue]
             : nil
+    }
+
+    private func evaluateNotifications(suppressDelivery: Bool) async {
+        let result = NotificationEvaluator.evaluate(
+            snapshots: snapshots,
+            settings: settings,
+            state: notificationState,
+            now: now(),
+            suppressDelivery: suppressDelivery || suppressCacheLoadNotifications
+        )
+        notificationState = result.state
+        _ = await notificationStateStore.save(result.state)
+        if !result.intents.isEmpty {
+            await notificationDelivery.deliver(result.intents)
+        }
+        suppressCacheLoadNotifications = false
     }
 
     private func applyConnectorStatesFromSettings() {

@@ -439,6 +439,32 @@ private func localUpdatedLabel(for isoString: String) -> String {
 }
 
 @MainActor
+@Test func saveSettingsPreservesCheckingStateDuringRefresh() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let counter = Counter()
+    let vm = StatusViewModel(
+        settings: settings,
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0")
+    )
+
+    let task = Task { await vm.refreshAll(reason: .manual) }
+    for _ in 0..<20 {
+        if vm.connectorState == .checking { break }
+        await Task.yield()
+    }
+
+    settings.refresh.autoRefreshEnabled = true
+    await vm.saveSettings(settings)
+
+    #expect(vm.connectorState == .checking)
+
+    task.cancel()
+    _ = await task.value
+}
+
+@MainActor
 @Test func disconnectClearsConsentAndProviderCache() async {
     var settings = AppSettings.defaults
     settings.connectors.codex.isEnabled = true
@@ -456,6 +482,36 @@ private func localUpdatedLabel(for isoString: String) -> String {
     #expect(persistedSettings.connectors.codex.isEnabled == false)
     #expect(!persistedCache.snapshots.contains { $0.provider == "openai" })
     #expect(vm.codexConnectorState == .notConnected)
+}
+
+@MainActor
+@Test func disconnectKeepsConsentWhenCacheWipeCannotBePersisted() async throws {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))
+
+    let invalidParent = FileManager.default.temporaryDirectory
+        .appendingPathComponent("whatthetoken-cache-parent-\(UUID().uuidString)")
+    try Data("not a directory".utf8).write(to: invalidParent)
+    defer { try? FileManager.default.removeItem(at: invalidParent) }
+
+    let vm = StatusViewModel(
+        snapshots: [UsageSnapshotFixture.codexSample()],
+        settings: settings,
+        cache: cache,
+        cacheStore: JSONFileSnapshotCacheStore(
+            url: invalidParent.appendingPathComponent("snapshot-cache.json")
+        ),
+        codexConnectorState: .connected,
+        codexConnectorStatusMessage: "Codex connected"
+    )
+
+    await vm.disconnect(.codex)
+
+    #expect(vm.settings.connectors.codex.isEnabled == true)
+    #expect(vm.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate))
+    #expect(vm.codexConnectorState == .connected)
 }
 
 @MainActor

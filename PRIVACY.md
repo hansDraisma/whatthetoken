@@ -45,6 +45,21 @@ WhatTheToken may store sanitized status data:
 - parser/source version
 - connector enabled state and app preferences
 
+The Mac app stores this data locally in its Application Support directory:
+
+- `settings.json` for connector consent, refresh preferences, notification preferences, and menu bar display preferences
+- `snapshot-cache.json` for sanitized usage snapshots, last successful refresh timestamps, and sanitized provider error/backoff state
+
+These files must not contain provider credentials, copied tokens, raw provider payloads, prompts, responses, cookies, auth headers, provider session tokens, raw local database rows, or sensitive local paths.
+
+## Connector Consent And Disconnect
+
+Connectors are disabled by default. A connector may read local provider state only after the user chooses `Connect Claude Code` or `Connect Codex`.
+
+Disconnecting a provider disables future reads and removes that provider's cached usage snapshots from WhatTheToken storage. The app must not show the provider as disconnected unless disabled consent and cache removal are both persisted. If either write fails, the UI remains connected so it does not claim cached data was removed.
+
+Opening the popover may refresh enabled connectors, but provider backoff still applies. Timer-based auto-refresh is optional, off by default, and runs only while the popover is open.
+
 ## Confidence Labels
 
 Every usage number must show whether it is `verified`, `observed`, `estimated`, or `stale`.

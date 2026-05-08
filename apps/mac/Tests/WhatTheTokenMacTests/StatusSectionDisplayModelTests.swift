@@ -57,10 +57,9 @@ private func sectionDisplaySnapshot(
     ]
 
     let section = StatusSectionDisplayModel(snapshots: snapshots, now: sectionDisplayFixedNow)
-    let expected = localUpdatedLabel(for: "2026-05-05T09:44:00.000Z")
 
     #expect(section.brandTitle == "Anthropic · Claude Code")
-    #expect(section.trustLine == "Verified by Mac connector · \(expected)")
+    #expect(section.trustLine == "Verified by Mac connector")
     #expect(section.rows.count == 3)
     #expect(section.compareLink?.title == "Compare in Claude →")
     #expect(section.compareLink?.url.absoluteString == "https://claude.ai/settings/usage")
@@ -88,7 +87,7 @@ private func sectionDisplaySnapshot(
     #expect(section.compareLink?.url.absoluteString == "https://chatgpt.com/codex/settings/usage")
 }
 
-@Test func sectionUsesLatestUpdatedTimeForTrustLine() {
+@Test func sectionTrustLineOmitsUpdatedTime() {
     let snapshots = [
         sectionDisplaySnapshot(
             windowKey: "five_hour",
@@ -105,9 +104,9 @@ private func sectionDisplaySnapshot(
     ]
 
     let section = StatusSectionDisplayModel(snapshots: snapshots, now: sectionDisplayFixedNow)
-    let expected = localUpdatedLabel(for: "2026-05-05T09:45:00Z")
 
-    #expect(section.trustLine == "Verified by Mac connector · \(expected)")
+    #expect(section.trustLine == "Verified by Mac connector")
+    #expect(section.trustLine?.contains("Updated") == false)
 }
 
 @Test func sectionWithDivergentConfidenceOmitsTrustLineAndAddsBadge() {
@@ -199,16 +198,4 @@ private func sectionDisplaySnapshot(
     #expect(section.brandTitle == nil)
     #expect(section.trustLine == nil)
     #expect(section.rows.isEmpty)
-}
-
-private func localUpdatedLabel(for isoString: String) -> String {
-    let fractional = ISO8601DateFormatter()
-    fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let plain = ISO8601DateFormatter()
-    plain.formatOptions = [.withInternetDateTime]
-    let date = fractional.date(from: isoString) ?? plain.date(from: isoString)!
-    let formatter = DateFormatter()
-    formatter.dateFormat = "HH:mm"
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    return "Updated \(formatter.string(from: date))"
 }

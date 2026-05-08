@@ -107,7 +107,7 @@ private func rowDisplaySnapshot(
     #expect(row.showsBar == true)
 }
 
-@Test func extraUsageCreditsEmptyHidesBarAndShowsSentence() {
+@Test func extraUsageCreditsEmptyUsesNeutralCopyWhenProviderIsAvailable() {
     let row = StatusRowDisplayModel(
         snapshot: rowDisplaySnapshot(
             windowKey: "monthly_extra_usage",
@@ -124,11 +124,12 @@ private func rowDisplaySnapshot(
     )
 
     #expect(row.name == "Extra usage credits")
-    #expect(row.heroText == "Out of credits")
+    #expect(row.heroText == "No extra credits available")
     #expect(row.echoText == nil)
     #expect(row.state == .empty)
-    #expect(row.heroTintsRed == true)
+    #expect(row.heroTintsRed == false)
     #expect(row.showsBar == false)
+    #expect(row.showsStatus == false)
     #expect(row.statusWord == "Empty")
 }
 
@@ -211,11 +212,80 @@ private func rowDisplaySnapshot(
     )
 
     #expect(row.name == "Credits remaining")
-    #expect(row.heroText == "0")
+    #expect(row.heroText == "No extra credits available")
     #expect(row.echoText == nil)
     #expect(row.showsBar == false)
     #expect(row.heroTintsRed == false)
     #expect(row.showsStatus == false)
+}
+
+@Test func emptyFallbackCredits_doNotTintRed_whenProviderIsAvailable() {
+    let row = StatusRowDisplayModel(
+        snapshot: rowDisplaySnapshot(
+            windowKey: "monthly_extra_usage",
+            poolKey: "anthropic_claude_extra_usage",
+            unit: "credits",
+            used: 100,
+            limit: 100,
+            remaining: 0,
+            utilization: nil,
+            resetAt: nil
+        ),
+        sectionDefault: nil,
+        now: rowDisplayFixedNow,
+        providerAvailability: .available
+    )
+
+    #expect(row.heroText == "No extra credits available")
+    #expect(row.heroTintsRed == false)
+    #expect(row.showsStatus == false)
+    #expect(row.showsBar == false)
+}
+
+@Test func emptyFallbackCredits_doNotTintRed_whenProviderIsFallbackOnly() {
+    let row = StatusRowDisplayModel(
+        snapshot: rowDisplaySnapshot(
+            windowKey: "monthly_extra_usage",
+            poolKey: "anthropic_claude_extra_usage",
+            unit: "credits",
+            used: 100,
+            limit: 100,
+            remaining: 0,
+            utilization: nil,
+            resetAt: nil
+        ),
+        sectionDefault: nil,
+        now: rowDisplayFixedNow,
+        providerAvailability: .fallbackOnly
+    )
+
+    #expect(row.heroText == "No extra credits available")
+    #expect(row.heroTintsRed == false)
+    #expect(row.showsStatus == false)
+    #expect(row.showsBar == false)
+}
+
+@Test func emptyFallbackCredits_tintRed_whenProviderIsCritical() {
+    let row = StatusRowDisplayModel(
+        snapshot: rowDisplaySnapshot(
+            windowKey: "monthly_extra_usage",
+            poolKey: "anthropic_claude_extra_usage",
+            unit: "credits",
+            used: 100,
+            limit: 100,
+            remaining: 0,
+            utilization: nil,
+            resetAt: nil
+        ),
+        sectionDefault: nil,
+        now: rowDisplayFixedNow,
+        providerAvailability: .critical
+    )
+
+    #expect(row.heroText == "No extra credits available")
+    #expect(row.heroTintsRed == true)
+    #expect(row.showsStatus == true)
+    #expect(row.showsBar == true)
 }
 
 @Test func badgeAddedWhenUndercountLikelyDivergesFromSection() {

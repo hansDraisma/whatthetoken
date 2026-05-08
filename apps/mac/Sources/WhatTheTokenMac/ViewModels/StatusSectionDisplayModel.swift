@@ -37,9 +37,17 @@ struct StatusSectionDisplayModel: Sendable {
             confidence: Self.mode(snapshots.map(\.confidence)),
             undercountRisk: Self.mode(snapshots.map(\.undercountRisk))
         )
+        let providerAvailability = Self.firstProviderTab(in: snapshots)
+            .map { ProviderAvailability.from(snapshots: snapshots, tab: $0) }
+            ?? .available
 
         rows = snapshots.map {
-            StatusRowDisplayModel(snapshot: $0, sectionDefault: sectionDefault, now: now)
+            StatusRowDisplayModel(
+                snapshot: $0,
+                sectionDefault: sectionDefault,
+                now: now,
+                providerAvailability: providerAvailability
+            )
         }
     }
 
@@ -102,6 +110,10 @@ struct StatusSectionDisplayModel: Sendable {
         return values.max { lhs, rhs in
             counts[lhs, default: 0] < counts[rhs, default: 0]
         } ?? values.first ?? ""
+    }
+
+    private static func firstProviderTab(in snapshots: [UsageSnapshot]) -> ProviderTab? {
+        snapshots.lazy.compactMap(ProviderTab.from(snapshot:)).first
     }
 }
 

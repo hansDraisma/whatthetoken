@@ -13,7 +13,7 @@ Stage 2 already added persisted connector consent, sanitized last-known-good cac
 Stage 3 therefore has two linked goals:
 
 - keep enabled connectors fresh in the background while the menu bar app is running, after explicit user opt-in
-- notify once when enabled providers cross user-configurable low and critical thresholds
+- notify once when enabled providers cross user-configurable warning and critical thresholds
 
 ## Stage Boundary
 
@@ -24,7 +24,7 @@ In scope:
 - separate Pause and Disconnect connector actions
 - adaptive stale timing based on refresh mode
 - notification permission flow
-- low and critical notification thresholds, defaulting to 20% and 10%
+- warning and critical notification thresholds, defaulting to 20% and 10%
 - provider-level notification settings in the first UI
 - per-pool notification evaluation internally, so future advanced controls do not require rewriting the engine
 - notification state that suppresses repeated alerts during flapping or rolling-window churn
@@ -84,16 +84,16 @@ This keeps automatic users from seeing old values as trustworthy for too long, w
 
 Default notification thresholds:
 
-- low warning: remaining usage below 20%
-- critical warning: remaining usage below 10%
+- warning: remaining usage below 20%
+- critical: remaining usage below 10%
 
-The existing visual health model may still use `low < 30%` for in-app caution. Notifications should be less noisy and more action-oriented.
+The existing visual health model may still use `low < 30%` for in-app caution. Notification copy should call the 20% threshold a `warning`, not `low`, so the product does not use the same word for two different thresholds. The in-app state remains `low`; the notification state is `warning`.
 
 ### Provider-Level UI, Pool-Level Engine
 
 The first settings UI should be provider-level: users enable notifications for Claude Code and/or Codex without configuring every quota pool.
 
-The notification evaluator should still operate per pool/window internally. If Claude has multiple windows, or Codex exposes multiple buckets, a low state in any included quota pool can trigger a provider notification. This preserves correctness while keeping the first UI simple.
+The notification evaluator should still operate per pool/window internally. If Claude has multiple windows, or Codex exposes multiple buckets, a warning or critical state in any included quota pool can trigger a provider notification. This preserves correctness while keeping the first UI simple.
 
 ## User Flow
 
@@ -104,13 +104,13 @@ Settings gets an `Alerts` section below Refresh.
 Default state:
 
 - notifications disabled
-- low threshold 20%
+- warning threshold 20%
 - critical threshold 10%
 - provider alerts enabled for each enabled connector by default once notifications are enabled
 
 When the user turns notifications on:
 
-1. Show a short in-app explanation: WhatTheToken can alert when enabled providers drop below low or critical usage.
+1. Show a short in-app explanation: WhatTheToken can alert when enabled providers drop below warning or critical usage.
 2. Request macOS notification permission.
 3. If permission is granted, persist `notifications.isEnabled = true`.
 4. If permission is denied, keep in-app alert settings visible but show a disabled/needs-permission state with a button or copy pointing to System Settings.
@@ -124,15 +124,15 @@ The first UI should avoid advanced per-pool tuning.
 Controls:
 
 - master toggle: `Notify me before quota runs low`
-- low threshold stepper or menu: default 20%, allowed range 10-50%
+- warning threshold stepper or menu: default 20%, allowed range 10-50%
 - critical threshold stepper or menu: default 10%, allowed range 1-25%
 - provider toggles: Claude Code, Codex
 
 Validation:
 
-- critical threshold must be lower than low threshold
-- if the user lowers low below critical, clamp critical to one step below low
-- if the user raises critical above low, raise low to one step above critical
+- critical threshold must be lower than warning threshold
+- if the user lowers warning below critical, clamp critical to one step below warning
+- if the user raises critical above warning, raise warning to one step above critical
 
 The settings copy should avoid promising exact quota truth for `observed` data. Codex notification copy should mention that values are observed until provider semantics are validated.
 
@@ -154,6 +154,8 @@ Paused providers:
 - keep cached snapshots visible with a paused/disconnected affordance
 - do not emit notifications
 
+Disconnect while paused still requires confirmation and still removes cached values. Re-enabling after disconnect starts from an empty provider cache and refreshes only after the user resumes/connects the provider.
+
 ## Background Freshness
 
 ### Scheduler
@@ -171,11 +173,23 @@ Responsibilities:
 
 The scheduler must run only while the app process is running. It should not create launch agents, login items, or hidden daemons in Stage 3.
 
+### Sleep, Wake, And Clock Changes
+
+macOS may suspend timers during sleep, lid close, or aggressive power saving. On app wake or foreground activation, the scheduler should compare the current time with the last completed background refresh:
+
+- if background refresh is enabled and the last successful or attempted automatic refresh is older than the configured interval, run one catch-up automatic refresh
+- if another refresh is already in flight, do not start a second one
+- if provider backoff blocks a catch-up refresh, keep the cached values and next retry time
+
+Timer scheduling must use monotonic sleep intervals where Swift provides them, but staleness and backoff decisions must use wall-clock `Date` because they are persisted across launches. If the system clock moves backwards, do not immediately clear stale or backoff state; wait until a refresh succeeds or the persisted retry time is reached. If the system clock moves far forward, the next scheduler wake may run a catch-up refresh, still subject to the single-refresh guard.
+
 ### Foreground Refresh
 
 Popover open should still trigger a foreground refresh for enabled, unpaused connectors, subject to backoff. This keeps the popover useful even for users who do not enable background refresh.
 
 Manual refresh and retry should continue to bypass automatic backoff, but they must not refresh paused or disconnected connectors.
+
+Popover-open refresh should be debounced against background refresh. If any provider completed a background refresh within the last 60 seconds, popover-open should not immediately refresh that provider again. Manual refresh and retry bypass this debounce.
 
 ### Backoff
 
@@ -186,6 +200,8 @@ Stage 2 backoff remains per provider:
 - third and later failures: 60 minutes
 
 Background refresh must use the same persisted backoff metadata. Manual refresh can bypass the next automatic retry time, but a failed manual refresh still increments failure count.
+
+A successful manual refresh resets that provider's failure count and clears its next automatic retry time, exactly like a successful automatic refresh.
 
 ### Stale Evaluation
 
@@ -203,6 +219,14 @@ The stale reason should remain user-safe and avoid provider internals. Example: 
 ### Inputs
 
 Evaluate notifications after every successful refresh and after cached snapshots are loaded.
+
+Cache-load evaluation is state restoration, not a new quota observation. It must not emit a notification unless all of these are true:
+
+- the snapshot is still fresh under the current stale policy
+- notification state says this provider/pool/window level was not already notified
+- the notification state was absent because this is the first app version with notifications enabled, not because state decode failed
+
+If notification state decode fails, suppress cache-load notifications for that launch and rebuild state from the next successful refresh. This avoids notification storms after launch or corrupted local state.
 
 Inputs:
 
@@ -240,8 +264,8 @@ Use remaining percentage as the threshold basis:
 
 Threshold states:
 
-- healthy: at or above low threshold
-- low: below low threshold and at or above critical threshold
+- healthy: at or above warning threshold
+- warning: below warning threshold and at or above critical threshold
 - critical: below critical threshold
 
 ### Deduplication And Recovery
@@ -258,17 +282,26 @@ Notification state should store sanitized identifiers only:
 - last observed level
 - recovery timestamp when applicable
 
+For rolling-window providers, the deduplication key should not include a moving timestamp. Use the stable provider/product/pool key and a normalized window kind such as `rolling_5h`, `rolling_7d`, or the connector's stable `windowKey` when it is already normalized. This keeps rolling windows from producing a new dedupe key on every refresh.
+
 Recovery rules:
 
-- low alert can fire again only after the pool recovers to at least `low + 5 percentage points`
+- warning alert can fire again only after the pool recovers to at least `warning + 5 percentage points`
 - critical alert can fire again only after the pool recovers to at least `critical + 5 percentage points`
 - if a provider has a discrete `resetAt`, recovery after reset also clears notification state for that pool/window
 - for rolling-window providers, use recovery threshold plus a minimum 60-minute cooldown to avoid repeated alerts during churn
 
 Critical escalation:
 
-- if a low notification has already fired, a later critical crossing may still fire once
-- critical should not be suppressed by a previous low notification
+- if a warning notification has already fired, a later critical crossing may still fire once
+- if a pool drops directly from healthy to critical, fire the critical notification; do not require a prior warning notification
+- critical should not be suppressed by a previous warning notification
+
+Dismissal behavior:
+
+- dismissing a macOS notification does not reset notification state
+- do not re-fire the same provider/pool/window level until recovery or reset rules clear that state
+- if the app is still below threshold on the next refresh, keep the state suppressed
 
 ### Confidence Copy
 
@@ -279,7 +312,7 @@ Examples:
 - verified: `Claude Code is below 20% remaining. Verified from local Claude Code usage status.`
 - observed: `Codex is below 20% remaining. Based on observed local Codex rate-limit status.`
 - stale: no notification; show stale state in the app instead
-- estimated: reserve copy shape for future providers; do not emit estimated notifications in Stage 3 unless a Stage 3 implementation explicitly introduces estimated snapshots
+- estimated: no estimated notifications in Stage 3
 
 ## Notification Delivery
 
@@ -291,6 +324,7 @@ Live implementation:
 - requests permission only after user action
 - schedules local notifications
 - relies on macOS Focus and notification settings for interruption behavior
+- when permission is denied, offers System Settings guidance using `x-apple.systempreferences:com.apple.preference.notifications` if that URL works on the supported macOS version; otherwise show textual instructions
 
 Test implementation:
 
@@ -308,6 +342,7 @@ The visual design should stay modest:
 
 - keep the existing gauge symbol
 - add a short status title or accessibility label if SwiftUI supports it cleanly
+- include a visible critical affordance in the menu bar item if it can be implemented without private API or layout instability
 - avoid a complex dynamic badge until the visual polish stage
 
 The indicator must use `ProviderAvailability`, not raw worst-row state, so fallback credits do not make a provider look critical while included quota is healthy.
@@ -345,7 +380,7 @@ Notification content should not include sensitive local paths, raw payload value
 Extend notification settings from inert Stage 2 fields into active settings:
 
 - `notifications.isEnabled`
-- `notifications.lowThreshold`
+- `notifications.warningThreshold`
 - `notifications.criticalThreshold`
 - `notifications.providerAlerts`
 
@@ -356,7 +391,23 @@ Add connector paused state separately from destructive disconnect:
 - `connectors.codex.isEnabled`
 - `connectors.codex.isPaused`
 
-If a migration is required, existing Stage 2 users should keep enabled connectors enabled and unpaused.
+Stage 3 must bump `AppSettings.schemaVersion` from `1` to `2`.
+
+Migration rules for v1 settings:
+
+- preserve `connectors.*.isEnabled`
+- set new `connectors.*.isPaused = false`
+- preserve `refresh.autoRefreshEnabled`
+- preserve `refresh.intervalSeconds`
+- preserve `notifications.isEnabled`
+- rename or map `notifications.lowThreshold` to `notifications.warningThreshold`
+- if the v1 `lowThreshold` is the old default `0.30`, migrate it to the new warning default `0.20`
+- if the user had changed `lowThreshold` to a non-default value, preserve that value as `warningThreshold`
+- preserve `notifications.criticalThreshold`
+- add provider alert settings enabled for providers whose connector is enabled, disabled for providers whose connector is disabled
+- preserve `menuBar.displayMode`
+
+`decodeValidated` should decode v2 directly, migrate v1 into v2, and reject unknown future schema versions by falling back to safe defaults through the store. Safe defaults remain: connectors disabled, paused false, background refresh disabled, notifications disabled.
 
 ### `SnapshotCache`
 
@@ -403,6 +454,7 @@ The evaluator decides whether a notification should exist. The delivery service 
 - If delivery fails, keep notification settings enabled but expose a settings status message.
 - If background refresh fails, keep Stage 2 cached values and backoff behavior.
 - If notification state decode fails, fall back to empty notification state; do not delete snapshot cache.
+- If notification state decode fails during app startup, suppress cache-load notification delivery until the next successful provider refresh.
 - If settings migration fails, fall back to safe defaults: connectors disabled, background refresh disabled, notifications disabled.
 
 ## Testing Strategy
@@ -412,25 +464,35 @@ Add focused tests for:
 - background refresh does not start unless explicitly enabled
 - background refresh runs while popover is closed
 - background refresh respects paused connectors
+- wake/activation catch-up refresh runs when the last automatic attempt is older than the configured interval
+- popover-open refresh skips a provider refreshed by background refresh in the last 60 seconds
 - manual refresh skips paused connectors
+- successful manual refresh clears provider backoff
 - pause keeps cached snapshots
+- disconnect while paused still removes cached snapshots after confirmation
 - disconnect removes cached snapshots
 - stale policy is `max(2 * interval, 15 minutes)` for automatic users
 - stale policy is 60 minutes for manual-only users
-- notification settings defaults are 20% and 10%
+- settings migration preserves v1 connector consent and migrates the old 30% notification default to 20%
+- notification settings defaults are 20% warning and 10% critical
 - notification permission is requested only after user action
-- evaluator fires low once below 20%
-- evaluator fires critical once below 10%, even after a prior low alert
+- evaluator fires warning once below 20%
+- evaluator fires critical once below 10%, even after a prior warning alert
+- evaluator fires critical when a pool drops directly from healthy to critical
 - evaluator does not alert on stale snapshots
 - evaluator does not alert for disabled or paused providers
+- evaluator does not re-fire after notification dismissal until recovery or reset
+- cache-load evaluation does not create startup notification storms
 - evaluator suppresses repeat alerts until recovery threshold or reset
 - rolling-window cooldown suppresses flapping alerts
+- rolling-window dedupe keys stay stable across refreshes
 - notification copy includes confidence-specific provenance
 - notification state stores only sanitized provider/pool/window metadata
 
 Manual verification:
 
 - enable background refresh and confirm refresh still occurs with popover closed
+- sleep/wake or reactivate the Mac app and confirm a single catch-up refresh occurs when due
 - enable notifications and confirm macOS permission prompt follows explicit action
 - use fixture states below 20% and 10% to confirm notifications
 - confirm macOS Focus controls notification interruption behavior
@@ -442,19 +504,24 @@ Manual verification:
 - Background refresh works while the app is running and the popover is closed.
 - Background refresh is disabled by default and requires explicit opt-in.
 - Auto-refresh still respects connector consent, pause state, and provider backoff.
+- Foreground and background refresh do not double-refresh providers immediately after a recent background refresh.
+- Wake or app activation performs at most one catch-up refresh when background refresh is overdue.
 - Pause keeps sanitized cached values and stops refresh/notifications.
 - Disconnect removes sanitized cached values for that provider.
 - Stale timing adapts to refresh mode.
+- Stage 2 v1 settings migrate to Stage 3 v2 settings without losing enabled connector consent.
 - Notifications are disabled by default and request macOS permission only after user action.
-- Low notification defaults to less than 20% remaining.
+- Warning notification defaults to less than 20% remaining.
 - Critical notification defaults to less than 10% remaining.
 - Notifications fire once per relevant provider/pool/window threshold crossing.
+- Startup cache loading does not repeatedly notify for already-notified warning/critical states.
+- Dismissed notifications do not re-fire until recovery or reset.
 - Notifications do not fire for stale, disabled, paused, or unsupported snapshots.
 - Notification copy reflects confidence and does not overclaim observed data.
 - No raw provider data or credentials are stored or included in notification content.
 
 ## Open Decisions
 
-None before implementation planning.
+None before implementation planning. The review risks around migration, threshold naming, sleep/wake, startup notification storms, foreground/background overlap, manual backoff reset, dismissal, direct critical drops, rolling-window keys, pause/disconnect edge cases, and permission-denial recovery are resolved above.
 
 The first implementation plan should keep the UI provider-level and the evaluator pool-level. Advanced per-pool alert controls can be a later spec after users have tried the simpler flow.

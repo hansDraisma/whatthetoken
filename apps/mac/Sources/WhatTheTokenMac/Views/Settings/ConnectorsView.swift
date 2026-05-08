@@ -14,25 +14,36 @@ struct ConnectorsView: View {
                     trustMessage: ConnectorConsentCopy.claude,
                     connectionActionTitle: connectorConnectionActionTitle(
                         for: .claude,
-                        isEnabled: viewModel.settings.connectors.claudeCode.isEnabled
+                        isEnabled: viewModel.settings.connectors.claudeCode.isEnabled,
+                        isPaused: viewModel.settings.connectors.claudeCode.isPaused
                     ),
-                    connectionActionRole: viewModel.settings.connectors.claudeCode.isEnabled ? .destructive : nil,
+                    connectionActionRole: nil,
                     isConnectionActionDisabled: viewModel.connectorState == .checking,
                     refreshActionTitle: viewModel.settings.connectors.claudeCode.isEnabled
                         ? claudeActionTitle(for: viewModel.connectorState)
                         : nil,
-                    isRefreshActionDisabled: viewModel.connectorState == .checking,
+                    isRefreshActionDisabled: viewModel.connectorState == .checking || viewModel.settings.connectors.claudeCode.isPaused,
+                    disconnectActionTitle: viewModel.settings.connectors.claudeCode.isEnabled
+                        ? connectorDisconnectActionTitle(for: .claude)
+                        : nil,
                     connectionAction: {
-                        if viewModel.settings.connectors.claudeCode.isEnabled {
-                            pendingDisconnect = .claude
-                        } else {
+                        if !viewModel.settings.connectors.claudeCode.isEnabled {
                             let viewModel = self.viewModel
                             Task { await viewModel.connectClaudeCode() }
+                        } else if viewModel.settings.connectors.claudeCode.isPaused {
+                            let viewModel = self.viewModel
+                            Task { await viewModel.setConnector(.claude, paused: false) }
+                        } else {
+                            let viewModel = self.viewModel
+                            Task { await viewModel.setConnector(.claude, paused: true) }
                         }
                     },
                     refreshAction: {
                         let viewModel = self.viewModel
                         Task { await viewModel.connectClaudeCode() }
+                    },
+                    disconnectAction: {
+                        pendingDisconnect = .claude
                     }
                 )
 
@@ -43,25 +54,36 @@ struct ConnectorsView: View {
                     trustMessage: ConnectorConsentCopy.codex,
                     connectionActionTitle: connectorConnectionActionTitle(
                         for: .codex,
-                        isEnabled: viewModel.settings.connectors.codex.isEnabled
+                        isEnabled: viewModel.settings.connectors.codex.isEnabled,
+                        isPaused: viewModel.settings.connectors.codex.isPaused
                     ),
-                    connectionActionRole: viewModel.settings.connectors.codex.isEnabled ? .destructive : nil,
+                    connectionActionRole: nil,
                     isConnectionActionDisabled: viewModel.codexConnectorState == .checking,
                     refreshActionTitle: viewModel.settings.connectors.codex.isEnabled
                         ? codexActionTitle(for: viewModel.codexConnectorState)
                         : nil,
-                    isRefreshActionDisabled: viewModel.codexConnectorState == .checking,
+                    isRefreshActionDisabled: viewModel.codexConnectorState == .checking || viewModel.settings.connectors.codex.isPaused,
+                    disconnectActionTitle: viewModel.settings.connectors.codex.isEnabled
+                        ? connectorDisconnectActionTitle(for: .codex)
+                        : nil,
                     connectionAction: {
-                        if viewModel.settings.connectors.codex.isEnabled {
-                            pendingDisconnect = .codex
-                        } else {
+                        if !viewModel.settings.connectors.codex.isEnabled {
                             let viewModel = self.viewModel
                             Task { await viewModel.connectCodex() }
+                        } else if viewModel.settings.connectors.codex.isPaused {
+                            let viewModel = self.viewModel
+                            Task { await viewModel.setConnector(.codex, paused: false) }
+                        } else {
+                            let viewModel = self.viewModel
+                            Task { await viewModel.setConnector(.codex, paused: true) }
                         }
                     },
                     refreshAction: {
                         let viewModel = self.viewModel
                         Task { await viewModel.connectCodex() }
+                    },
+                    disconnectAction: {
+                        pendingDisconnect = .codex
                     }
                 )
             }
@@ -90,6 +112,72 @@ struct ConnectorsView: View {
                     step: 300
                 )
                 .disabled(!viewModel.settings.refresh.autoRefreshEnabled)
+            }
+
+            Section("Alerts") {
+                Toggle("Notify me before quota runs low", isOn: Binding(
+                    get: { viewModel.settings.notifications.isEnabled },
+                    set: { enabled in
+                        let viewModel = self.viewModel
+                        Task { _ = await viewModel.setNotificationsEnabled(enabled) }
+                    }
+                ))
+
+                Toggle("Claude Code alerts", isOn: Binding(
+                    get: { viewModel.settings.notifications.providerAlerts.claudeCode.isEnabled },
+                    set: { enabled in
+                        var settings = viewModel.settings
+                        settings.notifications.providerAlerts.claudeCode.isEnabled = enabled
+                        Task { await viewModel.saveSettings(settings) }
+                    }
+                ))
+                .disabled(!viewModel.settings.notifications.isEnabled)
+
+                Toggle("Codex alerts", isOn: Binding(
+                    get: { viewModel.settings.notifications.providerAlerts.codex.isEnabled },
+                    set: { enabled in
+                        var settings = viewModel.settings
+                        settings.notifications.providerAlerts.codex.isEnabled = enabled
+                        Task { await viewModel.saveSettings(settings) }
+                    }
+                ))
+                .disabled(!viewModel.settings.notifications.isEnabled)
+
+                Stepper(
+                    "Warning: \(Int(viewModel.settings.notifications.warningThreshold * 100))%",
+                    value: Binding(
+                        get: { viewModel.settings.notifications.warningThreshold },
+                        set: { value in
+                            var settings = viewModel.settings
+                            settings.notifications.warningThreshold = value
+                            if settings.notifications.criticalThreshold >= value {
+                                settings.notifications.criticalThreshold = max(value - 0.01, 0.01)
+                            }
+                            Task { await viewModel.saveSettings(settings) }
+                        }
+                    ),
+                    in: 0.10...0.50,
+                    step: 0.05
+                )
+                .disabled(!viewModel.settings.notifications.isEnabled)
+
+                Stepper(
+                    "Critical: \(Int(viewModel.settings.notifications.criticalThreshold * 100))%",
+                    value: Binding(
+                        get: { viewModel.settings.notifications.criticalThreshold },
+                        set: { value in
+                            var settings = viewModel.settings
+                            settings.notifications.criticalThreshold = value
+                            if settings.notifications.warningThreshold <= value {
+                                settings.notifications.warningThreshold = min(value + 0.01, 0.50)
+                            }
+                            Task { await viewModel.saveSettings(settings) }
+                        }
+                    ),
+                    in: 0.01...0.25,
+                    step: 0.01
+                )
+                .disabled(!viewModel.settings.notifications.isEnabled)
             }
         }
         .formStyle(.grouped)

@@ -191,6 +191,24 @@ final class StatusViewModel {
         return true
     }
 
+    @discardableResult
+    func setNotificationsEnabled(_ enabled: Bool) async -> NotificationAuthorizationStatus {
+        if enabled {
+            let status = await notificationDelivery.requestAuthorization()
+            guard status == .granted else {
+                var disabled = settings
+                disabled.notifications.isEnabled = false
+                _ = await saveSettings(disabled)
+                return status
+            }
+        }
+
+        var nextSettings = settings
+        nextSettings.notifications.isEnabled = enabled
+        _ = await saveSettings(nextSettings)
+        return enabled ? .granted : await notificationDelivery.authorizationStatus()
+    }
+
     func disconnect(_ provider: CachedProviderID) async {
         var nextSettings = settings
         switch provider {

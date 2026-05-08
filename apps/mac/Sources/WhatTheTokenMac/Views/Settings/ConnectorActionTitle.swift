@@ -5,11 +5,18 @@ enum ConnectorConsentCopy {
     static let codex = "Connect Codex to read local rate-limit status. Codex auth stays inside Codex. WhatTheToken stores only sanitized usage status. Disconnect removes cached Codex usage from WhatTheToken."
 }
 
-func connectorConnectionActionTitle(for provider: CachedProviderID, isEnabled: Bool) -> String {
+func connectorConnectionActionTitle(for provider: CachedProviderID, isEnabled: Bool, isPaused: Bool) -> String {
+    if isEnabled && isPaused {
+        return "Resume \(provider.displayName)"
+    }
     if isEnabled {
-        return "Disconnect \(provider.displayName)..."
+        return "Pause \(provider.displayName)"
     }
     return "Connect \(provider.displayName)"
+}
+
+func connectorDisconnectActionTitle(for provider: CachedProviderID) -> String {
+    "Disconnect \(provider.displayName)..."
 }
 
 extension CachedProviderID {

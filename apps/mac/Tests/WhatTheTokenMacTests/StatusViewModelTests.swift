@@ -677,6 +677,48 @@ private func sensitiveKeyMatches(
 }
 
 @MainActor
+@Test func successfulRefreshEvaluatesAndDeliversNotifications() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.notifications.isEnabled = true
+    settings.notifications.providerAlerts.claudeCode.isEnabled = true
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    let vm = StatusViewModel(
+        settings: settings,
+        claudeRefresher: SnapshotClaudeRefresher(snapshots: [UsageSnapshotFixture.claudeIncludedSample(remaining: 8, utilization: 0.92)]),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        notificationStateStore: InMemoryNotificationStateStore(),
+        notificationDelivery: delivery
+    )
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(await delivery.deliveredIntents.count == 1)
+    #expect(await delivery.deliveredIntents.first?.level == .critical)
+}
+
+@MainActor
+@Test func loadPersistedStateSuppressesNotificationsWhenNotificationStateDecodeFails() async {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    settings.notifications.isEnabled = true
+    settings.notifications.providerAlerts.codex.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexIncludedSample(remaining: 8, utilization: 0.92)], for: .codex, at: Date())
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache)),
+        notificationStateStore: InMemoryNotificationStateStore(data: Data("bad json".utf8)),
+        notificationDelivery: delivery
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(await delivery.deliveredIntents.isEmpty)
+}
+
+@MainActor
 @Test func failedRefreshKeepsLastKnownGoodSnapshotsAndStoresSanitizedError() async {
     var settings = AppSettings.defaults
     settings.connectors.claudeCode.isEnabled = true

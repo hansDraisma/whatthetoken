@@ -136,94 +136,27 @@ final class StatusViewModel {
     func connectClaudeCode() async {
         guard connectorState != .checking else { return }
 
-        var attempted = false
-        var didEnterChecking = false
-        let previousState = connectorState
-        let previousMessage = connectorStatusMessage
-        defer {
-            if attempted && Task.isCancelled {
-                if didEnterChecking && connectorState == .checking {
-                    connectorState = previousState
-                    connectorStatusMessage = previousMessage
-                }
-            } else if attempted {
-                lastClaudeRefreshAt = Date()
-            }
-        }
-        attempted = true
-
-        guard let claudeRefresher else {
-            connectorState = .notConnected
-            connectorStatusMessage = "Claude Code is not connected"
-            return
+        if !settings.connectors.claudeCode.isEnabled {
+            settings.connectors.claudeCode.isEnabled = true
+            await settingsStore.save(settings)
+            connectorState = .connected
+            connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .connected)
         }
 
-        if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
-            replaceSnapshots(matching: { $0.provider == "anthropic" && $0.product == "claude_code" }, with: [])
-            connectorState = .missingClaudeCli
-            connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
-            return
-        }
-
-        connectorState = .checking
-        connectorStatusMessage = "Checking Claude Code"
-        didEnterChecking = true
-
-        do {
-            let result = try await claudeRefresher.refresh()
-            guard !Task.isCancelled else { return }
-            replaceSnapshots(matching: { $0.provider == "anthropic" && $0.product == "claude_code" }, with: result.snapshots)
-            connectorState = Self.setupState(for: result.status.source.state)
-            connectorStatusMessage = result.status.message
-        } catch {
-            guard !Task.isCancelled else { return }
-            replaceSnapshots(matching: { $0.provider == "anthropic" && $0.product == "claude_code" }, with: [])
-            connectorState = .networkError
-            connectorStatusMessage = "Claude Code usage could not be refreshed"
-        }
+        await refreshClaude(reason: .manual)
     }
 
     func connectCodex() async {
         guard codexConnectorState != .checking else { return }
 
-        var attempted = false
-        var didEnterChecking = false
-        let previousState = codexConnectorState
-        let previousMessage = codexConnectorStatusMessage
-        defer {
-            if attempted && Task.isCancelled {
-                if didEnterChecking && codexConnectorState == .checking {
-                    codexConnectorState = previousState
-                    codexConnectorStatusMessage = previousMessage
-                }
-            } else if attempted {
-                lastCodexRefreshAt = Date()
-            }
-        }
-        attempted = true
-
-        guard let codexRefresher else {
-            codexConnectorState = .notConnected
-            codexConnectorStatusMessage = "Codex is not connected"
-            return
+        if !settings.connectors.codex.isEnabled {
+            settings.connectors.codex.isEnabled = true
+            await settingsStore.save(settings)
+            codexConnectorState = .connected
+            codexConnectorStatusMessage = CodexConnectorSetupCopy.title(for: .connected)
         }
 
-        codexConnectorState = .checking
-        codexConnectorStatusMessage = "Checking Codex"
-        didEnterChecking = true
-
-        do {
-            let result = try await codexRefresher.refresh()
-            guard !Task.isCancelled else { return }
-            replaceSnapshots(matching: { $0.provider == "openai" && $0.product == "codex" }, with: result.snapshots)
-            codexConnectorState = Self.codexSetupState(for: result.status.source.state)
-            codexConnectorStatusMessage = result.status.message
-        } catch {
-            guard !Task.isCancelled else { return }
-            replaceSnapshots(matching: { $0.provider == "openai" && $0.product == "codex" }, with: [])
-            codexConnectorState = .networkError
-            codexConnectorStatusMessage = "Codex usage could not be refreshed"
-        }
+        await refreshCodex(reason: .manual)
     }
 
     func refreshAll(reason: RefreshReason) async {
@@ -231,9 +164,139 @@ final class StatusViewModel {
         isRefreshAllInFlight = true
         defer { isRefreshAllInFlight = false }
 
-        await connectClaudeCode()
+        await refreshClaude(reason: reason)
         guard !Task.isCancelled else { return }
-        await connectCodex()
+        await refreshCodex(reason: reason)
+    }
+
+    private func refreshClaude(reason: RefreshReason) async {
+        guard settings.connectors.claudeCode.isEnabled else { return }
+        guard connectorState != .checking else { return }
+        guard reason.isManual || cache.allowsAutomaticRefresh(for: .claude, now: now()) else { return }
+
+        if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
+            replaceSnapshots(matching: CachedProviderID.claude.snapshotPredicate, with: [])
+            cache.removeProvider(.claude)
+            await cacheStore.save(cache)
+            connectorState = .missingClaudeCli
+            connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
+            lastClaudeRefreshAt = now()
+            return
+        }
+
+        let previousState = connectorState
+        let previousMessage = connectorStatusMessage
+        connectorState = .checking
+        connectorStatusMessage = "Checking Claude Code"
+
+        do {
+            let result = try await requireClaudeRefreshResult()
+            guard !Task.isCancelled else {
+                connectorState = previousState
+                connectorStatusMessage = previousMessage
+                return
+            }
+
+            replaceSnapshots(matching: CachedProviderID.claude.snapshotPredicate, with: result.snapshots)
+            connectorState = Self.setupState(for: result.status.source.state)
+            connectorStatusMessage = result.status.message
+            lastClaudeRefreshAt = now()
+            cache.replaceSnapshots(result.snapshots, for: .claude, at: lastClaudeRefreshAt!)
+            await cacheStore.save(cache)
+        } catch {
+            guard !Task.isCancelled else {
+                connectorState = previousState
+                connectorStatusMessage = previousMessage
+                return
+            }
+
+            connectorState = .networkError
+            connectorStatusMessage = "Claude Code usage could not be refreshed"
+            cache.recordFailure(for: .claude, code: .network, message: connectorStatusMessage, now: now())
+            await cacheStore.save(cache)
+            applyCachedSnapshots()
+        }
+    }
+
+    private func refreshCodex(reason: RefreshReason) async {
+        guard settings.connectors.codex.isEnabled else { return }
+        guard codexConnectorState != .checking else { return }
+        guard reason.isManual || cache.allowsAutomaticRefresh(for: .codex, now: now()) else { return }
+
+        let previousState = codexConnectorState
+        let previousMessage = codexConnectorStatusMessage
+        codexConnectorState = .checking
+        codexConnectorStatusMessage = "Checking Codex"
+
+        do {
+            let result = try await requireCodexRefreshResult()
+            guard !Task.isCancelled else {
+                codexConnectorState = previousState
+                codexConnectorStatusMessage = previousMessage
+                return
+            }
+
+            replaceSnapshots(matching: CachedProviderID.codex.snapshotPredicate, with: result.snapshots)
+            codexConnectorState = Self.codexSetupState(for: result.status.source.state)
+            codexConnectorStatusMessage = result.status.message
+            lastCodexRefreshAt = now()
+            cache.replaceSnapshots(result.snapshots, for: .codex, at: lastCodexRefreshAt!)
+            await cacheStore.save(cache)
+        } catch {
+            guard !Task.isCancelled else {
+                codexConnectorState = previousState
+                codexConnectorStatusMessage = previousMessage
+                return
+            }
+
+            codexConnectorState = .networkError
+            codexConnectorStatusMessage = "Codex usage could not be refreshed"
+            cache.recordFailure(for: .codex, code: .network, message: codexConnectorStatusMessage, now: now())
+            await cacheStore.save(cache)
+            applyCachedSnapshots()
+        }
+    }
+
+    private func requireClaudeRefreshResult() async throws -> ClaudeConnectorResult {
+        guard let claudeRefresher else {
+            return ClaudeConnectorResult(
+                snapshots: [],
+                status: ConnectorStatus(
+                    product: "claude_code",
+                    source: ConnectorSource(
+                        connector: "claude_code",
+                        state: .notConnected,
+                        label: "Claude Code",
+                        parserVersion: "unknown",
+                        deviceId: "local_mac"
+                    ),
+                    message: "Claude Code is not connected"
+                )
+            )
+        }
+
+        return try await claudeRefresher.refresh()
+    }
+
+    private func requireCodexRefreshResult() async throws -> CodexConnectorResult {
+        guard let codexRefresher else {
+            return CodexConnectorResult(
+                snapshots: [],
+                status: ConnectorStatus(
+                    product: "codex",
+                    source: ConnectorSource(
+                        connector: "codex",
+                        state: .notConnected,
+                        label: "Codex",
+                        parserVersion: "unknown",
+                        deviceId: "local_mac"
+                    ),
+                    message: "Codex is not connected"
+                )
+            )
+        }
+
+        return try await codexRefresher.refresh()
     }
 
     nonisolated static func loadFixtureData() throws -> Data {
@@ -391,6 +454,17 @@ final class StatusViewModel {
 
 enum FixtureError: Error {
     case missingFixture
+}
+
+extension StatusViewModel.RefreshReason {
+    var isManual: Bool {
+        switch self {
+        case .manual, .retry:
+            return true
+        case .popoverOpened, .timerTick:
+            return false
+        }
+    }
 }
 
 struct UsageSnapshotSection: Identifiable, Equatable, Sendable {

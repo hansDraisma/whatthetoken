@@ -23,12 +23,7 @@ struct StatusSectionDisplayModel: Sendable {
         let trustUniform = confidences.count == 1 && labels.count == 1
 
         if trustUniform {
-            trustLine = [
-                "\(first.confidence.capitalized) by \(first.source.label)",
-                Self.updatedLabel(snapshots: snapshots)
-            ]
-            .compactMap { $0 }
-            .joined(separator: " · ")
+            trustLine = "\(first.confidence.capitalized) by \(first.source.label)"
         } else {
             trustLine = nil
         }
@@ -76,30 +71,6 @@ struct StatusSectionDisplayModel: Sendable {
         }
 
         return nil
-    }
-
-    private static func updatedLabel(snapshots: [UsageSnapshot]) -> String? {
-        let latest = snapshots
-            .compactMap { parseISODate($0.lastUpdatedAt) }
-            .max()
-        guard let latest else { return nil }
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        return "Updated \(formatter.string(from: latest))"
-    }
-
-    private static func parseISODate(_ value: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: value) {
-            return date
-        }
-
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: value)
     }
 
     private static func mode(_ values: [String]) -> String {

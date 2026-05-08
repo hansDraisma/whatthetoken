@@ -75,7 +75,7 @@ extension PopoverChromeState {
 
     private static func indicator(for model: ProviderTabModel) -> ProviderTabIndicator {
         switch model.body {
-        case let .connected(snapshots, _):
+        case let .connected(snapshots, _, _):
             switch ProviderAvailability.from(snapshots: snapshots, tab: model.tab) {
             case .available:
                 return .none
@@ -90,7 +90,7 @@ extension PopoverChromeState {
             return .stale
         case .disconnected:
             return .disconnected
-        case .empty, .checking:
+        case .empty, .loading:
             return .none
         }
     }

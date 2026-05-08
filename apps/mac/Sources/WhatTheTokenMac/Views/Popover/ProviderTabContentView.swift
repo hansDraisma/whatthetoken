@@ -8,15 +8,15 @@ struct ProviderTabContentView: View {
 
     var body: some View {
         switch model.body {
-        case let .connected(snapshots, _):
+        case let .connected(snapshots, _, _):
             StatusSectionView(snapshots: snapshots)
         case .empty:
             empty
-        case .checking:
+        case .loading:
             checking
         case let .disconnected(reason):
             disconnected(reason: reason)
-        case let .error(kind, lastSnapshots):
+        case let .error(kind, lastSnapshots, _):
             errorBody(kind: kind, lastSnapshots: lastSnapshots)
         }
     }

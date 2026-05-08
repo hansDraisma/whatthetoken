@@ -131,7 +131,15 @@ Expected: green (no new failures introduced by switching to Swift 6 mode).
 
 If Swift 6 mode surfaces concurrency errors in pre-existing files that this plan does not touch, fix them with the minimal annotation needed (`@MainActor` on a method, `Sendable` conformance on a value type, `@Sendable` on a closure). Keep the diff focused on isolation correctness; do not refactor structure.
 
-If the baseline does not turn green within ~30 minutes of focused fixes, revert this task (`git revert` the commit) and document the Swift 5 mode constraint in the plan as a known limitation, then drop the explicit `Sendable` claims from later tasks. Continuing forward without a green baseline is not acceptable.
+If the baseline does not turn green within ~30 minutes of focused fixes, revert this task and continue under Swift 5 mode. Concretely:
+
+```
+git revert --no-edit HEAD
+```
+
+The revert commit message will read `Revert "build(mac): enable Swift 6 language mode"`. From there, every subsequent task that relied on `@MainActor`-implies-`Sendable` (the timer task in Phase D, the SwiftUI button-action `Task { ... }` closures in Phases G–I) needs explicit `@Sendable` annotations on the captured closures or `@unchecked Sendable` conformance on the `@MainActor` reference types. Add these inline as the compiler complains; do not preemptively annotate everything.
+
+Continuing forward without a green baseline is not acceptable.
 
 - [ ] **Step 3: Commit**
 
@@ -1508,6 +1516,21 @@ Append to `BannerStateTests.swift` (inside the existing suite):
         let banner = BannerState.from(viewModel: vm, selected: .claude)
         if case .critical = banner { } else { Issue.record("Expected .critical for 0% remaining") }
     }
+
+    @MainActor
+    @Test func banner_connectedWithStaleReason_yieldsStale_overridingWorst() {
+        // Even if `worst` is .healthy, a snapshot carrying a non-nil
+        // `staleReason` must surface as `.stale` because the underlying data
+        // is not authoritative.
+        let snap = UsageSnapshotFixture.claudeStaleSample()
+        let vm = StatusViewModel(snapshots: [snap], connectorState: .connected)
+        let banner = BannerState.from(viewModel: vm, selected: .claude)
+        if case let .stale(text) = banner {
+            #expect(text == BannerCopy.stale)
+        } else {
+            Issue.record("Expected .stale when snapshot has staleReason")
+        }
+    }
 ```
 
 Add to `StatusViewModelFakes.swift` (under `UsageSnapshotFixture`):
@@ -1546,6 +1569,21 @@ Add to `StatusViewModelFakes.swift` (under `UsageSnapshotFixture`):
             used: 100, limit: 100, remaining: 0, utilization: 1.0,
             resetAt: s.resetAt, lastUpdatedAt: s.lastUpdatedAt,
             confidence: s.confidence, undercountRisk: s.undercountRisk, staleReason: s.staleReason,
+            display: s.display, source: s.source
+        )
+    }
+
+    /// A healthy-looking snapshot whose `staleReason` is non-nil. Banner mapping
+    /// must honour the stale signal even when worst-case is healthy.
+    static func claudeStaleSample() -> UsageSnapshot {
+        let s = claudeSample()
+        return UsageSnapshot(
+            id: s.id, userAccountId: s.userAccountId, provider: s.provider, product: s.product,
+            surface: s.surface, poolKey: s.poolKey, windowKey: s.windowKey, unit: s.unit,
+            used: s.used, limit: s.limit, remaining: s.remaining, utilization: s.utilization,
+            resetAt: s.resetAt, lastUpdatedAt: s.lastUpdatedAt,
+            confidence: s.confidence, undercountRisk: s.undercountRisk,
+            staleReason: "test_stale",
             display: s.display, source: s.source
         )
     }
@@ -2182,21 +2220,24 @@ Replace the placeholder `popoverDidOpen` / `popoverDidClose` and add private hel
         let sleeper = self.sleeper
         let interval = self.interval
         let viewModel = self.viewModel
-        // Capture `self` weakly only to read the generation counter — the
-        // reference is read-only and the entire access happens inside an
-        // explicit MainActor closure, so no Swift 6 isolation hazard.
+        // `[weak self]` keeps the controller deallocatable independent of
+        // the in-flight Task. The generation re-check goes through a single
+        // `@MainActor` helper, which is the only call that crosses into the
+        // controller's isolation domain — clearer than an inline
+        // `MainActor.run` block, and easier to step through in a debugger.
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
                 await sleeper(interval)
                 if Task.isCancelled { break }
-                let stillValid: Bool = await MainActor.run {
-                    guard let self else { return false }
-                    return self.generation == expected
-                }
-                if !stillValid { break }
+                guard let self, await self.isCurrentGeneration(expected) else { break }
                 await viewModel.refreshAll(reason: .timerTick)
             }
         }
+    }
+
+    @MainActor
+    private func isCurrentGeneration(_ expected: Int) -> Bool {
+        return generation == expected
     }
 
     private func stopTimer() {
@@ -2768,7 +2809,7 @@ struct ProviderTabContentView: View {
         case (.claude, .codex), (.codex, .claude):
             // Mapping invariant violation. Covered by ProviderTabModel mapping
             // tests; if we ever hit this in production it's a programmer error.
-            assertionFailure("Cross-provider reason in tab \(model.tab)")
+            assertionFailure("ProviderTabModel invariant violated: tab=\(model.tab) but reason=\(reason); see ProviderTabModel.from mapping in ProviderTabModel.swift")
             return "\(model.tab.title) is unavailable"
         }
     }

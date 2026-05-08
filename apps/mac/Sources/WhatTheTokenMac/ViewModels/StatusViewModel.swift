@@ -111,6 +111,7 @@ final class StatusViewModel {
     func loadPersistedState() async {
         settings = await settingsStore.load()
         cache = await cacheStore.load()
+        applyCachedRefreshTimestamps()
         applyCachedSnapshots()
         applyConnectorStatesFromSettings()
         hasLoadedPersistedState = true
@@ -418,6 +419,15 @@ final class StatusViewModel {
             }
             return false
         }
+    }
+
+    private func applyCachedRefreshTimestamps() {
+        lastClaudeRefreshAt = settings.connectors.claudeCode.isEnabled
+            ? cache.lastSuccessfulRefreshAtByProvider[CachedProviderID.claude.rawValue]
+            : nil
+        lastCodexRefreshAt = settings.connectors.codex.isEnabled
+            ? cache.lastSuccessfulRefreshAtByProvider[CachedProviderID.codex.rawValue]
+            : nil
     }
 
     private func applyConnectorStatesFromSettings() {

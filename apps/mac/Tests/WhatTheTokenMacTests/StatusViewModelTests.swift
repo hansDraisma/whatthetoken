@@ -357,6 +357,29 @@ private func localUpdatedLabel(for isoString: String) -> String {
 }
 
 @MainActor
+@Test func loadPersistedStateRestoresCachedRefreshTimestamps() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
+    var cache = SnapshotCache.empty
+    let claudeAt = Date(timeIntervalSince1970: 1_000)
+    let codexAt = Date(timeIntervalSince1970: 2_000)
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: claudeAt)
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: codexAt)
+
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.lastRefreshAt(for: .claude) == claudeAt)
+    #expect(vm.lastRefreshAt(for: .codex) == codexAt)
+    #expect(vm.lastUpdatedAt == claudeAt)
+}
+
+@MainActor
 @Test func loadPersistedStateDoesNotRenderDisabledProviderCache() async {
     var cache = SnapshotCache.empty
     cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))

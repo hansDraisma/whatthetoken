@@ -6,11 +6,20 @@ import Observation
 final class AppModel {
     let viewModel: StatusViewModel
     let refreshController: PopoverRefreshController
+    let backgroundRefreshController: BackgroundRefreshController
 
     init(viewModel: StatusViewModel) {
         self.viewModel = viewModel
         self.refreshController = PopoverRefreshController(viewModel: viewModel)
-        Task { await viewModel.loadPersistedState() }
+        let backgroundRefreshController = BackgroundRefreshController(viewModel: viewModel)
+        self.backgroundRefreshController = backgroundRefreshController
+        self.viewModel.onSettingsChanged = { [weak backgroundRefreshController] in
+            backgroundRefreshController?.settingsDidChange()
+        }
+        Task {
+            await viewModel.loadPersistedState()
+            backgroundRefreshController.start()
+        }
     }
 
     static func live() -> AppModel {

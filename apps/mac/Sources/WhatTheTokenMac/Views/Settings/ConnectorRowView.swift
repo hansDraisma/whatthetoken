@@ -5,13 +5,17 @@ struct ConnectorRowView: View {
     let stateTitle: String
     let detail: String
     let trustMessage: String
-    let actionTitle: String
-    let isWorking: Bool
-    let action: () -> Void
+    let connectionActionTitle: String
+    let connectionActionRole: ButtonRole?
+    let isConnectionActionDisabled: Bool
+    let refreshActionTitle: String?
+    let isRefreshActionDisabled: Bool
+    let connectionAction: () -> Void
+    let refreshAction: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.headline)
                 Text(stateTitle)
@@ -27,8 +31,19 @@ struct ConnectorRowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button(actionTitle, action: action)
-                .disabled(isWorking)
+            VStack(alignment: .trailing, spacing: 8) {
+                if let refreshActionTitle {
+                    Button(refreshActionTitle, action: refreshAction)
+                        .disabled(isRefreshActionDisabled)
+                }
+
+                Button(
+                    connectionActionTitle,
+                    role: connectionActionRole,
+                    action: connectionAction
+                )
+                .disabled(isConnectionActionDisabled)
+            }
         }
         .padding(.vertical, 6)
     }

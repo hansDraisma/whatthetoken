@@ -71,9 +71,9 @@ extension BannerState {
         case .disconnected:
             let text = bothDisconnected ? BannerCopy.disconnectedBoth : BannerCopy.disconnected(selected: selected)
             return .disconnected(text: text)
-        case .error(.network, _), .error(.schemaChanged, _):
+        case .error(.network, _, _), .error(.schemaChanged, _, _):
             return .stale(text: BannerCopy.stale)
-        case let .connected(snapshots, _):
+        case let .connected(snapshots, _, _):
             let availability = ProviderAvailability.from(snapshots: snapshots, tab: selected)
 
             switch availability {
@@ -92,7 +92,7 @@ extension BannerState {
                 let text = BannerCopy.critical(provider: selected)
                 return .critical(text: appendHintIfApplicable(text, otherTab: otherTab, otherBody: otherModel.body))
             }
-        case .empty, .checking:
+        case .empty, .loading:
             return .hidden
         }
     }
@@ -102,7 +102,7 @@ extension BannerState {
         otherTab: ProviderTab,
         otherBody: ProviderTabModel.Body
     ) -> String {
-        if case let .connected(snapshots, _) = otherBody,
+        if case let .connected(snapshots, _, _) = otherBody,
            ProviderAvailability.from(snapshots: snapshots, tab: otherTab) == .available {
             return base + ". " + BannerCopy.hint(otherHealthy: otherTab)
         }

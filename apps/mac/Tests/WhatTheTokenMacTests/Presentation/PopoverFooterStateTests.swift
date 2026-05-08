@@ -26,11 +26,11 @@ import Testing
     }
 
     @MainActor
-    @Test func footer_whileRefreshing_disablesRefresh() {
+    @Test func footer_globalRefreshDisablesButtonWithoutMarkingSelectedProviderRefreshing() {
         let vm = StatusViewModel()
         vm.testSet_isRefreshAllInFlight(true)
         let state = PopoverFooterState.from(viewModel: vm, selected: .claude)
-        #expect(state.isRefreshing == true)
+        #expect(state.isRefreshing == false)
         #expect(state.canRefresh == false)
     }
 
@@ -44,5 +44,28 @@ import Testing
 
         #expect(PopoverFooterState.from(viewModel: vm, selected: .claude).lastUpdatedAt == oldClaude)
         #expect(PopoverFooterState.from(viewModel: vm, selected: .codex).lastUpdatedAt == freshCodex)
+    }
+
+    @MainActor
+    @Test func footerRefreshingIsScopedToSelectedProvider() {
+        let vm = StatusViewModel(
+            snapshots: [UsageSnapshotFixture.claudeSample()],
+            connectorState: .checking,
+            codexConnectorState: .connected
+        )
+
+        let claude = PopoverFooterState.from(viewModel: vm, selected: .claude)
+        let codex = PopoverFooterState.from(viewModel: vm, selected: .codex)
+
+        #expect(claude.isRefreshing == true)
+        #expect(claude.labelText(now: Date(timeIntervalSince1970: 1_000)) == "Updating values...")
+        #expect(codex.isRefreshing == false)
+    }
+
+    @Test func footerLabelUsesLastUpdatedWhenNotRefreshing() {
+        let date = Date(timeIntervalSince1970: 1_000)
+        let state = PopoverFooterState(lastUpdatedAt: date, isRefreshing: false, canRefresh: true)
+
+        #expect(state.labelText(now: Date(timeIntervalSince1970: 1_060)).hasPrefix("Last updated"))
     }
 }

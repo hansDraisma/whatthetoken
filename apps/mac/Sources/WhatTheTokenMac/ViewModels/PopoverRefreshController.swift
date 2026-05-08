@@ -5,7 +5,6 @@ typealias SleepClosure = @Sendable (Duration) async -> Void
 @MainActor
 final class PopoverRefreshController {
     private let viewModel: StatusViewModel
-    private let interval: Duration
     private let sleeper: SleepClosure
     private var timerTask: Task<Void, Never>?
     private var openRefreshTask: Task<Void, Never>?
@@ -13,11 +12,9 @@ final class PopoverRefreshController {
 
     init(
         viewModel: StatusViewModel,
-        interval: Duration = .seconds(30),
         sleeper: @escaping SleepClosure = { try? await Task.sleep(for: $0) }
     ) {
         self.viewModel = viewModel
-        self.interval = interval
         self.sleeper = sleeper
     }
 
@@ -37,10 +34,17 @@ final class PopoverRefreshController {
         stopOpenRefresh()
         let expected = generation
         let viewModel = self.viewModel
-        startTimer(expectedGeneration: expected)
         openRefreshTask = Task { [weak self] in
-            await viewModel.refreshAll(reason: .popoverOpened)
+            await viewModel.loadPersistedStateIfNeeded()
             guard let self, self.isCurrentGeneration(expected) else { return }
+            if viewModel.settings.refresh.autoRefreshEnabled {
+                self.startTimer(
+                    expectedGeneration: expected,
+                    interval: viewModel.settings.refresh.intervalDuration
+                )
+            }
+            await viewModel.refreshAll(reason: .popoverOpened)
+            guard self.isCurrentGeneration(expected) else { return }
             self.clearOpenRefreshTask()
         }
     }
@@ -51,10 +55,9 @@ final class PopoverRefreshController {
         stopTimer()
     }
 
-    private func startTimer(expectedGeneration expected: Int) {
+    private func startTimer(expectedGeneration expected: Int, interval: Duration) {
         stopTimer()
         let sleeper = self.sleeper
-        let interval = self.interval
         let viewModel = self.viewModel
         timerTask = Task { [weak self] in
             while !Task.isCancelled {

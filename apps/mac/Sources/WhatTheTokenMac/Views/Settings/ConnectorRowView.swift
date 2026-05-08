@@ -10,8 +10,10 @@ struct ConnectorRowView: View {
     let isConnectionActionDisabled: Bool
     let refreshActionTitle: String?
     let isRefreshActionDisabled: Bool
+    let disconnectActionTitle: String?
     let connectionAction: () -> Void
     let refreshAction: () -> Void
+    let disconnectAction: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -43,6 +45,10 @@ struct ConnectorRowView: View {
                     action: connectionAction
                 )
                 .disabled(isConnectionActionDisabled)
+
+                if let disconnectActionTitle, let disconnectAction {
+                    Button(disconnectActionTitle, role: .destructive, action: disconnectAction)
+                }
             }
         }
         .padding(.vertical, 6)

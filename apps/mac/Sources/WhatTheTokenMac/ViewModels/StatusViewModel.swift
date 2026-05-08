@@ -159,11 +159,15 @@ final class StatusViewModel {
         case .codex:
             nextSettings.connectors.codex.isEnabled = false
         }
-        guard await settingsStore.save(nextSettings) else { return }
 
         var nextCache = cache
         nextCache.removeProvider(provider)
         guard await cacheStore.save(nextCache) else { return }
+        guard await settingsStore.save(nextSettings) else {
+            _ = await cacheStore.save(cache)
+            return
+        }
+
         settings = nextSettings
         cache = nextCache
         applyCachedSnapshots()

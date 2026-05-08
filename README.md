@@ -29,6 +29,14 @@ The app must not collect prompts, responses, conversation content, cookies, auth
 
 Every usage number must be labeled as `verified`, `observed`, `estimated`, or `stale`.
 
+## Local Persistence And Refresh
+
+The Mac app persists connector consent, refresh preferences, and a sanitized snapshot cache in Application Support. It does not persist provider credentials, raw provider payloads, prompts, responses, cookies, auth headers, or provider session tokens.
+
+Connectors start disconnected by default. `Connect Claude Code` and `Connect Codex` are explicit opt-in actions. `Disconnect ...` stops future reads for that provider and removes that provider's cached usage snapshots from WhatTheToken storage. The app must not present a provider as disconnected unless both disabled consent and cache removal are persisted.
+
+Manual refresh remains available for connected providers. Opening the popover may refresh enabled connectors subject to provider backoff. Timer-based auto-refresh runs only while the popover is open and only when the user enables it. During refresh, existing values remain visible with a small updating indicator; the last-updated timestamp appears in the footer only.
+
 ## License
 
 WhatTheToken uses Apache-2.0. Copyright 2026 Hans Draisma unless otherwise noted.

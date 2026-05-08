@@ -122,35 +122,50 @@ final class StatusViewModel {
         await loadPersistedState()
     }
 
-    func setConnector(_ provider: CachedProviderID, enabled: Bool) async {
+    @discardableResult
+    func setConnector(_ provider: CachedProviderID, enabled: Bool) async -> Bool {
+        var nextSettings = settings
         switch provider {
         case .claude:
-            settings.connectors.claudeCode.isEnabled = enabled
+            nextSettings.connectors.claudeCode.isEnabled = enabled
         case .codex:
-            settings.connectors.codex.isEnabled = enabled
+            nextSettings.connectors.codex.isEnabled = enabled
         }
 
-        await settingsStore.save(settings)
+        guard await settingsStore.save(nextSettings) else { return false }
+        settings = nextSettings
         applyCachedSnapshots()
         applyConnectorStatesFromSettings()
+        return true
     }
 
-    func saveSettings(_ newSettings: AppSettings) async {
+    @discardableResult
+    func saveSettings(_ newSettings: AppSettings) async -> Bool {
         let previousConnectorSettings = settings.connectors
+        guard await settingsStore.save(newSettings) else { return false }
         settings = newSettings
-        await settingsStore.save(settings)
         applyCachedSnapshots()
         if previousConnectorSettings != settings.connectors {
             applyConnectorStatesFromSettings()
         }
+        return true
     }
 
     func disconnect(_ provider: CachedProviderID) async {
+        var nextSettings = settings
+        switch provider {
+        case .claude:
+            nextSettings.connectors.claudeCode.isEnabled = false
+        case .codex:
+            nextSettings.connectors.codex.isEnabled = false
+        }
+        guard await settingsStore.save(nextSettings) else { return }
+
         var nextCache = cache
         nextCache.removeProvider(provider)
         guard await cacheStore.save(nextCache) else { return }
+        settings = nextSettings
         cache = nextCache
-        await setConnector(provider, enabled: false)
         applyCachedSnapshots()
         applyConnectorStatesFromSettings()
     }
@@ -159,8 +174,10 @@ final class StatusViewModel {
         guard connectorState != .checking else { return }
 
         if !settings.connectors.claudeCode.isEnabled {
-            settings.connectors.claudeCode.isEnabled = true
-            await settingsStore.save(settings)
+            var nextSettings = settings
+            nextSettings.connectors.claudeCode.isEnabled = true
+            guard await settingsStore.save(nextSettings) else { return }
+            settings = nextSettings
             connectorState = .connected
             connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .connected)
         }
@@ -172,8 +189,10 @@ final class StatusViewModel {
         guard codexConnectorState != .checking else { return }
 
         if !settings.connectors.codex.isEnabled {
-            settings.connectors.codex.isEnabled = true
-            await settingsStore.save(settings)
+            var nextSettings = settings
+            nextSettings.connectors.codex.isEnabled = true
+            guard await settingsStore.save(nextSettings) else { return }
+            settings = nextSettings
             codexConnectorState = .connected
             codexConnectorStatusMessage = CodexConnectorSetupCopy.title(for: .connected)
         }

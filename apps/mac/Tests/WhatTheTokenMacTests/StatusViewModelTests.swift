@@ -503,6 +503,40 @@ private func sensitiveKeyMatches(
 }
 
 @MainActor
+@Test func disconnectKeepsConsentWhenSettingsDisableCannotBePersisted() async throws {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))
+    let cacheStore = InMemorySnapshotCacheStore(data: try JSONEncoder.cacheEncoder.encode(cache))
+
+    let invalidParent = FileManager.default.temporaryDirectory
+        .appendingPathComponent("whatthetoken-settings-parent-\(UUID().uuidString)")
+    try Data("not a directory".utf8).write(to: invalidParent)
+    defer { try? FileManager.default.removeItem(at: invalidParent) }
+
+    let vm = StatusViewModel(
+        snapshots: [UsageSnapshotFixture.codexSample()],
+        settings: settings,
+        cache: cache,
+        settingsStore: JSONFileAppSettingsStore(
+            url: invalidParent.appendingPathComponent("settings.json")
+        ),
+        cacheStore: cacheStore,
+        codexConnectorState: .connected,
+        codexConnectorStatusMessage: "Codex connected"
+    )
+
+    await vm.disconnect(.codex)
+    let persistedCache = await cacheStore.load()
+
+    #expect(vm.settings.connectors.codex.isEnabled == true)
+    #expect(vm.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate))
+    #expect(vm.codexConnectorState == .connected)
+    #expect(persistedCache.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate))
+}
+
+@MainActor
 @Test func refreshAllSkipsDisabledConnectors() async {
     let claudeCounter = Counter()
     let codexCounter = Counter()

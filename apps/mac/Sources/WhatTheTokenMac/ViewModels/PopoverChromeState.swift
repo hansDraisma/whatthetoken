@@ -94,4 +94,27 @@ extension PopoverChromeState {
             return .none
         }
     }
+
+    @MainActor
+    static func menuBarTitle(viewModel: StatusViewModel) -> String {
+        hasCriticalProvider(viewModel: viewModel) ? "WhatTheToken - Critical" : "WhatTheToken"
+    }
+
+    @MainActor
+    static func menuBarSystemImage(viewModel: StatusViewModel) -> String {
+        hasCriticalProvider(viewModel: viewModel) ? "gauge.with.dots.needle.67percent" : "gauge"
+    }
+
+    @MainActor
+    private static func hasCriticalProvider(viewModel: StatusViewModel) -> Bool {
+        let claude = ProviderAvailability.from(
+            snapshots: viewModel.snapshots.filter(CachedProviderID.claude.snapshotPredicate),
+            tab: .claude
+        )
+        let codex = ProviderAvailability.from(
+            snapshots: viewModel.snapshots.filter(CachedProviderID.codex.snapshotPredicate),
+            tab: .codex
+        )
+        return claude == .critical || codex == .critical
+    }
 }

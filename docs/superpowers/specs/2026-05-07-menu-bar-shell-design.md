@@ -595,3 +595,130 @@ Wireframes are layout and information-density only. SwiftUI defaults will resolv
 - **Provenance UI** in Settings showing the existing `ConnectorSourceState` detail.
 - **Keyboard shortcuts** — `Cmd+R` (refresh), `Cmd+1` / `Cmd+2` (tab switching).
 - **Disconnect / reconnect** actions in Settings, once backing model APIs exist.
+
+## 14. Addendum: Contextual Provider Availability
+
+This addendum corrects a Phase 1 false alarm in the provider banner: fallback credit rows are currently included in the same worst-row calculation as included usage windows. That makes a provider look critically low when the included quota is healthy but optional overflow credits are zero. The visible symptom is a red "running critically low" banner while session and weekly rows are still green.
+
+### Source Semantics
+
+Provider docs describe credits / extra usage as a fallback lane, not the primary included allowance:
+
+- Claude Code usage is governed by plan/session usage limits; Claude extra usage applies after included plan limits are reached and can apply to Claude Code. Sources: [Claude Code usage limits](https://support.claude.com/en/articles/14552983-models-usage-limits-in-claude-code), [Claude extra usage](https://support.claude.com/en/articles/12429409-extra-usage-for-max-20x-plans), [Claude usage bundles](https://support.claude.com/en/articles/14246112-buy-usage-bundles).
+- Codex uses included plan limits first; after plan limits are reached, usage can draw from a credit balance when the plan/workspace supports flexible pricing. Sources: [ChatGPT flexible credits](https://help.openai.com/articles/12642688), [Codex with ChatGPT plan](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan/), [Codex rate card](https://help.openai.com/en/articles/20001106-codex-rate-card%E8%BF%99%E4%B8%AA%E6%96%B0%E6%94%B6%E8%B4%B9%E6%A8%A1%E5%BC%8F%E5%B7%B2%E7%BB%8F%E5%AE%9E%E8%A3%85%E4%BA%86%E5%90%97%EF%BC%9F).
+
+Because credits are a fallback lane, zero credits are not inherently critical while included usage is still available.
+
+### Lanes
+
+Each selected provider is evaluated through two lanes:
+
+| Lane | Claude snapshots | Codex snapshots |
+|---|---|---|
+| Included quota | `provider == "anthropic"`, `product == "claude_code"`, `poolKey == "anthropic_claude_subscription"` | `provider == "openai"`, `product == "codex"`, `unit == "utilization"` |
+| Fallback credits | `provider == "anthropic"`, `product == "claude_code"`, `poolKey == "anthropic_claude_extra_usage"` | `provider == "openai"`, `product == "codex"`, `poolKey == "openai_codex_credits"` |
+
+Rows outside these lanes are informational for provider availability unless a future connector explicitly classifies them.
+
+### Thresholds
+
+Reuse the existing `StatusUsageState` thresholds exactly:
+
+| Row state | Numeric rule |
+|---|---|
+| `.empty` | remaining fraction `<= 0` |
+| `.critical` | remaining fraction `< 0.10` |
+| `.low` | remaining fraction `< 0.30` |
+| `.healthy` | remaining fraction `>= 0.30` |
+| unknown remaining | `.healthy`, matching current behavior |
+
+Within each lane, aggregate with worst-of using the existing ordering: `.empty` > `.critical` > `.low` > `.healthy`.
+
+### Availability Cases
+
+Provider-level availability is a presentation concept:
+
+```swift
+enum ProviderAvailability: Equatable, Sendable {
+    case available
+    case low
+    case fallbackOnly
+    case critical
+    case stale
+    case disconnected
+}
+```
+
+State precedence is:
+
+`disconnected > stale > critical > fallbackOnly > low > available`
+
+Disconnected comes from `ProviderTabModel.Body.disconnected`. Stale comes from `ProviderTabModel.Body.error(.network/.schemaChanged, _)` or any selected-provider snapshot with `staleReason != nil`.
+
+`fallbackOnly` means included usage is exhausted (`.empty`) but fallback credits are available. It is not critical because the provider still has a usable path, but it needs distinct copy from `.low`: "Included usage exhausted. Extra credits available."
+
+### Availability Matrix
+
+| Included lane | Fallback lane | Availability | Banner |
+|---|---|---|---|
+| healthy | missing | available | hidden |
+| healthy | zero | available | hidden |
+| healthy | positive | available | hidden |
+| low | missing or zero | low | included usage is running low |
+| low | positive | low | included usage is running low; extra credits available |
+| critical | positive | low | included usage is critically low; extra credits available |
+| critical | missing or zero | critical | included usage is critically low and there is no overflow path |
+| empty | positive | fallbackOnly | included usage exhausted; extra credits available |
+| empty | missing or zero | critical | no included usage headroom or extra credits available |
+
+For this table, a fallback lane is **positive** when any fallback credit row has a healthy/low/critical-but-positive state. It is **zero** when all fallback credit rows are `.empty`. It is **missing** when the provider exposes no fallback credit row.
+
+The `.critical` row intentionally requires no fallback credits: sub-10% included usage with no overflow path should still produce a red banner before the hard stop. Sub-10% included usage with positive fallback credits is a warning, not `fallbackOnly`, because the provider has not moved to fallback-only operation yet.
+
+### Credit Row Copy
+
+Credit rows must not say "Out of credits" in v1. That phrase implies a user previously had credits and spent them, which requires persistent history that Phase 1 does not collect.
+
+Use:
+
+| Fallback credits | Included lane context | Hero copy | Severity styling |
+|---|---|---|---|
+| missing | any | no row rendered | none |
+| zero | included available or low | `No extra credits available` | neutral / non-red |
+| zero | included empty or critical | `No extra credits available` | red only because there is no usable fallback |
+| positive | any | `<n> credits available` | normal row threshold styling |
+
+Memory is intentionally deferred. Revisit local persistence such as `hasEverSeenPositiveCredits` only if users report that "No extra credits available" is misleading after they previously bought and spent credits. Any persistence proposal must include account/workspace scoping and privacy review.
+
+### Menu-Bar Icon Alignment
+
+Any menu-bar icon, badge, or future tint that communicates provider health must use the same `ProviderAvailability` model as the banner. The icon must not continue to use old raw worst-row state after this addendum, otherwise the false red alarm moves from the banner to the menu bar.
+
+If the current icon remains a static SF Symbol with no tint/badge, no icon code is required. If a stateful icon is introduced in this branch, it must be backed by `ProviderAvailability`.
+
+### Required Tests
+
+Add focused tests for both Claude and Codex:
+
+| Included lane | Fallback lane | Expected availability |
+|---|---|---|
+| healthy | missing | `.available` |
+| healthy | zero | `.available` |
+| healthy | positive | `.available` |
+| low | zero | `.low` |
+| critical | positive | `.low` |
+| critical | zero | `.critical` |
+| empty | positive | `.fallbackOnly` |
+| empty | missing | `.critical` |
+| empty | zero | `.critical` |
+
+Add stale overlay tests that prove `stale` wins over `.available`, `.low`, `.fallbackOnly`, and `.critical`.
+
+Add banner tests proving:
+
+- Screenshot case: Claude included usage green plus extra usage credits zero does not render a critical banner.
+- Codex included usage green plus credits zero does not render a critical banner.
+- Included exhausted plus credits positive renders fallback-only copy, not critical copy.
+- Included exhausted plus credits zero renders critical copy.
+
+Add row-copy tests proving zero fallback credits render `No extra credits available`, not `Out of credits`.

@@ -25,6 +25,7 @@ final class StatusViewModel {
     private(set) var isRefreshAllInFlight = false
     private(set) var hasLoadedPersistedState = false
     private var suppressCacheLoadNotifications = false
+    private var lastBackgroundRefreshAtByProvider: [CachedProviderID: Date] = [:]
     var onSettingsChanged: (@MainActor () -> Void)?
 
     var isAnyRefreshing: Bool {
@@ -282,6 +283,7 @@ final class StatusViewModel {
     private func refreshClaude(reason: RefreshReason) async {
         guard settings.connectors.claudeCode.isEnabled && !settings.connectors.claudeCode.isPaused else { return }
         guard connectorState != .checking else { return }
+        if reason == .popoverOpened && recentlyBackgroundRefreshed(.claude) { return }
         guard reason.isManual || cache.allowsAutomaticRefresh(for: .claude, now: now()) else { return }
 
         if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
@@ -313,6 +315,9 @@ final class StatusViewModel {
             lastClaudeRefreshAt = now()
             cache.replaceSnapshots(result.snapshots, for: .claude, at: lastClaudeRefreshAt!)
             _ = await cacheStore.save(cache)
+            if reason == .timerTick {
+                lastBackgroundRefreshAtByProvider[.claude] = lastClaudeRefreshAt
+            }
             await evaluateNotifications(suppressDelivery: false)
         } catch {
             guard !Task.isCancelled else {
@@ -332,6 +337,7 @@ final class StatusViewModel {
     private func refreshCodex(reason: RefreshReason) async {
         guard settings.connectors.codex.isEnabled && !settings.connectors.codex.isPaused else { return }
         guard codexConnectorState != .checking else { return }
+        if reason == .popoverOpened && recentlyBackgroundRefreshed(.codex) { return }
         guard reason.isManual || cache.allowsAutomaticRefresh(for: .codex, now: now()) else { return }
 
         let previousState = codexConnectorState
@@ -353,6 +359,9 @@ final class StatusViewModel {
             lastCodexRefreshAt = now()
             cache.replaceSnapshots(result.snapshots, for: .codex, at: lastCodexRefreshAt!)
             _ = await cacheStore.save(cache)
+            if reason == .timerTick {
+                lastBackgroundRefreshAtByProvider[.codex] = lastCodexRefreshAt
+            }
             await evaluateNotifications(suppressDelivery: false)
         } catch {
             guard !Task.isCancelled else {
@@ -546,6 +555,11 @@ final class StatusViewModel {
             await notificationDelivery.deliver(result.intents)
         }
         suppressCacheLoadNotifications = false
+    }
+
+    private func recentlyBackgroundRefreshed(_ provider: CachedProviderID) -> Bool {
+        guard let last = lastBackgroundRefreshAtByProvider[provider] else { return false }
+        return now().timeIntervalSince(last) < 60
     }
 
     private func applyConnectorStatesFromSettings() {

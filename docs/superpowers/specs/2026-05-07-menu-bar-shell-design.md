@@ -1,0 +1,757 @@
+# Menu Bar Shell — Design
+
+- **Date:** 2026-05-07
+- **Status:** Approved (brainstorming complete; ready for implementation plan)
+- **Scope:** macOS app shell refactor — primary UI moves from `WindowGroup` to `MenuBarExtra`, with a Settings window and a DEBUG-only developer window. Tabs and a conditional banner ship as the *frame* for richer per-provider intelligence later.
+
+## 1. Goal And Constraints
+
+The app's job is one-second glanceability: which AI coding tools can I use right now? The menu bar surface delivers that in a popover; the Settings window owns connector configuration; richer per-provider spend or recommendation logic is out of scope and lives in a follow-up spec.
+
+The popover is **status-only**. It carries no credential forms, no provenance details, and no setup affordances beyond a single CTA that opens Settings.
+
+This spec covers Codex and Claude only. Gemini and any "Combined" / aggregated tab are explicitly deferred.
+
+## 2. Locked Decisions
+
+These are settled. Do not re-litigate during implementation.
+
+- **Tabs Phase 1:** Codex, Claude. Gemini and Combined are out of scope.
+- **Activation policy:** production runs as `.accessory` (no Dock icon, no Cmd-Tab entry, no Window menu). Bundling sets `LSUIElement = true`; the runtime call is the source of truth in dev.
+- **Settings is a separate window** opened via `Cmd+,` (`SwiftUI.Settings { … }`). Connectors-only on day 1.
+- **Phase 1 connector actions in Settings:** `Connect`, `Refresh`, `Retry` (state-driven; see §6 table). **No disconnect, no separate reconnect** until backing model APIs exist.
+- **Chrome:** the popover footer shows "Last updated …" + a refresh icon, plus a `•••` overflow menu containing Settings, About, Quit (and, in DEBUG only, Open Developer Window).
+- **Disconnected tabs are still selectable** and render a compact empty state with a primary "Open Settings" button.
+- **Banner is selected-provider scoped, conditional, and deterministic.** When the active tab's body is `.disconnected`, banner shows `.disconnected`. When the active tab is connected with data, banner uses the contextual provider-availability model in §14, not raw worst-of every row. When data is stale or the provider is in a network/schema error state, banner shows `.stale`. Disconnected text broadens to "Connect Claude or Codex in Settings" when both providers are disconnected.
+- **Single shared `StatusViewModel`** instance, owned by an `AppModel` that's instantiated once at app startup. `MenuBarExtra`, `Settings`, and (DEBUG) the developer window all read from it.
+- **Single serialized chrome refresh entry** (`StatusViewModel.refreshAll(reason:)`). Manual / popover-open / 30s in-popover timer share one outer in-flight guard. Settings actions bypass `refreshAll` and call provider-specific methods directly; the per-provider `.checking` guards prevent duplicate same-provider calls.
+- **Per-provider stored state** (`lastClaudeRefreshAt`, `lastCodexRefreshAt`). The popover's footer "Last updated …" is **scoped to the selected tab** — it shows that provider's last refresh time, not the older-of-the-two. This avoids the asymmetric-refresh case where the global label would lie ("Claude refreshed 10 min ago, user just connects Codex" → footer must say "just now" on the Codex tab, not "10 minutes ago"). "Last updated" means "the time of the most recent meaningful determination of this provider's state," including local checks like missing CLI.
+- **No background polling Phase 1.** Polling runs only while the popover is open, every 30s, and is cancelled on close.
+- **No production debug window.** The developer window is `#if DEBUG` only and not compiled into release builds.
+- **Copy uses "remaining usage / quota"**, never "spend"; the data contract is `UsageSnapshot`, not cost.
+- **Reuses existing thresholds.** `StatusUsageState` already defines `critical < 10%`, `low < 30%`, `healthy ≥ 30%`, `empty = 0`. No new thresholds.
+
+## 3. Architecture And File Layout
+
+Preserves the existing `Models / ViewModels / Views` discipline.
+
+```
+apps/mac/Sources/WhatTheTokenMac/
+  WhatTheTokenApp.swift               // modified: MenuBarExtra + Settings; DEBUG Window(id: "developer")
+  MacAppLauncher.swift                // modified: activation-policy aware (.regular | .accessory | noop)
+  AppModel.swift                      // NEW: owns shared dependencies
+  Models/                             // unchanged
+  ViewModels/
+    StatusViewModel.swift             // extended: @MainActor; per-provider timestamps; refreshAll
+    BannerState.swift                 // NEW
+    ProviderTabModel.swift            // NEW
+    PopoverFooterState.swift          // NEW
+    PopoverRefreshController.swift    // NEW
+  Views/
+    Popover/
+      PopoverRootView.swift           // NEW
+      StatusBannerView.swift          // NEW
+      ProviderTabBarView.swift        // NEW
+      ProviderTabContentView.swift    // NEW
+      PopoverFooterView.swift         // NEW
+      StatusSectionView.swift         // moved here from Views/
+    Settings/
+      SettingsRootView.swift          // NEW
+      ConnectorsView.swift            // NEW
+      ConnectorRowView.swift          // NEW
+    Developer/
+      DeveloperWindowView.swift       // NEW; #if DEBUG only
+```
+
+`Views/ContentView.swift` is removed in the final implementation step (after the new tree compiles and tests pass), not the first.
+
+### `MacAppLauncher`
+
+`MacAppActivationPolicy` gains `.accessory` alongside `.regular`. `configureLaunch(arguments:application:)` selects:
+
+- `.regular` only when the launch arg `--developer-window` is present (DEBUG builds opening the developer window directly).
+- `.accessory` for normal production launch.
+- `noop` (early return) for `--claude-connector-smoke` **and** `--codex-connector-smoke`.
+
+The current Codex-smoke-activates-Dock bug (`WhatTheTokenApp.swift:11-13` runs the Codex smoke check after `configureForInteractiveLaunch()` already activated the app) is fixed by reordering: both smoke-mode checks run *before* `configureLaunch`.
+
+### `AppModel`
+
+```swift
+@MainActor
+@Observable
+final class AppModel {
+    let viewModel: StatusViewModel
+    let refreshController: PopoverRefreshController
+
+    init(viewModel: StatusViewModel) {
+        self.viewModel = viewModel
+        self.refreshController = PopoverRefreshController(viewModel: viewModel)
+    }
+
+    static func live() -> AppModel { AppModel(viewModel: .live()) }
+}
+
+@main
+struct WhatTheTokenApp: App {
+    // App is constructed once per process. Use `let` rather than `@State` —
+    // observation tracking flows through the @Observable reads in the views.
+    private let app: AppModel = .live()
+
+    init() {
+        // 1. smoke-mode handling first (Claude and Codex both)
+        // 2. configureLaunch second
+    }
+
+    var body: some Scene {
+        MenuBarExtra(/* … */) {
+            PopoverRootView(viewModel: app.viewModel, controller: app.refreshController)
+        }
+        .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsRootView(viewModel: app.viewModel)
+        }
+
+        #if DEBUG
+        Window("WhatTheToken — Developer", id: "developer") {
+            DeveloperWindowView(viewModel: app.viewModel)
+        }
+        #endif
+    }
+}
+```
+
+## 4. Popover Composition
+
+### View tree
+
+```
+PopoverRootView                                 // owns selectedTab; .onAppear / .onDisappear -> controller
+├── StatusBannerView                            // rendered only when bannerState != .hidden
+├── ProviderTabBarView                          // segmented control: Codex / Claude (both always selectable)
+├── ProviderTabContentView                      // body switches on ProviderTabModel.body:
+│   ├── .connected     → StatusSectionView for selected provider's snapshots
+│   ├── .empty         → "Connected — no usage data yet" + Refresh button
+│   ├── .checking      → previous body, dimmed, with spinner overlay
+│   ├── .disconnected  → empty-state card + reason copy + "Open Settings" primary button
+│   └── .error         → reason copy + "Retry" button (calls refreshAll(reason: .retry))
+└── PopoverFooterView                           // "Last updated …" + Refresh + ••• overflow
+```
+
+### Presentation models
+
+Pure structs / enums; no AppKit, no I/O. Each is a deterministic projection of `StatusViewModel`'s observable state.
+
+```swift
+enum ProviderTab: String, CaseIterable, Identifiable, Sendable {
+    case codex, claude
+    var id: String { rawValue }
+    var title: String { self == .codex ? "Codex" : "Claude Code" }
+}
+
+struct ProviderTabModel: Equatable, Sendable {
+    enum Body: Equatable, Sendable {
+        case connected(snapshots: [UsageSnapshot], worst: StatusUsageState)
+        case empty                              // connected, no snapshots
+        case checking                           // refresh in flight
+        case disconnected(reason: DisconnectedReason)
+        case error(kind: ErrorKind, lastSnapshots: [UsageSnapshot])
+    }
+    enum DisconnectedReason: Equatable, Sendable {
+        case notConnected, missingCredentials, missingClaudeCLI, tokenInvalid, permissionDenied, rateLimited
+    }
+    enum ErrorKind: Equatable, Sendable { case network, schemaChanged }
+    let tab: ProviderTab
+    let body: Body
+}
+
+enum BannerState: Equatable, Sendable {
+    case hidden
+    case critical(text: String)
+    case low(text: String)
+    case stale(text: String)
+    case disconnected(text: String)
+}
+
+struct PopoverFooterState: Equatable, Sendable {
+    let lastUpdatedAt: Date?
+    let isRefreshing: Bool
+    let canRefresh: Bool                        // false while isAnyRefreshing
+}
+```
+
+### Mapping rules
+
+**`ProviderTabModel.from(viewModel:tab:)`** — for Claude:
+
+| `ClaudeConnectorSetupState` | `Body` |
+|---|---|
+| `.checking` | `.checking` |
+| `.connected` + non-empty filtered snapshots | `.connected(snapshots, worst:)` where `worst` = worst-of `StatusUsageState` |
+| `.connected` + empty filtered snapshots | `.empty` |
+| `.notConnected` | `.disconnected(.notConnected)` |
+| `.missingCredentials` | `.disconnected(.missingCredentials)` |
+| `.missingClaudeCli` | `.disconnected(.missingClaudeCLI)` |
+| `.tokenInvalid` | `.disconnected(.tokenInvalid)` |
+| `.rateLimited` | `.disconnected(.rateLimited)` |
+| `.networkError` | `.error(.network, lastSnapshots:)` |
+| `.schemaChanged` | `.error(.schemaChanged, lastSnapshots:)` |
+
+Codex mapping mirrors this over `CodexConnectorSetupState`. `.permissionDenied` → `.disconnected(.permissionDenied)`. The `.missingClaudeCLI` and `.rateLimited` cases do not apply to Codex.
+
+Snapshot filter predicates match the existing `replaceSnapshots` calls: `provider == "anthropic" && product == "claude_code"` for Claude; `provider == "openai" && product == "codex"` for Codex.
+
+**`BannerState.from(viewModel:selected:)`** — looks at the *selected* tab's `ProviderTabModel.body`. The cases are mutually exclusive (a body is exactly one of these); evaluation order does not matter for correctness.
+
+> §14 supersedes the original connected-row mapping below. Keep the disconnected, checking, empty, and explicit error-body behavior from this table, but use `ProviderAvailability` for `.connected(...)` bodies so optional fallback credits do not make the provider falsely critical.
+
+| Selected tab `body` | Banner |
+|---|---|
+| `.disconnected(_)` | `.disconnected(text:)`. When both providers are `.disconnected`, broaden to "Connect Claude or Codex in Settings." |
+| `.error(.network, _)` or `.error(.schemaChanged, _)`, or any rendered snapshot for the selected provider has `staleReason != nil` | `.stale(text:)` |
+| `.connected(_, worst: .critical)` | `.critical(text:)` |
+| `.connected(_, worst: .low)` | `.low(text:)` |
+| `.connected(_, worst: .healthy)` | `.hidden` |
+| `.connected(_, worst: .empty)` | `.critical` — `.empty` means **0% remaining**, semantically more severe than critical (<10%). Both surface as a critical banner. |
+| `.empty` | `.hidden` |
+| `.checking` | `.hidden` (transient; refresh will resolve) |
+
+**Cross-provider hint** is appended to a `.critical` or `.low` banner only when the *other* provider's body is `.connected(_, worst: .healthy)`. Format: "Claude is running low — Codex has more room." If the other provider is itself low/critical/disconnected, no hint is appended. §14 further suppresses this hint for `criticalWithFallback` and `fallbackOnly` copy.
+
+**`PopoverFooterState`**: `lastUpdatedAt = viewModel.lastRefreshAt(for: selected)` (per-tab); `isRefreshing = viewModel.isAnyRefreshing`; `canRefresh = !isRefreshing`. Constructed via `from(viewModel:selected:)`.
+
+### Banner copy (centralized in a `BannerCopy` enum for future localization)
+
+> §14 supersedes the critical/low strings below for connected providers. The stale and disconnected copy remains valid.
+
+- critical: `"Claude is running critically low"` (+ optional cross-provider hint)
+- low: `"Claude is running low"` (+ optional cross-provider hint)
+- stale: `"Usage may be outdated. Refresh to check current limits."`
+- disconnected (selected): `"Codex is not connected. Open Settings to connect."`
+- disconnected (both): `"Connect Claude or Codex in Settings."`
+
+## 5. Refresh Controller And Lifecycle
+
+### `StatusViewModel` becomes `@MainActor`-isolated end-to-end
+
+The class is UI-bound; every public method touches observable UI state. Promoting to `@MainActor` removes Sendable friction without runtime overhead in the existing call sites.
+
+```swift
+@MainActor
+@Observable
+final class StatusViewModel {
+    // existing stored UI state
+    var snapshots: [UsageSnapshot]
+    var connectorState: ClaudeConnectorSetupState
+    var connectorStatusMessage: String
+    var codexConnectorState: CodexConnectorSetupState
+    var codexConnectorStatusMessage: String
+
+    // NEW: per-provider stored state
+    private(set) var lastClaudeRefreshAt: Date?
+    private(set) var lastCodexRefreshAt: Date?
+    private(set) var isRefreshAllInFlight: Bool = false
+
+    // Derived
+    var isAnyRefreshing: Bool {
+        connectorState == .checking
+            || codexConnectorState == .checking
+            || isRefreshAllInFlight
+    }
+
+    // Per-tab read; the popover's footer scopes "Last updated …" to whichever
+    // tab is selected, so the label never claims freshness for a provider that
+    // wasn't part of the most recent refresh.
+    func lastRefreshAt(for tab: ProviderTab) -> Date? {
+        switch tab {
+        case .claude: return lastClaudeRefreshAt
+        case .codex:  return lastCodexRefreshAt
+        }
+    }
+}
+```
+
+### `refreshAll` keeps an outer guard; legs run sequentially
+
+```swift
+enum RefreshReason: Equatable, Sendable {
+    case popoverOpened, manual, timerTick, retry
+}
+
+@MainActor
+func refreshAll(reason: RefreshReason) async {
+    guard !isRefreshAllInFlight else { return }
+    isRefreshAllInFlight = true
+    defer { isRefreshAllInFlight = false }
+
+    await connectClaudeCode()
+    await connectCodex()
+}
+```
+
+Sequential awaits: this is what the codebase already proves compiles under the current toolchain. Concurrent legs (`async let`) are a documented future optimization (see §10).
+
+### Per-provider timestamps via `defer` + `attempted` flag
+
+Stamps fire on every code path *except* the `.checking`-guard re-entry, so local-check terminal states (no refresher, missing CLI) update the timestamp correctly.
+
+```swift
+@MainActor
+func connectClaudeCode() async {
+    guard connectorState != .checking else { return }   // dedup re-entry; no stamp
+
+    var attempted = false
+    defer { if attempted { lastClaudeRefreshAt = Date() } }
+    attempted = true
+
+    guard let claudeRefresher else {
+        connectorState = .notConnected
+        connectorStatusMessage = "Claude Code is not connected"
+        return
+    }
+
+    if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
+        // Provider-scoped clear: only Claude's snapshots, not Codex's, must be wiped.
+        replaceSnapshots(matching: { $0.provider == "anthropic" && $0.product == "claude_code" }, with: [])
+        connectorState = .missingClaudeCli
+        connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
+        return
+    }
+
+    connectorState = .checking
+    connectorStatusMessage = "Checking Claude Code"
+
+    do {
+        let result = try await claudeRefresher.refresh()
+        // existing success path
+    } catch {
+        // existing error path
+    }
+}
+```
+
+`connectCodex()` follows the same shape over its own state.
+
+### `PopoverRefreshController`
+
+Owns popover-open lifecycle and the in-popover timer. Does **not** own the in-flight guard — that lives on `StatusViewModel`. Sleeper is injected as a closure for deterministic tests.
+
+```swift
+typealias SleepClosure = @Sendable (Duration) async -> Void
+
+@MainActor
+final class PopoverRefreshController {
+    private let viewModel: StatusViewModel
+    private let interval: Duration
+    private let sleeper: SleepClosure
+    private var timerTask: Task<Void, Never>?
+
+    init(
+        viewModel: StatusViewModel,
+        interval: Duration = .seconds(30),
+        sleeper: @escaping SleepClosure = { try? await Task.sleep(for: $0) }
+    ) {
+        self.viewModel = viewModel
+        self.interval = interval
+        self.sleeper = sleeper
+    }
+
+    func popoverDidOpen() {
+        Task { await viewModel.refreshAll(reason: .popoverOpened) }
+        startTimer()
+    }
+
+    func popoverDidClose()  { stopTimer() }
+    func userTappedRefresh() { Task { await viewModel.refreshAll(reason: .manual) } }
+    func userTappedRetry()   { Task { await viewModel.refreshAll(reason: .retry)  } }
+
+    private func startTimer() {
+        stopTimer()
+        let sleeper = self.sleeper
+        let interval = self.interval
+        timerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await sleeper(interval)
+                if Task.isCancelled { break }
+                await self?.viewModel.refreshAll(reason: .timerTick)
+            }
+        }
+    }
+
+    private func stopTimer() {
+        timerTask?.cancel()
+        timerTask = nil
+    }
+}
+```
+
+`PopoverRootView` drives lifecycle through `.onAppear` / `.onDisappear`. There is no public SwiftUI hook for `MenuBarExtra` popover visibility (`isInserted` controls the *menu-bar item*, not the popover); `.onAppear` on the popover content is the documented stable signal across macOS 14+. AppKit fallback (`NSStatusItem.button.window?.isVisible` observation) is documented as a back-pocket but not implemented Phase 1.
+
+### Open-trigger debounce: not added
+
+If a user opens the popover within seconds of a previous refresh, we re-run. The cost is one HTTP call per provider; the outer guard prevents overlap. Debouncing trades implementation complexity for sub-second savings users will not perceive.
+
+## 6. Settings
+
+Single-pane Settings window. No `TabView` shell yet — adding one is YAGNI until a second pane exists.
+
+```swift
+struct SettingsRootView: View {
+    let viewModel: StatusViewModel
+    var body: some View {
+        ConnectorsView(viewModel: viewModel)
+            .frame(minWidth: 480, minHeight: 360)
+    }
+}
+
+struct ConnectorsView: View {
+    let viewModel: StatusViewModel
+    var body: some View {
+        Form {
+            Section("Connectors") {
+                ConnectorRowView(
+                    title: "Claude Code",
+                    stateTitle: ClaudeConnectorSetupCopy.title(for: viewModel.connectorState),
+                    detail: viewModel.connectorStatusMessage,
+                    trustMessage: ClaudeConnectorSetupCopy.trustMessage,
+                    actionTitle: claudeActionTitle(for: viewModel.connectorState),
+                    isWorking: viewModel.connectorState == .checking,
+                    action: { Task { await viewModel.connectClaudeCode() } }
+                )
+                ConnectorRowView(
+                    title: "Codex",
+                    stateTitle: CodexConnectorSetupCopy.title(for: viewModel.codexConnectorState),
+                    detail: viewModel.codexConnectorStatusMessage,
+                    trustMessage: CodexConnectorSetupCopy.trustMessage,
+                    actionTitle: codexActionTitle(for: viewModel.codexConnectorState),
+                    isWorking: viewModel.codexConnectorState == .checking,
+                    action: { Task { await viewModel.connectCodex() } }
+                )
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+```
+
+`ConnectorRowView` displays four strings: `title` (provider name), `stateTitle` (from setup-copy enum), `detail` (from `connectorStatusMessage`), `trustMessage`. `stateTitle` and `detail` are presented as a two-line label so the row degrades when both happen to be the same string.
+
+### `ConnectorRowView` action-title rules
+
+| State | Button title |
+|---|---|
+| `.notConnected` | `Connect` |
+| `.checking` | `Checking…` (button disabled) |
+| `.connected` | `Refresh` |
+| `.networkError`, `.schemaChanged`, `.rateLimited` (Claude) | `Retry` |
+| `.missingCredentials`, `.missingClaudeCli`, `.tokenInvalid` (Claude) | `Connect` |
+| `.permissionDenied`, `.missingCredentials` (Codex) | `Connect` |
+
+Action target is the existing per-provider `connectClaudeCode()` / `connectCodex()`. Settings drives a single provider; the popover's chrome refresh button drives `refreshAll(reason: .manual)`. Two distinct entry points serving two distinct intents.
+
+The richer source-state surface (`ConnectorSource` / `ConnectorSourceState`) already exists in the model but its UI display is **not** Phase 1; current state is conveyed through the existing setup-copy and `connectorStatusMessage` strings. A dedicated provenance view is its own follow-up spec.
+
+## 7. DEBUG Developer Window
+
+`Window(id: "developer")` (single, named, openable-on-demand) wrapped in `#if DEBUG`. Not compiled into release. There is no environment variable, hidden launch flag, or release-build path that exposes the developer window.
+
+`DeveloperWindowView` Phase 1 contents:
+
+- Header line: `"Build: DEBUG · Bundle: \(bundleId) · macOS \(version)"`.
+- Per-provider section: setup state (raw enum case), `connectorStatusMessage`, `lastClaudeRefreshAt` / `lastCodexRefreshAt`, plus a per-provider "Refresh now" button calling `connectClaudeCode()` / `connectCodex()`.
+- A "Refresh all" button calling `viewModel.refreshAll(reason: .manual)`.
+- A scrolling list of `UsageSnapshot` JSON dumps (one card per snapshot).
+
+The developer window is **diagnostic-only**, limited to refresh actions and state inspection that are already available in production. No mutating affordances (no credential clear, no fixture toggle, no state injection).
+
+The popover's `•••` overflow menu adds, in DEBUG builds only, an `Open Developer Window` item via `openWindow(id: "developer")`.
+
+`.accessory` activation policy hosts windows without a Dock icon, so opening the developer window does not require flipping to `.regular`. Developers needing a Dock icon can launch with `--developer-window` (Section 3).
+
+## 8. Implementation Sequencing
+
+1. Introduce `AppModel`, presentation models (`BannerState`, `ProviderTabModel`, `PopoverFooterState`), `PopoverRefreshController`, the new view files, and amended `MacAppLauncher`. Old `ContentView` still compiles and is still referenced.
+2. Switch `WhatTheTokenApp`'s scene tree to `MenuBarExtra` + `Settings` + (DEBUG) `Window(id: "developer")`. Old `ContentView` is no longer referenced from the scene tree.
+3. Run `swift test`; manual smoke checklist (§9). Both green.
+4. Delete `Views/ContentView.swift`. Run tests again.
+
+## 9. Testing Plan
+
+### Pure-function tests — `apps/mac/Tests/WhatTheTokenMacTests/Presentation/`
+
+| Subject | Coverage |
+|---|---|
+| `ProviderTabModel.from(viewModel:tab:)` | One case per `ClaudeConnectorSetupState` (×9) and `CodexConnectorSetupState` (×7). For `.connected`, sub-cases with and without snapshots. |
+| `BannerState.from(viewModel:selected:)` | One assert per non-connected `Body` case (table in §4); connected bodies use the contextual provider-availability matrix in §14; both-providers-disconnected broadens copy; cross-provider hint fires only when allowed by §14; `.hidden` when active tab availability is `.available`; `.hidden` for `.empty` and `.checking`. |
+| `PopoverFooterState.from(viewModel:selected:)` | `lastUpdatedAt` is the selected tab's per-provider timestamp (nil/Date); `canRefresh` mirrors `!isAnyRefreshing`. Includes the asymmetric-refresh case (one tab fresh, one stale) to confirm scope-to-selected behavior. |
+| `claudeActionTitle(for:)` / `codexActionTitle(for:)` | One assert per setup-state case (table in §6). |
+
+### `StatusViewModel` async tests
+
+- `refreshAll_runsBothProvidersInOrder` — fakes record sequence; Claude before Codex.
+- `refreshAll_dropsOverlappingChromeRefresh` — two `refreshAll` back-to-back; second returns immediately.
+- `refreshAll_doesNotBlockSettingsAction` — kick `refreshAll`; while in flight, call `connectCodex()`; per-provider `.checking` dedup applies but `isRefreshAllInFlight` is unaffected; no crash.
+- `refreshAll_setsIsRefreshAllInFlight_falseOnExit` — observes `false → true → false`.
+- `refreshAll_isolatesProviderFailures` — Claude leg throws → Claude state goes `.networkError`; Codex leg still completes.
+- `connectClaudeCode_stampsTimestamp_onMissingCLIPath`.
+- `connectClaudeCode_stampsTimestamp_onNoRefresherPath`.
+- `connectClaudeCode_doesNotStamp_onCheckingGuardReentry`.
+- `connectCodex_stampsTimestamp_onNoRefresherPath`.
+- `lastRefreshAt_isPerTab`.
+- `connectClaudeCode_missingCLI_preservesCodexSnapshots` — seed `snapshots` with one Claude snapshot and one Codex snapshot; trigger the missing-CLI path; assert the Claude snapshot is gone and the Codex snapshot is unchanged. **(Fixes the existing bug at `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift:52` where `snapshots = []` wipes both providers' rows.)**
+
+### `PopoverRefreshController` tests
+
+A `FakeSleeper` exposes `fireOneTick()` and a `pendingTicks` count to drive the timer deterministically.
+
+- `popoverDidOpen_runsImmediateRefresh_andStartsTimer` — open → one `refreshAll`; `fakeSleeper.fireOneTick()` → second; again → third.
+- `popoverDidClose_cancelsBeforeNextTick` — open → close → fire tick → no further refresh.
+- `userTappedRefresh_routesThroughRefreshAll` — manual tap during in-flight refresh is dropped by the outer guard.
+- `userTappedRetry_routesThroughRefreshAll` — same with `.retry` reason.
+
+### `MacAppLauncher` tests
+
+A `FakeMacApplication` records `setActivationPolicy` and `activateIgnoringOtherApps` calls.
+
+- `configureLaunch_setsAccessoryPolicy_onProductionLaunch` — no special args → `.accessory`, no activate.
+- `configureLaunch_setsRegularPolicy_onDeveloperWindowFlag` — `--developer-window` arg → `.regular` + activate.
+- `configureLaunch_skipsActivation_onClaudeSmoke` — `--claude-connector-smoke` → no policy / no activate.
+- `configureLaunch_skipsActivation_onCodexSmoke` — `--codex-connector-smoke` → no policy / no activate. **(Fixes the existing bug at `WhatTheTokenApp.swift:11-13`.)**
+
+### `AppModel` test
+
+- `live_initializesWiredDependencies` — smoke that `AppModel.live()` constructs without crashing; behavioral wiring covered by ViewModel and Controller tests above; no `viewModel === viewModel` identity assertion.
+
+### View-level testing
+
+Phase 1 does not add SwiftUI snapshot or `ViewInspector` tests. Coverage comes from the presentation-model layer.
+
+### Manual smoke checklist (release-build, before merge)
+
+1. App launches, no Dock icon, no Cmd-Tab entry, menu-bar icon visible.
+2. Click menu-bar icon → popover opens with Codex + Claude tabs.
+3. Codex tab not connected → "Open Settings" CTA. Click → Settings opens to Connectors.
+4. In Settings → Connect Codex → state transitions in both Settings and the popover.
+5. Repeat for Claude.
+6. With both connected, popover shows snapshot rows; banner is hidden when both providers are healthy.
+7. Tap refresh → spinner; "Last updated" moves.
+8. Leave popover open 30s → second refresh fires. Close popover, wait 60s, reopen → exactly one refresh fires (open trigger), not three.
+9. `Cmd+,` from any state → Settings opens.
+10. `•••` overflow → Settings, About (system About panel), Quit work.
+11. DEBUG build only: `Open Developer Window` item present in `•••`. Release build: absent.
+
+## 10. Risk Register
+
+| # | Risk | L | I | Mitigation |
+|---|------|---|---|---|
+| 1 | `.onAppear` / `.onDisappear` on popover root unreliable across macOS versions for `MenuBarExtra(.window)` (Apple has not committed to popover-vs-scene lifecycle semantics) | Medium | Medium (a stuck timer breaks "no background polling Phase 1") | (a) `PopoverRefreshController` carries a generation counter incremented on every open/close; the timer task verifies the captured generation before firing, so a missed `.onDisappear` cannot keep refreshing forever past a subsequent reopen. (b) Manual smoke step #8 explicitly watches "Last updated" across a close → wait → reopen cycle; if it advances during the closed period, the AppKit fallback (`NSStatusItem.button.window?.isVisible` observation, §13 follow-up) is required before ship. |
+| 2 | Future move to concurrent provider legs hits Swift 6 strict-concurrency diagnostics | Low | Low (Phase 1 stays sequential) | Phase 1 ships sequential awaits, which the existing codebase already proves compile under the current toolchain. Concurrent legs are a documented future optimization, not a Phase 1 dependency. Re-validate against the then-current Swift before promoting. |
+| 3 | `LSUIElement` only takes effect at bundle build; SwiftPM `swift run` shows Dock | High | Low | Programmatic `.accessory` in `MacAppLauncher` is the runtime source of truth; bundle-time `Info.plist` mirrors it. Documented in the dev README. |
+| 4 | Refresh stampede when popover is opened/closed rapidly | Low | Low | `popoverDidClose` cancels the timer; `isRefreshAllInFlight` drops re-entrant `refreshAll`; per-provider `.checking` dedups inside legs. Covered by tests. |
+| 5 | Disconnect deferred → users with stale Keychain credentials have no in-app clear path | Medium | Medium | Existing `tokenInvalid` / `missingCredentials` setup-states already surface "credentials are invalid"; user fixes credentials in the source CLI and clicks Retry. Disconnect/reconnect is a follow-up spec; gap is documented. |
+| 6 | "Last updated …" footer is scoped to the selected tab — switching tabs may surface a much-older timestamp on a rarely-viewed provider | Low | Low | Behavior is intentional: each tab's footer reflects that provider's freshness. The visible jump on tab switch is acceptable signal, not a bug. |
+| 7 | DEBUG developer window introduces dev/prod behavior divergence | Medium | Low (intended) | Diagnostic-only: limited to refresh actions and state inspection that are already available in production. No mutating affordances. Reviewed before merge. |
+| 8 | Banner / setup-copy strings hardcoded (no localization) | High | Low | Strings centralized in setup-copy enums and a new `BannerCopy` enum so localization is a future change without touching views. |
+| 9 | Cross-provider hint copy could mislead in edge cases | Low | Medium | Hint fires only when other provider's body is `.connected(_, worst: .healthy)`; `.rateLimited` is `.disconnected`, not connected. Unit-tested. |
+| 10 | First-launch with no providers connected — empty popover may feel broken | Medium | Medium | Disconnected empty state shows a clear CTA + setup copy + trust message. (A menu-bar-icon badge until at least one provider is connected is a follow-up; not Phase 1.) |
+
+## 11. Out Of Scope
+
+Explicit anti-scope, for any future agent reading this spec.
+
+- Per-provider spend / cost data model.
+- Combined / aggregated tab.
+- Gemini connector and tab.
+- Disconnect / reconnect actions in Settings.
+- Background polling (any cadence) when the popover is closed.
+- Auto-opening Settings on first launch.
+- Localization (English-only Phase 1).
+- ViewInspector / SwiftUI snapshot tests.
+- AppKit-bridged popover-visibility observation (only the `.onAppear` / `.onDisappear` path is in Phase 1).
+- Login items / launch-at-login support.
+- Dock-mode toggling at runtime.
+- Menu-bar-icon badge for unconnected state.
+- Provenance / source-state UI surface in Settings.
+
+## 12. Visual Reference
+
+Low-fidelity wireframes for the seven canonical states are committed at `2026-05-07-menu-bar-shell-mockups/index.html`. Open in a browser to view.
+
+| Section | State |
+|---|---|
+| `#popover-healthy` | Popover — both providers healthy (banner hidden) |
+| `#popover-critical` | Popover — Claude critical with cross-provider hint to Codex |
+| `#popover-disconnected` | Popover — Codex tab selected, disconnected; Claude connected |
+| `#popover-stale` | Popover — network error; cached snapshots shown muted; Retry button |
+| `#popover-both-disconnected` | Popover — both providers disconnected (first launch) |
+| `#settings` | Settings → Connectors page |
+| `#developer` | Developer window (DEBUG only) |
+
+Wireframes are layout and information-density only. SwiftUI defaults will resolve final colors, type, and spacing during implementation. The wireframes are advisory; if a SwiftUI affordance produces a more idiomatic surface than what's drawn, prefer the SwiftUI shape and update the wireframe.
+
+## 13. Future Optimizations
+
+- **AppKit-bridged popover-visibility observation.** If `.onAppear` / `.onDisappear` on the `MenuBarExtra(.window)` content prove unreliable on a future macOS release (manual smoke step #8 catches this), replace the SwiftUI lifecycle hook with `NSStatusItem.button.window?.isVisible` KVO behind a small protocol so `PopoverRefreshController` can swap signal sources without changing call sites.
+- **Concurrent provider legs in `refreshAll`** via `async let` — re-validate under the then-current Swift toolchain before promoting; saves `min(Claude, Codex)` of refresh latency.
+- **Menu-bar-icon badge** until at least one provider is connected.
+- **Compound footer label** (e.g., "Codex 30s · Claude 12 min ago") if users find tab-scoped timestamps insufficient; only worth doing if real usage data shows confusion.
+- **Provenance UI** in Settings showing the existing `ConnectorSourceState` detail.
+- **Keyboard shortcuts** — `Cmd+R` (refresh), `Cmd+1` / `Cmd+2` (tab switching).
+- **Disconnect / reconnect** actions in Settings, once backing model APIs exist.
+
+## 14. Addendum: Contextual Provider Availability
+
+This addendum corrects a Phase 1 false alarm in the provider banner: fallback credit rows are currently included in the same worst-row calculation as included usage windows. That makes a provider look critically low when the included quota is healthy but optional overflow credits are zero. The visible symptom is a red "running critically low" banner while session and weekly rows are still green.
+
+### Source Semantics
+
+Provider docs describe credits / extra usage as a fallback lane, not the primary included allowance:
+
+- Claude Code usage is governed by plan/session usage limits; Claude extra usage applies after included plan limits are reached and can apply to Claude Code. Sources: [Claude Code usage limits](https://support.claude.com/en/articles/14552983-models-usage-limits-in-claude-code), [Claude extra usage](https://support.claude.com/en/articles/12429409-extra-usage-for-max-20x-plans), [Claude usage bundles](https://support.claude.com/en/articles/14246112-buy-usage-bundles).
+- Codex uses included plan limits first; after plan limits are reached, usage can draw from a credit balance when the plan/workspace supports flexible pricing. Sources: [ChatGPT flexible credits](https://help.openai.com/articles/12642688), [Codex with ChatGPT plan](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan/), [Codex rate card](https://help.openai.com/en/articles/20001106-codex-rate-card).
+
+Because credits are a fallback lane, zero credits are not inherently critical while included usage is still available.
+
+### Lanes
+
+Each selected provider is evaluated through two lanes. Filters are explicit so a future connector adding a new utilization-bearing row cannot silently fold into the wrong lane.
+
+| Lane | Claude snapshots | Codex snapshots |
+|---|---|---|
+| Included quota | `provider == "anthropic"`, `product == "claude_code"`, `poolKey == "anthropic_claude_subscription"` | `provider == "openai"`, `product == "codex"`, `unit == "utilization"`, **`poolKey != "openai_codex_credits"`** |
+| Fallback credits | `provider == "anthropic"`, `product == "claude_code"`, `poolKey == "anthropic_claude_extra_usage"` | `provider == "openai"`, `product == "codex"`, `poolKey == "openai_codex_credits"` |
+
+Rows outside these lanes are informational for provider availability unless a future connector explicitly classifies them.
+
+### Aggregation
+
+The two lanes aggregate differently:
+
+- **Included lane** — worst-of `StatusUsageState` across all included rows, using the existing ordering `.empty > .critical > .low > .healthy`. This is **lane-scoped**, distinct from `ProviderTabModel.Body.connected(_, worst:)` which spans every snapshot for the provider.
+- **Fallback lane** — tri-state, not severity. The lane is **positive** when at least one fallback row is non-empty, **zero** when every fallback row is empty, **missing** when no fallback row is present at all.
+
+### Thresholds
+
+Reuse the existing `StatusUsageState` thresholds exactly:
+
+| Row state | Numeric rule |
+|---|---|
+| `.empty` | remaining fraction `<= 0` |
+| `.critical` | remaining fraction `< 0.10` |
+| `.low` | remaining fraction `< 0.30` |
+| `.healthy` | remaining fraction `>= 0.30` |
+| unknown remaining | `.healthy`, matching current behavior |
+
+### Availability Cases
+
+Provider-level availability is a presentation concept derived from snapshots. It does **not** model disconnection or non-snapshot error states; those continue to live on `ProviderTabModel.Body` and are handled by `BannerState` upstream of availability.
+
+```swift
+enum ProviderAvailability: Equatable, Sendable {
+    case available
+    case low                      // included is below the low threshold
+    case criticalWithFallback     // included is .critical, fallback credits provide a usable path
+    case fallbackOnly             // included is .empty,    fallback credits provide a usable path
+    case critical                 // no usable path remains
+    case stale
+}
+```
+
+State precedence within `from(snapshots:tab:)` is:
+
+`stale > critical > fallbackOnly > criticalWithFallback > low > available`
+
+`stale` is produced when any selected-provider snapshot has `staleReason != nil`. `BannerState` continues to handle stale for the `.error(.network)` and `.error(.schemaChanged)` bodies; **`ProviderAvailability` only handles snapshot staleness inside the `.connected` body.** The two paths are disjoint and must not double-detect.
+
+`criticalWithFallback` and `fallbackOnly` both surface as a `BannerState.low` (not a new banner severity) but each carries distinct copy. They are separate enum cases, not one collapsed `.low`, because the banner copy bucket is the user-visible decision and we want the type system to enforce it.
+
+### Availability Matrix
+
+| Included lane | Fallback lane | Availability | Banner case | Banner copy |
+|---|---|---|---|---|
+| healthy | missing | `.available` | hidden | — |
+| healthy | zero | `.available` | hidden | — |
+| healthy | positive | `.available` | hidden | — |
+| low | missing or zero | `.low` | `.low` | `BannerCopy.low` (+ optional cross-provider hint) |
+| low | positive | `.low` | `.low` | `BannerCopy.low` (+ optional cross-provider hint) |
+| critical | positive | `.criticalWithFallback` | `.low` | `BannerCopy.criticalLowFallback` |
+| critical | missing or zero | `.critical` | `.critical` | `BannerCopy.critical` (+ optional cross-provider hint) |
+| empty | positive | `.fallbackOnly` | `.low` | `BannerCopy.fallbackOnly` |
+| empty | missing or zero | `.critical` | `.critical` | `BannerCopy.critical` (+ optional cross-provider hint) |
+
+The `.critical` rows intentionally require no fallback credits: sub-10% (or 0%) included usage with no overflow path should produce a red banner before the hard stop.
+
+### Canonical Banner Strings
+
+These strings are the source of truth. Implementation must consume these constants verbatim, not paraphrase. `provider.title` interpolates to `"Claude Code"` or `"Codex"` depending on the selected tab.
+
+- `BannerCopy.low(provider:)` → `"\(provider.title) included usage is running low"`
+- `BannerCopy.criticalLowFallback(provider:)` → `"\(provider.title) included usage is critically low. Extra credits available."`
+- `BannerCopy.fallbackOnly(provider:)` → `"\(provider.title) included usage is exhausted. Extra credits available."`
+- `BannerCopy.critical(provider:)` → `"\(provider.title) is out of usable quota"`
+- `BannerCopy.stale` → `"Usage may be outdated. Refresh to check current limits."`
+- `BannerCopy.disconnected(selected:)` → `"\(selected.title) is not connected. Open Settings to connect."`
+- `BannerCopy.disconnectedBoth` → `"Connect Claude or Codex in Settings."`
+- `BannerCopy.hint(otherHealthy:)` → `"\(other.title) has more room — consider switching new work."`
+
+### Cross-Provider Hint Behavior
+
+The cross-provider hint fires only when the *other* provider's body is `.connected(_, worst: .healthy)`.
+
+- `.low` and `.critical` banners: hint may be appended.
+- `.criticalWithFallback` and `.fallbackOnly` banners: hint **not** appended. The fallback copy already conveys that a usable path exists; appending the hint is redundant and risks misleading the user about which provider's path to take.
+- `.stale` and `.disconnected` banners: hint not appended.
+
+### Credit Row Copy
+
+Credit rows must not say "Out of credits" in v1. That phrase implies a user previously had credits and spent them, which requires persistent history that Phase 1 does not collect.
+
+| Fallback credits | Included lane context | Hero copy | Severity styling |
+|---|---|---|---|
+| missing | any | no row rendered | none |
+| zero | provider availability `.available`, `.low`, `.criticalWithFallback`, or `.fallbackOnly` | `No extra credits available` | neutral / non-red |
+| zero | provider availability `.critical` | `No extra credits available` | red, because there is no usable fallback |
+| positive | any | `<n> credits available` | normal row threshold styling |
+
+Row-level red styling on an empty fallback row is keyed on `ProviderAvailability == .critical`; every other availability state renders the row neutrally regardless of `state == .empty`. Neutral means: no red hero text, no red status dot, and no red progress bar. In the current `StatusRowDisplayModel` shape, this means `heroTintsRed == false`, `showsStatus == false`, and `showsBar == false` for empty fallback rows unless provider availability is `.critical`.
+
+Memory is intentionally deferred. Revisit local persistence such as `hasEverSeenPositiveCredits` only if users report that "No extra credits available" is misleading after they previously bought and spent credits. Any persistence proposal must include account/workspace scoping and privacy review.
+
+### Required Tests
+
+Lane-classification matrix tests for both Claude and Codex:
+
+| Included lane | Fallback lane | Expected availability |
+|---|---|---|
+| healthy | missing | `.available` |
+| healthy | zero | `.available` |
+| healthy | positive | `.available` |
+| low | zero | `.low` |
+| critical | positive | `.criticalWithFallback` |
+| critical | zero | `.critical` |
+| empty | positive | `.fallbackOnly` |
+| empty | missing | `.critical` |
+| empty | zero | `.critical` |
+
+Stale overlay tests prove `.stale` wins over `.available`, `.low`, `.criticalWithFallback`, `.fallbackOnly`, and `.critical`.
+
+Banner tests prove:
+
+- Screenshot case: Claude included usage green plus extra usage credits zero does not render a critical banner.
+- Codex included usage green plus credits zero does not render a critical banner.
+- Included `.empty` plus positive fallback renders `BannerCopy.fallbackOnly`, not critical copy.
+- Included `.critical` plus positive fallback renders `BannerCopy.criticalLowFallback`, not plain low copy.
+- Included `.empty` plus zero fallback renders `BannerCopy.critical`.
+- `.fallbackOnly` and `.criticalWithFallback` banners do **not** append the cross-provider hint, even when the other provider is healthy.
+- Cross-provider hint still appends to `.low` and `.critical` when the other provider is healthy.
+
+Row-copy and row-styling tests prove:
+
+- Zero fallback credits render `No extra credits available`, never `Out of credits`.
+- Empty fallback rows have `heroTintsRed == false`, `showsStatus == false`, and `showsBar == false` when provider availability is `.available`, `.low`, `.criticalWithFallback`, or `.fallbackOnly`.
+- Empty fallback rows have critical styling only when provider availability is `.critical`.
+
+### Future: Menu-Bar Icon Alignment
+
+If/when a stateful menu-bar icon, badge, or tint is introduced, it must read from `ProviderAvailability`, not raw `worstUsageState`. Today the icon is a static SF Symbol with no state, so no icon change is required by this addendum. See §13.

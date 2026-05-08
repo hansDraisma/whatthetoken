@@ -136,16 +136,21 @@ final class StatusViewModel {
     }
 
     func saveSettings(_ newSettings: AppSettings) async {
+        let previousConnectorSettings = settings.connectors
         settings = newSettings
         await settingsStore.save(settings)
         applyCachedSnapshots()
-        applyConnectorStatesFromSettings()
+        if previousConnectorSettings != settings.connectors {
+            applyConnectorStatesFromSettings()
+        }
     }
 
     func disconnect(_ provider: CachedProviderID) async {
+        var nextCache = cache
+        nextCache.removeProvider(provider)
+        guard await cacheStore.save(nextCache) else { return }
+        cache = nextCache
         await setConnector(provider, enabled: false)
-        cache.removeProvider(provider)
-        await cacheStore.save(cache)
         applyCachedSnapshots()
         applyConnectorStatesFromSettings()
     }
@@ -194,7 +199,7 @@ final class StatusViewModel {
         if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
             replaceSnapshots(matching: CachedProviderID.claude.snapshotPredicate, with: [])
             cache.removeProvider(.claude)
-            await cacheStore.save(cache)
+            _ = await cacheStore.save(cache)
             connectorState = .missingClaudeCli
             connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
             lastClaudeRefreshAt = now()
@@ -219,7 +224,7 @@ final class StatusViewModel {
             connectorStatusMessage = result.status.message
             lastClaudeRefreshAt = now()
             cache.replaceSnapshots(result.snapshots, for: .claude, at: lastClaudeRefreshAt!)
-            await cacheStore.save(cache)
+            _ = await cacheStore.save(cache)
         } catch {
             guard !Task.isCancelled else {
                 connectorState = previousState
@@ -230,7 +235,7 @@ final class StatusViewModel {
             connectorState = .networkError
             connectorStatusMessage = "Claude Code usage could not be refreshed"
             cache.recordFailure(for: .claude, code: .network, message: connectorStatusMessage, now: now())
-            await cacheStore.save(cache)
+            _ = await cacheStore.save(cache)
             applyCachedSnapshots()
         }
     }
@@ -258,7 +263,7 @@ final class StatusViewModel {
             codexConnectorStatusMessage = result.status.message
             lastCodexRefreshAt = now()
             cache.replaceSnapshots(result.snapshots, for: .codex, at: lastCodexRefreshAt!)
-            await cacheStore.save(cache)
+            _ = await cacheStore.save(cache)
         } catch {
             guard !Task.isCancelled else {
                 codexConnectorState = previousState
@@ -269,7 +274,7 @@ final class StatusViewModel {
             codexConnectorState = .networkError
             codexConnectorStatusMessage = "Codex usage could not be refreshed"
             cache.recordFailure(for: .codex, code: .network, message: codexConnectorStatusMessage, now: now())
-            await cacheStore.save(cache)
+            _ = await cacheStore.save(cache)
             applyCachedSnapshots()
         }
     }

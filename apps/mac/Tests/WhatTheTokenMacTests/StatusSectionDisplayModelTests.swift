@@ -166,6 +166,33 @@ private func sectionDisplaySnapshot(
     #expect(session?.badges.isEmpty == true)
 }
 
+@Test func sectionPassesCriticalProviderAvailabilityToFallbackCreditsRows() {
+    let snapshots = [
+        sectionDisplaySnapshot(
+            windowKey: "five_hour",
+            poolKey: "anthropic_claude_subscription",
+            unit: "utilization",
+            remaining: 0,
+            utilization: 1.0
+        ),
+        sectionDisplaySnapshot(
+            windowKey: "monthly_extra_usage",
+            poolKey: "anthropic_claude_extra_usage",
+            unit: "credits",
+            remaining: 0,
+            utilization: nil
+        )
+    ]
+
+    let section = StatusSectionDisplayModel(snapshots: snapshots, now: sectionDisplayFixedNow)
+    let credits = section.rows.first { $0.name == "Extra usage credits" }
+
+    #expect(credits?.heroText == "No extra credits available")
+    #expect(credits?.heroTintsRed == true)
+    #expect(credits?.showsStatus == true)
+    #expect(credits?.showsBar == true)
+}
+
 @Test func emptySnapshotsProducesNilTrustAndNoRows() {
     let section = StatusSectionDisplayModel(snapshots: [], now: sectionDisplayFixedNow)
 

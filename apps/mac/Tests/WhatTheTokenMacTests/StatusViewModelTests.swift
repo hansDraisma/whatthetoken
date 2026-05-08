@@ -98,3 +98,229 @@ private func localUpdatedLabel(for isoString: String) -> String {
     formatter.locale = Locale(identifier: "en_US_POSIX")
     return "Updated \(formatter.string(from: date))"
 }
+
+@MainActor
+@Test func newViewModel_hasNilTimestamps_andIsNotRefreshing() {
+    let vm = StatusViewModel()
+    #expect(vm.lastClaudeRefreshAt == nil)
+    #expect(vm.lastCodexRefreshAt == nil)
+    #expect(vm.isRefreshAllInFlight == false)
+}
+
+@MainActor
+@Test func lastRefreshAt_isPerTab() {
+    let vm = StatusViewModel()
+
+    let claudeAt = Date(timeIntervalSince1970: 1_000)
+    let codexAt = Date(timeIntervalSince1970: 2_000)
+
+    #expect(vm.lastRefreshAt(for: .claude) == nil)
+    #expect(vm.lastRefreshAt(for: .codex) == nil)
+
+    vm.testSet_lastClaudeRefreshAt(claudeAt)
+    vm.testSet_lastCodexRefreshAt(codexAt)
+
+    #expect(vm.lastRefreshAt(for: .claude) == claudeAt)
+    #expect(vm.lastRefreshAt(for: .codex) == codexAt)
+}
+
+@MainActor
+@Test func isAnyRefreshing_reflectsAllPaths() {
+    let vm = StatusViewModel()
+    #expect(vm.isAnyRefreshing == false)
+
+    vm.testSet_isRefreshAllInFlight(true)
+    #expect(vm.isAnyRefreshing == true)
+}
+
+@MainActor
+@Test func refreshAll_runsBothProvidersInOrder() async {
+    final class CallRecorder: @unchecked Sendable {
+        var calls: [String] = []
+        func record(_ name: String) { calls.append(name) }
+    }
+    let recorder = CallRecorder()
+
+    let claude = RecordingClaudeRefresher { recorder.record("claude") }
+    let codex = RecordingCodexRefresher { recorder.record("codex") }
+    let vm = StatusViewModel(
+        snapshots: [],
+        claudeRefresher: claude,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        codexRefresher: codex
+    )
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(recorder.calls == ["claude", "codex"])
+}
+
+@MainActor
+@Test func refreshAll_setsBothTimestamps() async {
+    let vm = StatusViewModel(
+        snapshots: [],
+        claudeRefresher: NoopClaudeRefresher(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        codexRefresher: NoopCodexRefresher()
+    )
+    #expect(vm.lastClaudeRefreshAt == nil)
+    #expect(vm.lastCodexRefreshAt == nil)
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(vm.lastClaudeRefreshAt != nil)
+    #expect(vm.lastCodexRefreshAt != nil)
+}
+
+@MainActor
+@Test func refreshAll_dropsOverlappingChromeRefresh() async {
+    let counter = Counter()
+    let claude = SlowClaudeRefresher(counter: counter)
+    let codex = NoopCodexRefresher()
+
+    let vm = StatusViewModel(
+        snapshots: [],
+        claudeRefresher: claude,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        codexRefresher: codex
+    )
+
+    async let first: Void = vm.refreshAll(reason: .manual)
+    async let second: Void = vm.refreshAll(reason: .timerTick)
+    _ = await (first, second)
+
+    #expect(counter.value == 1, "Second overlapping refreshAll should be dropped by the outer guard.")
+}
+
+@MainActor
+@Test func connectClaudeCode_stampsTimestamp_onMissingCLIPath() async {
+    let vm = StatusViewModel(
+        snapshots: [],
+        claudeRefresher: NoopClaudeRefresher(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "unknown")
+    )
+    #expect(vm.lastClaudeRefreshAt == nil)
+    await vm.connectClaudeCode()
+    #expect(vm.lastClaudeRefreshAt != nil)
+    #expect(vm.connectorState == .missingClaudeCli)
+}
+
+@MainActor
+@Test func connectClaudeCode_stampsTimestamp_onNoRefresherPath() async {
+    let vm = StatusViewModel(snapshots: [])
+    #expect(vm.lastClaudeRefreshAt == nil)
+    await vm.connectClaudeCode()
+    #expect(vm.lastClaudeRefreshAt != nil)
+    #expect(vm.connectorState == .notConnected)
+}
+
+@MainActor
+@Test func connectClaudeCode_doesNotStamp_onCheckingGuardReentry() async {
+    let vm = StatusViewModel(snapshots: [])
+    vm.testSet_connectorStateToChecking()
+    #expect(vm.lastClaudeRefreshAt == nil)
+    await vm.connectClaudeCode()
+    #expect(vm.lastClaudeRefreshAt == nil)
+}
+
+@MainActor
+@Test func connectClaudeCode_cancelledMidRefresh_doesNotStampTimestamp() async {
+    let counter = Counter()
+    let vm = StatusViewModel(
+        snapshots: [],
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0")
+    )
+    #expect(vm.lastClaudeRefreshAt == nil)
+
+    let task = Task { await vm.connectClaudeCode() }
+    try? await Task.sleep(nanoseconds: 5_000_000)
+    task.cancel()
+    _ = await task.value
+
+    #expect(vm.lastClaudeRefreshAt == nil)
+}
+
+@MainActor
+@Test func connectClaudeCode_cancelledMidRefresh_restoresPreviousState() async {
+    let counter = Counter()
+    let vm = StatusViewModel(
+        snapshots: [UsageSnapshotFixture.claudeSample()],
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        connectorState: .connected,
+        connectorStatusMessage: "Claude Code connected"
+    )
+
+    let task = Task { await vm.connectClaudeCode() }
+    for _ in 0..<20 {
+        if vm.connectorState == .checking { break }
+        await Task.yield()
+    }
+    #expect(vm.connectorState == .checking)
+
+    task.cancel()
+    _ = await task.value
+
+    #expect(vm.connectorState == .connected)
+    #expect(vm.connectorStatusMessage == "Claude Code connected")
+}
+
+@MainActor
+@Test func connectClaudeCode_missingCLI_preservesCodexSnapshots() async {
+    let codexSnapshot = UsageSnapshotFixture.codexSample()
+    let claudeSnapshot = UsageSnapshotFixture.claudeSample()
+    let vm = StatusViewModel(
+        snapshots: [claudeSnapshot, codexSnapshot],
+        claudeRefresher: NoopClaudeRefresher(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "unknown")
+    )
+
+    await vm.connectClaudeCode()
+
+    #expect(vm.snapshots.contains(where: { $0.id == codexSnapshot.id }))
+    #expect(!vm.snapshots.contains(where: { $0.id == claudeSnapshot.id }))
+    #expect(vm.connectorState == .missingClaudeCli)
+}
+
+@MainActor
+@Test func connectCodex_stampsTimestamp_onNoRefresherPath() async {
+    let vm = StatusViewModel(snapshots: [])
+    #expect(vm.lastCodexRefreshAt == nil)
+    await vm.connectCodex()
+    #expect(vm.lastCodexRefreshAt != nil)
+    #expect(vm.codexConnectorState == .notConnected)
+}
+
+@MainActor
+@Test func connectCodex_doesNotStamp_onCheckingGuardReentry() async {
+    let vm = StatusViewModel(snapshots: [])
+    vm.testSet_codexConnectorStateToChecking()
+    #expect(vm.lastCodexRefreshAt == nil)
+    await vm.connectCodex()
+    #expect(vm.lastCodexRefreshAt == nil)
+}
+
+@MainActor
+@Test func connectCodex_cancelledMidRefresh_restoresPreviousState() async {
+    let counter = Counter()
+    let vm = StatusViewModel(
+        snapshots: [UsageSnapshotFixture.codexSample()],
+        codexRefresher: SlowCodexRefresher(counter: counter),
+        codexConnectorState: .connected,
+        codexConnectorStatusMessage: "Codex connected"
+    )
+
+    let task = Task { await vm.connectCodex() }
+    for _ in 0..<20 {
+        if vm.codexConnectorState == .checking { break }
+        await Task.yield()
+    }
+    #expect(vm.codexConnectorState == .checking)
+
+    task.cancel()
+    _ = await task.value
+
+    #expect(vm.codexConnectorState == .connected)
+    #expect(vm.codexConnectorStatusMessage == "Codex connected")
+}

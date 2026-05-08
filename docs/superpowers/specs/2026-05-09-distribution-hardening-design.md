@@ -39,6 +39,7 @@ Current app packaging:
 Missing for Stage 5:
 
 - app icon and asset catalog
+- Xcode app target for public release archives
 - entitlements file
 - Developer ID signing script
 - hardened runtime signing configuration
@@ -190,7 +191,11 @@ Versioning rules:
 - Every release script must accept explicit version and build values.
 - Sparkle compares bundle versions, so `CFBundleVersion` must never go backward in public builds.
 
-The implementation plan should decide whether to keep the manual SwiftPM `.app` assembly or move to an Xcode archive/export flow. Sparkle's docs recommend Xcode archive/export because Sparkle helper tools and framework code must be embedded and signed correctly. If the project keeps `package-app.sh`, the script must explicitly preserve framework symlinks, sign nested code before the outer app, verify signatures, and fail on unsigned nested content.
+Public release builds must use a thin Xcode app target that references the existing Swift source tree and archives with `xcodebuild archive`. Release export must use `xcodebuild -exportArchive` with Developer ID export options.
+
+SwiftPM remains the fast local development and unit-test path. The current `package-app.sh` may remain temporarily for unsigned developer bundle smoke tests, but it is not the Public V1 release path. Once the Xcode release flow is proven, either delete `package-app.sh` or rename/document it as development-only so it cannot be mistaken for a notarizable release path.
+
+Sparkle's docs recommend Xcode archive/export because Sparkle helper tools and framework code must be embedded and signed correctly. The Xcode target should add Sparkle through Swift Package Manager and use Xcode's Embed & Sign behavior for `Sparkle.framework`. Hand-written release scripts should wrap `xcodebuild`, `notarytool`, `stapler`, `hdiutil`, `spctl`, checksum generation, and Sparkle appcast tooling; they should not reimplement Xcode's nested framework embedding.
 
 ## Signing And Hardened Runtime
 
@@ -249,9 +254,9 @@ Sparkle is the chosen updater framework. Stage 5 should make the app Sparkle-cap
 Required Sparkle setup:
 
 - choose Sparkle 2.x
-- embed `Sparkle.framework` in `Contents/Frameworks`
-- preserve framework symlinks when packaging
-- sign Sparkle framework and helper tools before signing the outer app
+- add Sparkle to the Xcode app target through Swift Package Manager
+- embed `Sparkle.framework` with Xcode's Embed & Sign behavior
+- verify Sparkle framework and helper tools are signed inside the archived app
 - add `SUPublicEDKey` to `Info.plist` once the EdDSA key is generated
 - add `SUFeedURL` only after the public appcast URL is chosen
 - set `SUEnableAutomaticChecks` to `false` for Public V1 builds
@@ -288,7 +293,7 @@ Public V1 should distribute a DMG rather than only a zip archive.
 
 DMG requirements:
 
-- signed with Developer ID where appropriate
+- contains a Developer ID signed app
 - notarized and stapled
 - includes `WhatTheToken.app`
 - includes `/Applications` symlink
@@ -318,6 +323,8 @@ This is user-controlled. It must be off by default.
 Stage 5 should introduce scripts that can be run locally by the maintainer:
 
 - build app bundle
+- archive the Xcode app target
+- export the archive with Developer ID export options
 - sign app
 - verify app signature
 - create DMG
@@ -359,7 +366,8 @@ Automated verification:
 
 - `swift test` from `apps/mac`
 - `pnpm --filter @whatthetoken/core test`
-- app bundle script exits nonzero on missing binary, missing Info.plist, or unsigned release mode
+- Xcode project configuration tests verify release metadata, entitlements, and Sparkle settings
+- development app bundle script is clearly labeled as non-release if it remains
 - release script dry-run validates required inputs
 - entitlements test verifies release builds do not contain `get-task-allow`
 - bundle metadata test verifies version/build values are present and valid
@@ -406,7 +414,7 @@ Stage 5 is complete when:
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Sparkle framework or helper tools are copied incorrectly | release fails to launch or notarize | prefer Xcode archive/export or use `ditto`; verify nested code signing |
+| Sparkle framework or helper tools are copied incorrectly | release fails to launch or notarize | use Xcode archive/export and Embed & Sign; verify nested code signing |
 | Sparkle private EdDSA key is lost | future updates cannot be signed normally | store key in Keychain plus documented secure backup outside repo |
 | Sparkle private key leaks | attacker may sign malicious update archives if appcast/download hosting is compromised | keep private key off hosting machines and out of CI until secret model exists |
 | App Sandbox breaks connectors | Claude/Codex stop working in public builds | test sandbox matrix before enabling; document unsandboxed direct-distribution rationale if needed |

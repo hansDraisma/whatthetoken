@@ -135,6 +135,9 @@ private func localUpdatedLabel(for isoString: String) -> String {
 
 @MainActor
 @Test func refreshAll_runsBothProvidersInOrder() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
     final class CallRecorder: @unchecked Sendable {
         var calls: [String] = []
         func record(_ name: String) { calls.append(name) }
@@ -145,6 +148,7 @@ private func localUpdatedLabel(for isoString: String) -> String {
     let codex = RecordingCodexRefresher { recorder.record("codex") }
     let vm = StatusViewModel(
         snapshots: [],
+        settings: settings,
         claudeRefresher: claude,
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
         codexRefresher: codex
@@ -157,8 +161,12 @@ private func localUpdatedLabel(for isoString: String) -> String {
 
 @MainActor
 @Test func refreshAll_setsBothTimestamps() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
     let vm = StatusViewModel(
         snapshots: [],
+        settings: settings,
         claudeRefresher: NoopClaudeRefresher(),
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
         codexRefresher: NoopCodexRefresher()
@@ -174,12 +182,15 @@ private func localUpdatedLabel(for isoString: String) -> String {
 
 @MainActor
 @Test func refreshAll_dropsOverlappingChromeRefresh() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
     let counter = Counter()
     let claude = SlowClaudeRefresher(counter: counter)
     let codex = NoopCodexRefresher()
 
     let vm = StatusViewModel(
         snapshots: [],
+        settings: settings,
         claudeRefresher: claude,
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
         codexRefresher: codex
@@ -422,4 +433,79 @@ private func localUpdatedLabel(for isoString: String) -> String {
     #expect(persistedSettings.connectors.codex.isEnabled == false)
     #expect(!persistedCache.snapshots.contains { $0.provider == "openai" })
     #expect(vm.codexConnectorState == .notConnected)
+}
+
+@MainActor
+@Test func refreshAllSkipsDisabledConnectors() async {
+    let claudeCounter = Counter()
+    let codexCounter = Counter()
+    let vm = StatusViewModel(
+        claudeRefresher: SlowClaudeRefresher(counter: claudeCounter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        codexRefresher: SlowCodexRefresher(counter: codexCounter)
+    )
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(claudeCounter.value == 0)
+    #expect(codexCounter.value == 0)
+}
+
+@MainActor
+@Test func refreshAllRefreshesOnlyEnabledConnector() async {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    let codexCounter = Counter()
+    let vm = StatusViewModel(
+        settings: settings,
+        codexRefresher: SlowCodexRefresher(counter: codexCounter)
+    )
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(codexCounter.value == 1)
+}
+
+@MainActor
+@Test func successfulRefreshPersistsProviderSnapshotsToCache() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let cacheStore = InMemorySnapshotCacheStore()
+    let vm = StatusViewModel(
+        settings: settings,
+        claudeRefresher: SnapshotClaudeRefresher(snapshots: [UsageSnapshotFixture.claudeLowSample()]),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        cacheStore: cacheStore,
+        now: { Date(timeIntervalSince1970: 2_000) }
+    )
+
+    await vm.refreshAll(reason: .manual)
+    let cache = await cacheStore.load()
+
+    #expect(cache.snapshots.map(\.id) == [UsageSnapshotFixture.claudeLowSample().id])
+    #expect(cache.lastSuccessfulRefreshAtByProvider[CachedProviderID.claude.rawValue] == Date(timeIntervalSince1970: 2_000))
+}
+
+@MainActor
+@Test func failedRefreshKeepsLastKnownGoodSnapshotsAndStoresSanitizedError() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+    let cacheStore = InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    let vm = StatusViewModel(
+        settings: settings,
+        cache: cache,
+        claudeRefresher: ThrowingClaudeRefresher(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        cacheStore: cacheStore,
+        now: { Date(timeIntervalSince1970: 2_000) }
+    )
+
+    await vm.refreshAll(reason: .manual)
+    let persisted = await cacheStore.load()
+
+    #expect(vm.snapshots.map(\.id) == [UsageSnapshotFixture.claudeSample().id])
+    #expect(persisted.lastErrorByProvider[CachedProviderID.claude.rawValue]?.code == .network)
+    #expect(persisted.lastErrorByProvider[CachedProviderID.claude.rawValue]?.message == "Claude Code usage could not be refreshed")
 }

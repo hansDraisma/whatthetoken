@@ -50,6 +50,15 @@ final class StatusViewModel {
         }
     }
 
+    func isRefreshing(_ tab: ProviderTab) -> Bool {
+        switch tab {
+        case .claude:
+            return connectorState == .checking
+        case .codex:
+            return codexConnectorState == .checking
+        }
+    }
+
     #if DEBUG
     func testSet_lastClaudeRefreshAt(_ date: Date?) { lastClaudeRefreshAt = date }
     func testSet_lastCodexRefreshAt(_ date: Date?) { lastCodexRefreshAt = date }

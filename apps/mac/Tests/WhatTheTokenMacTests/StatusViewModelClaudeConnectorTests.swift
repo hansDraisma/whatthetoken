@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import WhatTheTokenMac
 
+@MainActor
 @Test func liveViewModelDoesNotRefreshClaudeConnectorOnInit() {
     let refresher = CountingClaudeConnectorRefresher(result: .success(.connected()))
     let viewModel = StatusViewModel(claudeRefresher: refresher)
@@ -11,6 +12,7 @@ import Testing
     #expect(viewModel.snapshots.isEmpty)
 }
 
+@MainActor
 @Test func liveFactoryStartsDisconnectedWithoutSnapshots() {
     let viewModel = StatusViewModel.live()
 

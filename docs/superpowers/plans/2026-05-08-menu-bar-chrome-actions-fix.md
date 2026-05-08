@@ -4,7 +4,7 @@
 
 **Goal:** Fix the popover overflow menu's Settings and About items so they actually open / show in `.accessory` activation mode. Today, clicking "Settings…" does nothing and "About WhatTheToken" can render behind other windows.
 
-**Architecture:** Three narrow changes across `WhatTheTokenApp.swift` and `Views/Popover/PopoverFooterView.swift`. Adopt SwiftUI's macOS 14 `@Environment(\.openSettings)` for the Settings flow (canonical, avoids string selectors), and activate the app *before* dispatching the action in **all three** affected paths: Settings, About, and (DEBUG) Open Developer Window. Quit is unaffected — `terminate(nil)` works regardless of activation state.
+**Architecture:** A narrow chrome-action helper plus two call-site changes across `WhatTheTokenApp.swift` and `Views/Popover/PopoverFooterView.swift`. Adopt SwiftUI's macOS 14 `@Environment(\.openSettings)` for the Settings flow (canonical, avoids string selectors), and activate the app *before* dispatching the action in **all three** affected paths: Settings, About, and (DEBUG) Open Developer Window. Quit is unaffected — `terminate(nil)` works regardless of activation state.
 
 **Tech Stack:** Swift 6.0, SwiftUI (`@Environment(\.openSettings)`, `Settings { … }` scene), AppKit interop (`NSApplication.shared.activate(ignoringOtherApps:)`, `orderFrontStandardAboutPanel`).
 
@@ -37,13 +37,17 @@ This plan fixes both by activating first and switching Settings to the SwiftUI-b
 
 ```
 apps/mac/Sources/WhatTheTokenMac/
+  MacChromeActions.swift                             # ADD (Task 1)
   WhatTheTokenApp.swift                              # MODIFY (Task 1)
   Views/
     Popover/
       PopoverFooterView.swift                        # MODIFY (Task 2)
+apps/mac/Tests/WhatTheTokenMacTests/
+  Presentation/
+    MacChromeActionTests.swift                       # ADD (Task 1)
 ```
 
-No test files are added. Phase 1 has no SwiftUI snapshot/inspector tests; the spec-§9 plan correctly puts coverage of activation-orchestration behavior under the manual smoke checklist.
+The live SwiftUI scene presentation still needs manual smoke coverage, but the ordering contract is unit-tested with injectable closures so Settings, About, and Developer Window cannot regress to action-before-activation silently.
 
 ---
 
@@ -60,7 +64,9 @@ No test files are added. Phase 1 has no SwiftUI snapshot/inspector tests; the sp
 ## Task 1: Adopt `@Environment(\.openSettings)` and activate before opening Settings
 
 **Files:**
+- Add: `apps/mac/Sources/WhatTheTokenMac/MacChromeActions.swift`
 - Modify: `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift`
+- Add: `apps/mac/Tests/WhatTheTokenMacTests/Presentation/MacChromeActionTests.swift`
 
 - [ ] **Step 1: Read the current `WhatTheTokenApp.swift`**
 
@@ -70,7 +76,76 @@ cd apps/mac && cat Sources/WhatTheTokenMac/WhatTheTokenApp.swift
 
 Confirm the current `openSettings()` has the (action-then-activate) order. The fix replaces the entire helper.
 
-- [ ] **Step 2: Replace the App's `openSettings()` plumbing**
+- [ ] **Step 2: Add focused ordering tests**
+
+Add `apps/mac/Tests/WhatTheTokenMacTests/Presentation/MacChromeActionTests.swift` with tests for:
+
+- Settings: records `["activate", "openSettings"]`.
+- About: records `["activate", "showAbout"]`.
+- Developer Window: records `["activate", "openWindow"]`.
+
+Run the focused tests before adding the helper:
+
+```
+cd apps/mac && swift test --filter MacChromeActionTests
+```
+
+Expected before implementation: fails because `MacChromeActions` does not exist.
+
+- [ ] **Step 3: Add the shared chrome-action helper**
+
+Create `apps/mac/Sources/WhatTheTokenMac/MacChromeActions.swift`:
+
+```swift
+#if canImport(AppKit)
+import AppKit
+#endif
+
+enum MacChromeActions {
+    @MainActor
+    static func openSettings(
+        activate: @MainActor () -> Void = defaultActivate,
+        openSettings: @MainActor () -> Void
+    ) {
+        activate()
+        openSettings()
+    }
+
+    @MainActor
+    static func showAbout(
+        activate: @MainActor () -> Void = defaultActivate,
+        showAbout: @MainActor () -> Void = defaultShowAbout
+    ) {
+        activate()
+        showAbout()
+    }
+
+    @MainActor
+    static func openDeveloperWindow(
+        activate: @MainActor () -> Void = defaultActivate,
+        openWindow: @MainActor () -> Void
+    ) {
+        activate()
+        openWindow()
+    }
+
+    @MainActor
+    private static func defaultActivate() {
+        #if canImport(AppKit)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        #endif
+    }
+
+    @MainActor
+    private static func defaultShowAbout() {
+        #if canImport(AppKit)
+        NSApplication.shared.orderFrontStandardAboutPanel(nil)
+        #endif
+    }
+}
+```
+
+- [ ] **Step 4: Replace the App's `openSettings()` plumbing**
 
 Edit `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift` so the App holds the SwiftUI environment value and calls it after activating. Replace the existing struct body and helper with:
 
@@ -123,22 +198,18 @@ struct WhatTheTokenApp: App {
     /// approach dispatched into nothing because `.accessory` apps are not
     /// frontmost when the menu-bar popover is shown.
     private func openSettingsAction() {
-        #if canImport(AppKit)
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        #endif
-        openSettingsScene()
+        MacChromeActions.openSettings {
+            openSettingsScene()
+        }
     }
 
     private var developerWindowOpener: (() -> Void)? {
         #if DEBUG
         let openWindow = self.openWindow
         return {
-            #if canImport(AppKit)
-            // Activate before opening so the developer window comes to front
-            // in `.accessory` mode, same as Settings and About.
-            NSApplication.shared.activate(ignoringOtherApps: true)
-            #endif
-            openWindow(id: "developer")
+            MacChromeActions.openDeveloperWindow {
+                openWindow(id: "developer")
+            }
         }
         #else
         return nil
@@ -147,9 +218,9 @@ struct WhatTheTokenApp: App {
 }
 ```
 
-The old `private func openSettings()` is removed entirely. The `PopoverRootView` call site now passes `openSettingsAction` (the new helper) — the parameter name `onOpenSettings` is unchanged so no upstream change is needed. The `developerWindowOpener` mirrors the activate-then-open pattern.
+The old `private func openSettings()` is removed entirely. The `PopoverRootView` call site now passes `openSettingsAction` (the new helper) — the parameter name `onOpenSettings` is unchanged so no upstream change is needed. The `developerWindowOpener` mirrors the activate-then-open pattern via `MacChromeActions`.
 
-- [ ] **Step 3: Build to confirm no regressions**
+- [ ] **Step 5: Build to confirm no regressions**
 
 ```
 cd apps/mac && swift build
@@ -157,15 +228,21 @@ cd apps/mac && swift build
 
 Expected: clean build. If the build fails because `\.openSettings` is missing, double-check macOS deployment target is `.macOS(.v14)` in `Package.swift` (it is — `@Environment(\.openSettings)` is macOS 14+).
 
-- [ ] **Step 4: Run the unit-test suite to confirm no behavior change**
+- [ ] **Step 6: Run the focused and full unit-test suites**
+
+```
+cd apps/mac && swift test --filter MacChromeActionTests
+```
+
+Expected: the three ordering tests pass.
 
 ```
 cd apps/mac && swift test
 ```
 
-Expected: all existing tests pass. None of them cover this code path; we're confirming we didn't break unrelated invariants.
+Expected: all tests pass.
 
-- [ ] **Step 5: Manual smoke — Settings opens**
+- [ ] **Step 7: Manual smoke — Settings opens**
 
 ```
 cd apps/mac && swift run WhatTheTokenMac
@@ -180,7 +257,7 @@ Then in the running app:
 
 If the window opens but is behind another app, the activation step is being skipped — re-check that the `NSApplication.shared.activate(...)` call comes *before* `openSettingsScene()`.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```
 git add apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift
@@ -204,13 +281,10 @@ Edit `apps/mac/Sources/WhatTheTokenMac/Views/Popover/PopoverFooterView.swift`. R
             Menu {
                 Button("Settings...", action: onOpenSettings)
                 Button("About WhatTheToken") {
-                    #if canImport(AppKit)
                     // Activate before showing the panel so it comes to front
                     // in `.accessory` mode (where the app is not frontmost
                     // when the menu-bar popover is shown).
-                    NSApplication.shared.activate(ignoringOtherApps: true)
-                    NSApplication.shared.orderFrontStandardAboutPanel(nil)
-                    #endif
+                    MacChromeActions.showAbout()
                 }
                 #if DEBUG
                 if let onOpenDeveloperWindow {
@@ -228,7 +302,7 @@ Edit `apps/mac/Sources/WhatTheTokenMac/Views/Popover/PopoverFooterView.swift`. R
             .frame(width: 28)
 ```
 
-The only change inside the `Menu { }` is the About button's action body: a `NSApplication.shared.activate(ignoringOtherApps: true)` call before `orderFrontStandardAboutPanel`. Settings, Developer Window, and Quit remain untouched.
+The only change inside the `Menu { }` is the About button's action body: delegate to `MacChromeActions.showAbout()`, which activates before `orderFrontStandardAboutPanel`. Settings, Developer Window, and Quit remain untouched.
 
 - [ ] **Step 2: Build**
 
@@ -279,7 +353,7 @@ Report any step that doesn't work — those are bugs that escape this fix and ne
 
 - **Cmd+, keyboard shortcut.** In `.accessory` mode the system menu bar is not constructed, so `Cmd+,` cannot be wired up the standard way. If we need this shortcut, the follow-up is to register a `KeyboardShortcut` on the popover's `•••` Settings item (which only fires while the popover is open) or move to a non-`.accessory` activation policy. Neither is in scope for this fix.
 - **Activation-policy refactor.** The `.accessory` policy itself is intentional and remains the right call for a menu-bar utility. Not changing.
-- **Unit tests for these flows.** SwiftUI scene-action wiring isn't unit-tested in this codebase; coverage is via the manual smoke checklist above.
+- **Full SwiftUI scene presentation tests.** The action ordering is unit-tested, but actually presenting Settings/About/Developer Window still needs the manual smoke checklist above because this codebase does not have SwiftUI scene-inspection coverage.
 
 ---
 
@@ -288,4 +362,5 @@ Report any step that doesn't work — those are bugs that escape this fix and ne
 - **Spec coverage:** This plan does not change any spec invariant. The behavior fixed here was implicit in the existing spec — Settings and About menu items must function. The plan adds the missing wiring detail.
 - **Placeholder scan:** No TBDs / TODOs / "implement later".
 - **Type consistency:** `openSettingsAction` matches the `onOpenSettings: () -> Void` parameter on `PopoverRootView`. `\.openSettings` requires macOS 14, which is the package's deployment target.
+- **Test coverage:** `MacChromeActionTests` verifies activation happens before each chrome action; manual smoke verifies real macOS scene/panel presentation.
 - **Bug fix only:** No new features, no scope expansion.

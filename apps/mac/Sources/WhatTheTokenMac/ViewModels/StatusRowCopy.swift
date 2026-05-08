@@ -2,6 +2,10 @@ import Foundation
 
 enum StatusRowCopy {
     static func heroText(snapshot: UsageSnapshot, state: StatusUsageState) -> String {
+        if isFallbackCredits(snapshot), state == .empty {
+            return "No extra credits available"
+        }
+
         if snapshot.unit == "credits",
            snapshot.used == nil,
            snapshot.limit == nil,
@@ -113,6 +117,11 @@ enum StatusRowCopy {
         default:
             return "Empty"
         }
+    }
+
+    private static func isFallbackCredits(_ snapshot: UsageSnapshot) -> Bool {
+        snapshot.poolKey == "anthropic_claude_extra_usage"
+            || snapshot.poolKey == "openai_codex_credits"
     }
 
     private static func formatted(_ value: Double) -> String {

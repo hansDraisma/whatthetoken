@@ -3,6 +3,10 @@ import Testing
 @testable import WhatTheTokenMac
 
 private func rowCopySnapshot(
+    provider: String = "anthropic",
+    product: String = "claude_code",
+    poolKey: String = "p",
+    windowKey: String = "five_hour",
     unit: String,
     remaining: Double?,
     utilization: Double? = nil,
@@ -12,11 +16,11 @@ private func rowCopySnapshot(
     UsageSnapshot(
         id: "s",
         userAccountId: "u",
-        provider: "anthropic",
-        product: "claude_code",
+        provider: provider,
+        product: product,
         surface: "cli",
-        poolKey: "p",
-        windowKey: "five_hour",
+        poolKey: poolKey,
+        windowKey: windowKey,
         unit: unit,
         used: used,
         limit: limit,
@@ -73,6 +77,34 @@ private func rowCopySnapshot(
     let snapshot = rowCopySnapshot(unit: "credits", remaining: 0, limit: 100)
 
     #expect(StatusRowCopy.heroText(snapshot: snapshot, state: .empty) == "Out of credits")
+}
+
+@Test func claudeFallbackCreditsZero_usesNeutralCopy() {
+    let snapshot = rowCopySnapshot(
+        poolKey: "anthropic_claude_extra_usage",
+        windowKey: "monthly_extra_usage",
+        unit: "credits",
+        remaining: 0,
+        used: 0,
+        limit: 100
+    )
+
+    #expect(StatusRowCopy.heroText(snapshot: snapshot, state: .empty) == "No extra credits available")
+}
+
+@Test func codexCreditsZero_usesNeutralCopy() {
+    let snapshot = rowCopySnapshot(
+        provider: "openai",
+        product: "codex",
+        poolKey: "openai_codex_credits",
+        windowKey: "credits_remaining",
+        unit: "credits",
+        remaining: 0,
+        used: nil,
+        limit: nil
+    )
+
+    #expect(StatusRowCopy.heroText(snapshot: snapshot, state: .empty) == "No extra credits available")
 }
 
 @Test func heroCountForCreditsHealthy() {

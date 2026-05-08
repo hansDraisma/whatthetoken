@@ -20,5 +20,6 @@ let package = Package(
             name: "WhatTheTokenMacTests",
             dependencies: ["WhatTheTokenMac"]
         )
-    ]
+    ],
+    swiftLanguageModes: [.v6]
 )

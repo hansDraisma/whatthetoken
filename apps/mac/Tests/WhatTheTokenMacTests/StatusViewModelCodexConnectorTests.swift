@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import WhatTheTokenMac
 
+@MainActor
 @Test func liveViewModelDoesNotRefreshCodexConnectorOnInit() {
     let refresher = CountingCodexConnectorRefresher(result: .success(.connected(snapshots: [.codexUsage()])))
     let viewModel = StatusViewModel(codexRefresher: refresher)

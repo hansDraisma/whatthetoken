@@ -19,13 +19,15 @@ struct WhatTheTokenApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("WhatTheToken", systemImage: "gauge") {
+        MenuBarExtra {
             PopoverRootView(
                 viewModel: app.viewModel,
                 controller: app.refreshController,
                 onOpenSettings: openSettingsAction,
                 onOpenDeveloperWindow: developerWindowOpener
             )
+        } label: {
+            MenuBarStatusLabel(viewModel: app.viewModel)
         }
         .menuBarExtraStyle(.window)
 

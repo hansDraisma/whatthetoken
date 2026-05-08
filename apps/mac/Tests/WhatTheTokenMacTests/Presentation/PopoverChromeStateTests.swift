@@ -64,6 +64,20 @@ import Testing
         #expect(chrome.indicators[.claude] == .critical)
     }
 
+    @MainActor
+    @Test func menuBarTitleReflectsCriticalProvider() {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        let vm = StatusViewModel(
+            snapshots: [UsageSnapshotFixture.claudeIncludedSample(remaining: 5, utilization: 0.95)],
+            settings: settings,
+            connectorState: .connected
+        )
+
+        #expect(PopoverChromeState.menuBarTitle(viewModel: vm) == "WhatTheToken - Critical")
+        #expect(PopoverChromeState.menuBarSystemImage(viewModel: vm) == "gauge.with.dots.needle.67percent")
+    }
+
     @Test func tabAccessibilityLabelsIncludeIndicatorState() {
         #expect(ProviderTabIndicator.none.accessibilityLabel(for: .codex) == "Codex")
         #expect(ProviderTabIndicator.warning.accessibilityLabel(for: .claude) == "Claude Code, running low")

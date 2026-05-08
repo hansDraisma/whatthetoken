@@ -2,6 +2,7 @@ import Foundation
 
 protocol SnapshotCacheStore: Sendable {
     func load() async -> SnapshotCache
+    @discardableResult
     func save(_ cache: SnapshotCache) async -> Bool
 }
 
@@ -21,6 +22,7 @@ struct JSONFileSnapshotCacheStore: SnapshotCacheStore {
         }
     }
 
+    @discardableResult
     func save(_ cache: SnapshotCache) async -> Bool {
         let temporaryURL = url
             .deletingLastPathComponent()
@@ -60,6 +62,7 @@ final class InMemorySnapshotCacheStore: SnapshotCacheStore, @unchecked Sendable 
         }
     }
 
+    @discardableResult
     func save(_ cache: SnapshotCache) async -> Bool {
         guard let encoded = try? JSONEncoder.cacheEncoder.encode(cache) else { return false }
         lock.withLock {

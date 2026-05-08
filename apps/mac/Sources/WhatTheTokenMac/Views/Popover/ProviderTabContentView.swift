@@ -8,16 +8,34 @@ struct ProviderTabContentView: View {
 
     var body: some View {
         switch model.body {
-        case let .connected(snapshots, _, _):
-            StatusSectionView(snapshots: snapshots)
+        case let .connected(snapshots, _, isRefreshing):
+            VStack(spacing: 0) {
+                refreshProgressLine(isVisible: isRefreshing)
+                StatusSectionView(snapshots: snapshots)
+            }
         case .empty:
             empty
         case .loading:
             checking
         case let .disconnected(reason):
             disconnected(reason: reason)
-        case let .error(kind, lastSnapshots, _):
-            errorBody(kind: kind, lastSnapshots: lastSnapshots)
+        case let .error(kind, lastSnapshots, isRefreshing):
+            VStack(spacing: 0) {
+                refreshProgressLine(isVisible: isRefreshing)
+                errorBody(kind: kind, lastSnapshots: lastSnapshots)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func refreshProgressLine(isVisible: Bool) -> some View {
+        if isVisible {
+            ProgressView()
+                .progressViewStyle(.linear)
+                .controlSize(.small)
+                .frame(height: 2)
+                .padding(.horizontal, 12)
+                .accessibilityLabel("Updating values")
         }
     }
 

@@ -35,6 +35,8 @@
   - Wire notification state/delivery stores into `StatusViewModel`.
 - Modify: `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift`
   - Expose a modest critical menu-bar state.
+- Create: `apps/mac/Sources/WhatTheTokenMac/Views/Popover/MenuBarStatusLabel.swift`
+  - Render an observing menu-bar label so critical state updates after snapshot changes.
 - Modify: `apps/mac/Sources/WhatTheTokenMac/Views/Settings/ConnectorActionTitle.swift`
   - Add pause/resume copy.
 - Modify: `apps/mac/Sources/WhatTheTokenMac/Views/Settings/ConnectorRowView.swift`
@@ -177,6 +179,19 @@ Append these tests to `apps/mac/Tests/WhatTheTokenMacTests/Storage/AppSettingsTe
     #expect(decoded.notifications.criticalThreshold == 0.08)
     #expect(decoded.notifications.providerAlerts.claudeCode.isEnabled == true)
     #expect(decoded.notifications.providerAlerts.codex.isEnabled == true)
+}
+
+@Test func unknownFutureSchemaVersionThrowsUnsupportedSchemaVersion() {
+    let data = #"{"schemaVersion":999}"#.data(using: .utf8)!
+
+    do {
+        _ = try AppSettings.decodeValidated(from: data)
+        Issue.record("Expected unsupported schema version")
+    } catch AppSettingsDecodeError.unsupportedSchemaVersion(let version) {
+        #expect(version == 999)
+    } catch {
+        Issue.record("Expected unsupported schema version, got \(error)")
+    }
 }
 ```
 
@@ -386,19 +401,16 @@ Append to `apps/mac/Tests/WhatTheTokenMacTests/Storage/SnapshotCacheTests.swift`
 
 ```swift
 @Test func stalePolicyForAutoRefreshUsesMaxOfTwoIntervalsAndFifteenMinutes() {
-    #expect(SnapshotStalePolicy.from(settings: {
-        var settings = AppSettings.defaults
-        settings.refresh.autoRefreshEnabled = true
-        settings.refresh.intervalSeconds = 300
-        return settings
-    }()).staleAfterMinutes == 15)
+    var fiveMinuteSettings = AppSettings.defaults
+    fiveMinuteSettings.refresh.autoRefreshEnabled = true
+    fiveMinuteSettings.refresh.intervalSeconds = 300
 
-    #expect(SnapshotStalePolicy.from(settings: {
-        var settings = AppSettings.defaults
-        settings.refresh.autoRefreshEnabled = true
-        settings.refresh.intervalSeconds = 1_200
-        return settings
-    }()).staleAfterMinutes == 40)
+    var twentyMinuteSettings = AppSettings.defaults
+    twentyMinuteSettings.refresh.autoRefreshEnabled = true
+    twentyMinuteSettings.refresh.intervalSeconds = 1_200
+
+    #expect(SnapshotStalePolicy.from(settings: fiveMinuteSettings).staleAfterMinutes == 15)
+    #expect(SnapshotStalePolicy.from(settings: twentyMinuteSettings).staleAfterMinutes == 40)
 }
 
 @Test func stalePolicyForManualOnlyUsesSixtyMinutes() {
@@ -453,6 +465,22 @@ Append to `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift`:
     #expect(vm.settings.connectors.codex.isEnabled == false)
     #expect(vm.settings.connectors.codex.isPaused == false)
     #expect(vm.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate) == false)
+}
+
+@MainActor
+@Test func pausedConnectorShowsPausedStatusWhileKeepingCachedSnapshots() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.claudeCode.isPaused = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1))
+    let vm = StatusViewModel(settings: settings, cache: cache)
+
+    await vm.loadPersistedState()
+
+    #expect(vm.snapshots.contains(where: CachedProviderID.claude.snapshotPredicate))
+    #expect(vm.connectorState == .connected)
+    #expect(vm.connectorStatusMessage == "Claude Code paused")
 }
 
 @MainActor
@@ -572,6 +600,22 @@ case .codex:
 
 In `disconnect(_:)`, set both `isEnabled = false` and `isPaused = false` for the provider.
 
+In `applyConnectorStatesFromSettings()`, expose pause as a visible status while keeping cached rows available:
+
+```swift
+if settings.connectors.claudeCode.isEnabled && settings.connectors.claudeCode.isPaused {
+    connectorState = .connected
+    connectorStatusMessage = "Claude Code paused"
+}
+
+if settings.connectors.codex.isEnabled && settings.connectors.codex.isPaused {
+    codexConnectorState = .connected
+    codexConnectorStatusMessage = "Codex paused"
+}
+```
+
+Keep the existing connected/error precedence for non-paused connectors; do not treat pause as disconnect.
+
 - [ ] **Step 6: Apply adaptive stale policy**
 
 In `applyCachedSnapshots()`, replace:
@@ -660,6 +704,25 @@ import Testing
     }
 
     @MainActor
+    @Test func startRunsImmediateRefreshWhenAutoRefreshEnabled() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        settings.refresh.autoRefreshEnabled = true
+        let vm = StatusViewModel(
+            settings: settings,
+            claudeRefresher: NoopClaudeRefresher(),
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0")
+        )
+        let controller = BackgroundRefreshController(viewModel: vm, sleeper: { _ in })
+
+        controller.start()
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(vm.lastClaudeRefreshAt != nil)
+        controller.stop()
+    }
+
+    @MainActor
     @Test func timerTickRefreshesWhilePopoverIsClosed() async {
         var settings = AppSettings.defaults
         settings.connectors.claudeCode.isEnabled = true
@@ -724,6 +787,9 @@ Create `apps/mac/Sources/WhatTheTokenMac/ViewModels/BackgroundRefreshController.
 
 ```swift
 import Foundation
+#if canImport(AppKit)
+import AppKit
+#endif
 
 @MainActor
 final class BackgroundRefreshController {
@@ -732,6 +798,9 @@ final class BackgroundRefreshController {
     private var timerTask: Task<Void, Never>?
     private var generation = 0
     private var lastAutomaticAttemptAt: Date?
+#if canImport(AppKit)
+    private var activeObserver: NSObjectProtocol?
+#endif
 
     init(
         viewModel: StatusViewModel,
@@ -745,6 +814,7 @@ final class BackgroundRefreshController {
         generation &+= 1
         stop()
         guard viewModel.settings.refresh.autoRefreshEnabled else { return }
+        startActivationObserver()
         let expected = generation
         let interval = viewModel.settings.refresh.intervalDuration
         let sleeper = self.sleeper
@@ -758,6 +828,9 @@ final class BackgroundRefreshController {
                 await viewModel.refreshAll(reason: .timerTick)
             }
         }
+        Task { [weak self] in
+            await self?.appBecameActive()
+        }
     }
 
     func settingsDidChange() {
@@ -767,6 +840,7 @@ final class BackgroundRefreshController {
     func stop() {
         timerTask?.cancel()
         timerTask = nil
+        stopActivationObserver()
     }
 
     func appBecameActive() async {
@@ -779,6 +853,30 @@ final class BackgroundRefreshController {
         guard !viewModel.isAnyRefreshing else { return }
         lastAutomaticAttemptAt = now
         await viewModel.refreshAll(reason: .timerTick)
+    }
+
+    private func startActivationObserver() {
+#if canImport(AppKit)
+        stopActivationObserver()
+        activeObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willBecomeActiveNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.appBecameActive()
+            }
+        }
+#endif
+    }
+
+    private func stopActivationObserver() {
+#if canImport(AppKit)
+        if let activeObserver {
+            NotificationCenter.default.removeObserver(activeObserver)
+            self.activeObserver = nil
+        }
+#endif
     }
 }
 ```
@@ -837,11 +935,19 @@ Add to `StatusViewModel`:
 var onSettingsChanged: (@MainActor () -> Void)?
 ```
 
-After successful `saveSettings`, `setConnector`, and `setConnector(_:paused:)`, call:
+After successful settings mutations, call:
 
 ```swift
 onSettingsChanged?()
 ```
+
+Required call sites:
+
+- `saveSettings(_:)`
+- `setConnector(_:enabled:)`
+- `setConnector(_:paused:)`
+- `disconnect(_:)`
+- the settings writes inside `connectClaudeCode()` and `connectCodex()`
 
 The `AppModel.init` body from Step 4 already creates the background controller as a local value before assigning the callback so the closure does not capture an incompletely initialized property.
 
@@ -1198,6 +1304,86 @@ import Testing
         #expect(result.intents.isEmpty)
         #expect(result.state.records.isEmpty == false)
     }
+
+    @Test func warningRefiresOnlyAfterRecoveryAndRollingCooldown() {
+        let warning = UsageSnapshotFixture.claudeIncludedSample(remaining: 19, utilization: 0.81)
+        let healthy = UsageSnapshotFixture.claudeIncludedSample(remaining: 26, utilization: 0.74)
+        let first = NotificationEvaluator.evaluate(
+            snapshots: [warning],
+            settings: alertSettings(),
+            state: .empty,
+            now: Date(timeIntervalSince1970: 1_000),
+            suppressDelivery: false
+        )
+        let recoveredInsideCooldown = NotificationEvaluator.evaluate(
+            snapshots: [healthy],
+            settings: alertSettings(),
+            state: first.state,
+            now: Date(timeIntervalSince1970: 1_600),
+            suppressDelivery: false
+        )
+        let repeatedInsideCooldown = NotificationEvaluator.evaluate(
+            snapshots: [warning],
+            settings: alertSettings(),
+            state: recoveredInsideCooldown.state,
+            now: Date(timeIntervalSince1970: 1_700),
+            suppressDelivery: false
+        )
+        let recoveredAfterCooldown = NotificationEvaluator.evaluate(
+            snapshots: [healthy],
+            settings: alertSettings(),
+            state: repeatedInsideCooldown.state,
+            now: Date(timeIntervalSince1970: 4_700),
+            suppressDelivery: false
+        )
+        let repeatedAfterCooldown = NotificationEvaluator.evaluate(
+            snapshots: [warning],
+            settings: alertSettings(),
+            state: recoveredAfterCooldown.state,
+            now: Date(timeIntervalSince1970: 4_760),
+            suppressDelivery: false
+        )
+
+        #expect(first.intents.count == 1)
+        #expect(repeatedInsideCooldown.intents.isEmpty)
+        #expect(repeatedAfterCooldown.intents.count == 1)
+    }
+
+    @Test func criticalRefiresOnlyAfterRecoveryAboveCriticalHysteresis() {
+        let critical = UsageSnapshotFixture.claudeIncludedSample(remaining: 9, utilization: 0.91)
+        let stillLow = UsageSnapshotFixture.claudeIncludedSample(remaining: 12, utilization: 0.88)
+        let recovered = UsageSnapshotFixture.claudeIncludedSample(remaining: 16, utilization: 0.84)
+        let first = NotificationEvaluator.evaluate(snapshots: [critical], settings: alertSettings(), state: .empty, now: Date(timeIntervalSince1970: 1_000), suppressDelivery: false)
+        let notRecovered = NotificationEvaluator.evaluate(snapshots: [stillLow], settings: alertSettings(), state: first.state, now: Date(timeIntervalSince1970: 5_000), suppressDelivery: false)
+        let recoveredResult = NotificationEvaluator.evaluate(snapshots: [recovered], settings: alertSettings(), state: notRecovered.state, now: Date(timeIntervalSince1970: 5_100), suppressDelivery: false)
+        let second = NotificationEvaluator.evaluate(snapshots: [critical], settings: alertSettings(), state: recoveredResult.state, now: Date(timeIntervalSince1970: 5_200), suppressDelivery: false)
+
+        #expect(notRecovered.intents.isEmpty)
+        #expect(recoveredResult.intents.isEmpty)
+        #expect(second.intents.count == 1)
+    }
+
+    @Test func codexDedupeUsesStablePoolKeyAcrossRotatingBucketKeys() {
+        let firstSnapshot = UsageSnapshotFixture.codexIncludedSample(remaining: 8, utilization: 0.92, bucketKey: "codex_bucket_a")
+        let rotatedSnapshot = UsageSnapshotFixture.codexIncludedSample(remaining: 7, utilization: 0.93, bucketKey: "codex_bucket_b")
+        let first = NotificationEvaluator.evaluate(
+            snapshots: [firstSnapshot],
+            settings: alertSettings(),
+            state: .empty,
+            now: Date(timeIntervalSince1970: 1_000),
+            suppressDelivery: false
+        )
+        let second = NotificationEvaluator.evaluate(
+            snapshots: [rotatedSnapshot],
+            settings: alertSettings(),
+            state: first.state,
+            now: Date(timeIntervalSince1970: 1_060),
+            suppressDelivery: false
+        )
+
+        #expect(first.intents.count == 1)
+        #expect(second.intents.isEmpty)
+    }
 }
 
 private func alertSettings() -> AppSettings {
@@ -1210,6 +1396,8 @@ private func alertSettings() -> AppSettings {
     return settings
 }
 ```
+
+If `UsageSnapshotFixture.codexIncludedSample` does not already expose `bucketKey`, add an optional parameter in `StatusViewModelFakes.swift` with the current default value and wire it to `poolKey`. This keeps existing tests unchanged while making the rotating-bucket regression explicit.
 
 - [ ] **Step 2: Run failing evaluator tests**
 
@@ -1266,23 +1454,31 @@ enum NotificationEvaluator {
             let level = levelFor(remainingRatio: remainingRatio, settings: settings)
             let key = NotificationDedupeKey(
                 provider: provider,
-                poolKey: snapshot.poolKey,
+                poolKey: normalizedPoolKey(snapshot, provider: provider),
                 windowKey: normalizedWindowKey(snapshot.windowKey)
             )
             let storageKey = key.storageKey
             let previous = nextState.records[storageKey]
-            let shouldNotify = shouldNotify(
+            let recovered = hasRecovered(
                 previous: previous,
+                remainingRatio: remainingRatio,
+                settings: settings,
+                now: now,
+                windowKey: key.windowKey
+            )
+            let effectivePrevious = recovered ? nil : previous
+            let shouldNotify = !recovered && shouldNotify(
+                previous: effectivePrevious,
                 level: level,
                 settings: settings,
                 now: now
             )
             nextState.records[storageKey] = NotificationRecord(
                 key: key,
-                lastNotifiedLevel: shouldNotify && !suppressDelivery ? level : previous?.lastNotifiedLevel,
-                lastNotifiedAt: shouldNotify && !suppressDelivery ? now : previous?.lastNotifiedAt,
+                lastNotifiedLevel: shouldNotify && !suppressDelivery ? level : effectivePrevious?.lastNotifiedLevel,
+                lastNotifiedAt: shouldNotify && !suppressDelivery ? now : effectivePrevious?.lastNotifiedAt,
                 lastObservedLevel: level,
-                recoveredAt: recoveredAt(previous: previous, level: level, settings: settings, now: now)
+                recoveredAt: recovered ? now : effectivePrevious?.recoveredAt
             )
 
             if shouldNotify && !suppressDelivery {
@@ -1349,20 +1545,49 @@ enum NotificationEvaluator {
         return previous?.lastNotifiedLevel == nil
     }
 
-    private static func recoveredAt(
+    private static func hasRecovered(
         previous: NotificationRecord?,
-        level: NotificationLevel,
+        remainingRatio: Double,
         settings: AppSettings,
-        now: Date
-    ) -> Date? {
-        if level == .healthy { return now }
-        return previous?.recoveredAt
+        now: Date,
+        windowKey: String
+    ) -> Bool {
+        guard let previousLevel = previous?.lastNotifiedLevel else { return false }
+        let recoveryMargin = 0.05
+        let recovered: Bool
+        switch previousLevel {
+        case .critical:
+            recovered = remainingRatio >= settings.notifications.criticalThreshold + recoveryMargin
+        case .warning:
+            recovered = remainingRatio >= settings.notifications.warningThreshold + recoveryMargin
+        case .healthy:
+            recovered = false
+        }
+        guard recovered else { return false }
+        guard isRollingWindow(windowKey), let lastNotifiedAt = previous?.lastNotifiedAt else {
+            return true
+        }
+        return now.timeIntervalSince(lastNotifiedAt) >= 3_600
+    }
+
+    private static func normalizedPoolKey(_ snapshot: UsageSnapshot, provider: CachedProviderID) -> String {
+        switch provider {
+        case .claude:
+            if isIncludedQuota(snapshot) { return "anthropic_claude_subscription" }
+        case .codex:
+            if isIncludedQuota(snapshot) { return "openai_codex_included" }
+        }
+        return snapshot.poolKey
     }
 
     private static func normalizedWindowKey(_ windowKey: String) -> String {
         if windowKey.contains("300m") { return "rolling_5h" }
         if windowKey.contains("10080m") || windowKey.contains("seven_day") { return "rolling_7d" }
         return windowKey
+    }
+
+    private static func isRollingWindow(_ windowKey: String) -> Bool {
+        windowKey.hasPrefix("rolling_")
     }
 
     private static func intent(provider: CachedProviderID, level: NotificationLevel, snapshot: UsageSnapshot) -> NotificationIntent {
@@ -1664,7 +1889,7 @@ After `applyConnectorStatesFromSettings()`, evaluate cache with:
 await evaluateNotifications(suppressDelivery: true)
 ```
 
-This intentionally suppresses delivery on cache load while still rebuilding state.
+This intentionally suppresses delivery on cache load while still rebuilding state. This is a deliberate conservative scope cut for the first implementation: notifications only deliver after a fresh successful refresh, not from cached startup data, even when the cached snapshot is fresh and has not previously notified.
 
 - [ ] **Step 5: Evaluate notifications after successful refresh**
 
@@ -1688,11 +1913,14 @@ private func evaluateNotifications(suppressDelivery: Bool) async {
 }
 ```
 
-Call this after successful Claude and Codex refresh cache saves:
+Call this immediately after successful Claude and Codex refresh cache saves:
 
 ```swift
+_ = await cacheStore.save(cache)
 await evaluateNotifications(suppressDelivery: false)
 ```
+
+There are two required insertion points: the Claude success path after its `_ = await cacheStore.save(cache)` line, and the Codex success path after its `_ = await cacheStore.save(cache)` line. Do not evaluate on refresh failures.
 
 - [ ] **Step 6: Wire live stores in `AppModel` and `StatusViewModel.live`**
 
@@ -1789,6 +2017,19 @@ Append to `StatusViewModelTests.swift`:
     #expect(result == .denied)
     #expect(vm.settings.notifications.isEnabled == false)
 }
+
+@MainActor
+@Test func disablingNotificationsDoesNotReportDeniedPermission() async {
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    var settings = AppSettings.defaults
+    settings.notifications.isEnabled = true
+    let vm = StatusViewModel(settings: settings, notificationDelivery: delivery)
+
+    let result = await vm.setNotificationsEnabled(false)
+
+    #expect(result == .notDetermined)
+    #expect(vm.settings.notifications.isEnabled == false)
+}
 ```
 
 - [ ] **Step 3: Run failing tests**
@@ -1846,7 +2087,7 @@ func setNotificationsEnabled(_ enabled: Bool) async -> NotificationAuthorization
     var nextSettings = settings
     nextSettings.notifications.isEnabled = enabled
     _ = await saveSettings(nextSettings)
-    return enabled ? .granted : .denied
+    return enabled ? .granted : await notificationDelivery.authorizationStatus()
 }
 ```
 
@@ -1867,6 +2108,33 @@ if let disconnectActionTitle, let disconnectAction {
 }
 ```
 
+Wire primary connector actions explicitly:
+
+```swift
+func primaryConnectorAction(for provider: CachedProviderID) {
+    switch provider {
+    case .claude:
+        if !viewModel.settings.connectors.claudeCode.isEnabled {
+            Task { await viewModel.connectClaudeCode() }
+        } else if viewModel.settings.connectors.claudeCode.isPaused {
+            Task { await viewModel.setConnector(.claude, paused: false) }
+        } else {
+            Task { await viewModel.setConnector(.claude, paused: true) }
+        }
+    case .codex:
+        if !viewModel.settings.connectors.codex.isEnabled {
+            Task { await viewModel.connectCodex() }
+        } else if viewModel.settings.connectors.codex.isPaused {
+            Task { await viewModel.setConnector(.codex, paused: false) }
+        } else {
+            Task { await viewModel.setConnector(.codex, paused: true) }
+        }
+    }
+}
+```
+
+Pass `disconnectActionTitle` and `disconnectAction` whenever the connector is enabled, including paused connectors. Disconnect remains the destructive action that removes cached values; pause only stops refresh and keeps cached values visible.
+
 Add an `Alerts` section:
 
 ```swift
@@ -1885,7 +2153,10 @@ Section("Alerts") {
             get: { viewModel.settings.notifications.warningThreshold },
             set: { value in
                 var settings = viewModel.settings
-                settings.notifications.warningThreshold = max(value, settings.notifications.criticalThreshold + 0.01)
+                settings.notifications.warningThreshold = value
+                if settings.notifications.criticalThreshold >= value {
+                    settings.notifications.criticalThreshold = max(value - 0.01, 0.01)
+                }
                 Task { await viewModel.saveSettings(settings) }
             }
         ),
@@ -1899,7 +2170,10 @@ Section("Alerts") {
             get: { viewModel.settings.notifications.criticalThreshold },
             set: { value in
                 var settings = viewModel.settings
-                settings.notifications.criticalThreshold = min(value, settings.notifications.warningThreshold - 0.01)
+                settings.notifications.criticalThreshold = value
+                if settings.notifications.warningThreshold <= value {
+                    settings.notifications.warningThreshold = min(value + 0.01, 0.50)
+                }
                 Task { await viewModel.saveSettings(settings) }
             }
         ),
@@ -1962,6 +2236,20 @@ Append to `PopoverRefreshControllerTests.swift`:
 
     #expect(counter.value == 1)
 }
+
+@MainActor
+@Test func popoverOpenDoesNotStartPopoverTimerWhenBackgroundAutoRefreshIsEnabled() async {
+    var settings = AppSettings.defaults
+    settings.refresh.autoRefreshEnabled = true
+    let vm = StatusViewModel(settings: settings)
+    let fake = FakeSleeper()
+    let controller = PopoverRefreshController(viewModel: vm, sleeper: { duration in await fake.sleep(duration) })
+
+    controller.popoverDidOpen()
+    for _ in 0..<20 { await Task.yield() }
+
+    #expect(fake.pendingTicks == 0)
+}
 ```
 
 - [ ] **Step 2: Run failing popover tests**
@@ -2007,6 +2295,10 @@ if reason == .popoverOpened && recentlyBackgroundRefreshed(.claude) { return }
 
 and similarly for Codex.
 
+Also make timer ownership explicit: when `settings.refresh.autoRefreshEnabled == true`, `PopoverRefreshController.popoverDidOpen()` must not start its own repeating timer. The background controller owns repeating refresh in that mode; popover opening may still run the one-shot `.popoverOpened` refresh, subject to the 60-second debounce above.
+
+Replace any test that expected popover-open to start the popover timer while auto-refresh is enabled with `popoverOpenDoesNotStartPopoverTimerWhenBackgroundAutoRefreshIsEnabled`.
+
 - [ ] **Step 4: Run focused tests**
 
 ```bash
@@ -2027,6 +2319,7 @@ git commit -m "feat(mac): debounce popover refresh after background refresh"
 
 **Files:**
 - Modify: `apps/mac/Sources/WhatTheTokenMac/ViewModels/PopoverChromeState.swift`
+- Create: `apps/mac/Sources/WhatTheTokenMac/Views/Popover/MenuBarStatusLabel.swift`
 - Modify: `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift`
 - Modify: `apps/mac/Tests/WhatTheTokenMacTests/Presentation/PopoverChromeStateTests.swift`
 
@@ -2087,7 +2380,28 @@ private static func hasCriticalProvider(viewModel: StatusViewModel) -> Bool {
 }
 ```
 
-- [ ] **Step 4: Wire `WhatTheTokenApp` menu bar label**
+- [ ] **Step 4: Add an observing menu bar label view**
+
+Create `apps/mac/Sources/WhatTheTokenMac/Views/Popover/MenuBarStatusLabel.swift`:
+
+```swift
+import SwiftUI
+
+struct MenuBarStatusLabel: View {
+    let viewModel: StatusViewModel
+
+    var body: some View {
+        Label(
+            PopoverChromeState.menuBarTitle(viewModel: viewModel),
+            systemImage: PopoverChromeState.menuBarSystemImage(viewModel: viewModel)
+        )
+    }
+}
+```
+
+The menu bar label must be a child `View` that reads the observable `StatusViewModel`. Do not pass a one-time title/system image string from the `App` struct; that can leave the menu bar title stuck after snapshots change.
+
+- [ ] **Step 5: Wire `WhatTheTokenApp` menu bar label**
 
 Replace:
 
@@ -2098,13 +2412,14 @@ MenuBarExtra("WhatTheToken", systemImage: "gauge") {
 with:
 
 ```swift
-MenuBarExtra(
-    PopoverChromeState.menuBarTitle(viewModel: app.viewModel),
-    systemImage: PopoverChromeState.menuBarSystemImage(viewModel: app.viewModel)
-) {
+MenuBarExtra {
+    PopoverRootView(viewModel: app.viewModel, refreshController: app.refreshController)
+} label: {
+    MenuBarStatusLabel(viewModel: app.viewModel)
+}
 ```
 
-- [ ] **Step 5: Run focused tests**
+- [ ] **Step 6: Run focused tests**
 
 ```bash
 cd apps/mac && swift test --filter PopoverChromeStateTests
@@ -2112,10 +2427,11 @@ cd apps/mac && swift test --filter PopoverChromeStateTests
 
 Expected: tests pass. If `gauge.with.dots.needle.67percent` is unavailable on macOS 14, use `exclamationmark.triangle` for critical and update the test.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add apps/mac/Sources/WhatTheTokenMac/ViewModels/PopoverChromeState.swift \
+  apps/mac/Sources/WhatTheTokenMac/Views/Popover/MenuBarStatusLabel.swift \
   apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift \
   apps/mac/Tests/WhatTheTokenMacTests/Presentation/PopoverChromeStateTests.swift
 git commit -m "feat(mac): expose critical menu bar state"
@@ -2141,7 +2457,7 @@ Expected: all Swift tests pass.
 pnpm --filter @whatthetoken/core test
 ```
 
-Expected: 4 core test files pass.
+Expected: the current core test suite passes. As of May 8, 2026 this is 18 tests; do not fail the plan for a harmless future count change if the package reports all tests passing.
 
 - [ ] **Step 3: Check whitespace**
 

@@ -10,12 +10,14 @@ final class StatusViewModel {
     var connectorStatusMessage: String
     var codexConnectorState: CodexConnectorSetupState
     var codexConnectorStatusMessage: String
+    var launchAtLoginStatusMessage: String?
     private var cache: SnapshotCache
     private var notificationState: NotificationState
     private let settingsStore: AppSettingsStore
     private let cacheStore: SnapshotCacheStore
     private let notificationStateStore: NotificationStateStore
     private let notificationDelivery: NotificationDelivery
+    private let launchAtLoginService: LaunchAtLoginServicing
     private let now: @MainActor () -> Date
     private let claudeRefresher: ClaudeConnectorRefreshing?
     private let claudeVersionProvider: ClaudeVersionProviding?
@@ -100,11 +102,13 @@ final class StatusViewModel {
         notificationState: NotificationState = .empty,
         notificationStateStore: NotificationStateStore = InMemoryNotificationStateStore(),
         notificationDelivery: NotificationDelivery = RecordingNotificationDelivery(permissionResult: .denied),
+        launchAtLoginService: LaunchAtLoginServicing = InMemoryLaunchAtLoginService(),
         now: @escaping @MainActor () -> Date = { Date() },
         connectorState: ClaudeConnectorSetupState = .notConnected,
         connectorStatusMessage: String = "Claude Code is not connected",
         codexConnectorState: CodexConnectorSetupState = .notConnected,
-        codexConnectorStatusMessage: String = "Codex is not connected"
+        codexConnectorStatusMessage: String = "Codex is not connected",
+        launchAtLoginStatusMessage: String? = nil
     ) {
         self.snapshots = snapshots
         self.settings = settings
@@ -117,11 +121,13 @@ final class StatusViewModel {
         self.notificationState = notificationState
         self.notificationStateStore = notificationStateStore
         self.notificationDelivery = notificationDelivery
+        self.launchAtLoginService = launchAtLoginService
         self.now = now
         self.connectorState = connectorState
         self.connectorStatusMessage = connectorStatusMessage
         self.codexConnectorState = codexConnectorState
         self.codexConnectorStatusMessage = codexConnectorStatusMessage
+        self.launchAtLoginStatusMessage = launchAtLoginStatusMessage
     }
 
     func loadPersistedState() async {
@@ -210,6 +216,28 @@ final class StatusViewModel {
         nextSettings.notifications.isEnabled = enabled
         _ = await saveSettings(nextSettings)
         return enabled ? .granted : await notificationDelivery.authorizationStatus()
+    }
+
+    @discardableResult
+    func setLaunchAtLoginEnabled(_ enabled: Bool) async -> Bool {
+        do {
+            try launchAtLoginService.setEnabled(enabled)
+        } catch {
+            launchAtLoginStatusMessage = "Launch at Login could not be updated"
+            return false
+        }
+
+        var nextSettings = settings
+        nextSettings.launchAtLogin.isEnabled = enabled
+        guard await settingsStore.save(nextSettings) else {
+            try? launchAtLoginService.setEnabled(settings.launchAtLogin.isEnabled)
+            launchAtLoginStatusMessage = "Launch at Login could not be saved"
+            return false
+        }
+
+        settings = nextSettings
+        launchAtLoginStatusMessage = nil
+        return true
     }
 
     func disconnect(_ provider: CachedProviderID) async {
@@ -479,7 +507,8 @@ final class StatusViewModel {
             settingsStore: settingsStore,
             cacheStore: cacheStore,
             notificationStateStore: notificationStateStore,
-            notificationDelivery: notificationDelivery
+            notificationDelivery: notificationDelivery,
+            launchAtLoginService: SystemLaunchAtLoginService()
         )
     }
 
@@ -641,6 +670,15 @@ final class StatusViewModel {
 
 enum FixtureError: Error {
     case missingFixture
+}
+
+@MainActor
+private final class InMemoryLaunchAtLoginService: LaunchAtLoginServicing {
+    private(set) var isEnabled = false
+
+    func setEnabled(_ enabled: Bool) throws {
+        isEnabled = enabled
+    }
 }
 
 extension StatusViewModel.RefreshReason {

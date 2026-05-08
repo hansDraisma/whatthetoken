@@ -163,6 +163,22 @@ struct ConnectorsView: View {
                 )
                 .disabled(!viewModel.settings.notifications.isEnabled)
             }
+
+            Section("Launch") {
+                Toggle("Launch at login", isOn: Binding(
+                    get: { viewModel.settings.launchAtLogin.isEnabled },
+                    set: { enabled in
+                        let viewModel = self.viewModel
+                        Task { await viewModel.setLaunchAtLoginEnabled(enabled) }
+                    }
+                ))
+
+                if let message = viewModel.launchAtLoginStatusMessage {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .formStyle(.grouped)
         .alert(disconnectAlertTitle, isPresented: disconnectConfirmationPresented) {

@@ -65,4 +65,16 @@ import Testing
     @Test func codex_checking_isCheckingEllipsis() {
         #expect(codexActionTitle(for: .checking) == "Checking...")
     }
+
+    @Test func connectorConsentCopyStatesStoredDataBoundary() {
+        let claude = ConnectorConsentCopy.claude.lowercased()
+        let codex = ConnectorConsentCopy.codex.lowercased()
+
+        #expect(claude.contains("credentials"))
+        #expect(claude.contains("claude code storage"))
+        #expect(claude.contains("sanitized usage status"))
+        #expect(codex.contains("auth"))
+        #expect(codex.contains("inside codex"))
+        #expect(codex.contains("sanitized usage status"))
+    }
 }

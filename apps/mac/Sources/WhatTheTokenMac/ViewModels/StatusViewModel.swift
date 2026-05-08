@@ -5,16 +5,22 @@ import Observation
 @Observable
 final class StatusViewModel {
     var snapshots: [UsageSnapshot]
+    var settings: AppSettings
     var connectorState: ClaudeConnectorSetupState
     var connectorStatusMessage: String
     var codexConnectorState: CodexConnectorSetupState
     var codexConnectorStatusMessage: String
+    private var cache: SnapshotCache
+    private let settingsStore: AppSettingsStore
+    private let cacheStore: SnapshotCacheStore
+    private let now: @MainActor () -> Date
     private let claudeRefresher: ClaudeConnectorRefreshing?
     private let claudeVersionProvider: ClaudeVersionProviding?
     private let codexRefresher: CodexConnectorRefreshing?
     private(set) var lastClaudeRefreshAt: Date?
     private(set) var lastCodexRefreshAt: Date?
     private(set) var isRefreshAllInFlight = false
+    private(set) var hasLoadedPersistedState = false
 
     var isAnyRefreshing: Bool {
         connectorState == .checking
@@ -65,22 +71,66 @@ final class StatusViewModel {
 
     init(
         snapshots: [UsageSnapshot] = [],
+        settings: AppSettings = .defaults,
+        cache: SnapshotCache = .empty,
         claudeRefresher: ClaudeConnectorRefreshing? = nil,
         claudeVersionProvider: ClaudeVersionProviding? = nil,
         codexRefresher: CodexConnectorRefreshing? = nil,
+        settingsStore: AppSettingsStore = InMemoryAppSettingsStore(),
+        cacheStore: SnapshotCacheStore = InMemorySnapshotCacheStore(),
+        now: @escaping @MainActor () -> Date = { Date() },
         connectorState: ClaudeConnectorSetupState = .notConnected,
         connectorStatusMessage: String = "Claude Code is not connected",
         codexConnectorState: CodexConnectorSetupState = .notConnected,
         codexConnectorStatusMessage: String = "Codex is not connected"
     ) {
         self.snapshots = snapshots
+        self.settings = settings
+        self.cache = cache
         self.claudeRefresher = claudeRefresher
         self.claudeVersionProvider = claudeVersionProvider
         self.codexRefresher = codexRefresher
+        self.settingsStore = settingsStore
+        self.cacheStore = cacheStore
+        self.now = now
         self.connectorState = connectorState
         self.connectorStatusMessage = connectorStatusMessage
         self.codexConnectorState = codexConnectorState
         self.codexConnectorStatusMessage = codexConnectorStatusMessage
+    }
+
+    func loadPersistedState() async {
+        settings = await settingsStore.load()
+        cache = await cacheStore.load()
+        applyCachedSnapshots()
+        applyConnectorStatesFromSettings()
+        hasLoadedPersistedState = true
+    }
+
+    func loadPersistedStateIfNeeded() async {
+        guard !hasLoadedPersistedState else { return }
+        await loadPersistedState()
+    }
+
+    func setConnector(_ provider: CachedProviderID, enabled: Bool) async {
+        switch provider {
+        case .claude:
+            settings.connectors.claudeCode.isEnabled = enabled
+        case .codex:
+            settings.connectors.codex.isEnabled = enabled
+        }
+
+        await settingsStore.save(settings)
+        applyCachedSnapshots()
+        applyConnectorStatesFromSettings()
+    }
+
+    func disconnect(_ provider: CachedProviderID) async {
+        await setConnector(provider, enabled: false)
+        cache.removeProvider(provider)
+        await cacheStore.save(cache)
+        applyCachedSnapshots()
+        applyConnectorStatesFromSettings()
     }
 
     func connectClaudeCode() async {
@@ -207,7 +257,10 @@ final class StatusViewModel {
         }
     }
 
-    static func live() -> StatusViewModel {
+    static func live(
+        settingsStore: AppSettingsStore = InMemoryAppSettingsStore(),
+        cacheStore: SnapshotCacheStore = InMemorySnapshotCacheStore()
+    ) -> StatusViewModel {
         let versionProvider = InstalledClaudeVersionProvider()
         return StatusViewModel(
             claudeRefresher: ClaudeConnectorService(
@@ -226,7 +279,9 @@ final class StatusViewModel {
                 deviceId: "local_mac",
                 userAccountId: "local_user",
                 now: { ISO8601DateFormatter().string(from: Date()) }
-            )
+            ),
+            settingsStore: settingsStore,
+            cacheStore: cacheStore
         )
     }
 
@@ -271,6 +326,43 @@ final class StatusViewModel {
         with replacement: [UsageSnapshot]
     ) {
         snapshots = snapshots.filter { !predicate($0) } + replacement
+    }
+
+    private func applyCachedSnapshots() {
+        let evaluated = cache.snapshotsEvaluatingStaleness(now: now())
+        snapshots = evaluated.filter { snapshot in
+            if CachedProviderID.claude.snapshotPredicate(snapshot) {
+                return settings.connectors.claudeCode.isEnabled
+            }
+            if CachedProviderID.codex.snapshotPredicate(snapshot) {
+                return settings.connectors.codex.isEnabled
+            }
+            return false
+        }
+    }
+
+    private func applyConnectorStatesFromSettings() {
+        if !settings.connectors.claudeCode.isEnabled {
+            connectorState = .notConnected
+            connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .notConnected)
+        } else if let error = cache.lastErrorByProvider[CachedProviderID.claude.rawValue] {
+            connectorState = error.code == .schemaChanged ? .schemaChanged : .networkError
+            connectorStatusMessage = error.message
+        } else {
+            connectorState = .connected
+            connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .connected)
+        }
+
+        if !settings.connectors.codex.isEnabled {
+            codexConnectorState = .notConnected
+            codexConnectorStatusMessage = CodexConnectorSetupCopy.title(for: .notConnected)
+        } else if let error = cache.lastErrorByProvider[CachedProviderID.codex.rawValue] {
+            codexConnectorState = error.code == .schemaChanged ? .schemaChanged : .networkError
+            codexConnectorStatusMessage = error.message
+        } else {
+            codexConnectorState = .connected
+            codexConnectorStatusMessage = CodexConnectorSetupCopy.title(for: .connected)
+        }
     }
 
     private static func snapshotSections(for snapshots: [UsageSnapshot]) -> [UsageSnapshotSection] {

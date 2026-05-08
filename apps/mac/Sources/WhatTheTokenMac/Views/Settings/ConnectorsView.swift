@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ConnectorsView: View {
     let viewModel: StatusViewModel
+    @State private var pendingDisconnect: CachedProviderID?
 
     var body: some View {
         Form {
@@ -11,20 +12,25 @@ struct ConnectorsView: View {
                     stateTitle: ClaudeConnectorSetupCopy.title(for: viewModel.connectorState),
                     detail: viewModel.connectorStatusMessage,
                     trustMessage: ConnectorConsentCopy.claude,
-                    actionTitle: claudeActionTitle(for: viewModel.connectorState),
-                    isWorking: viewModel.connectorState == .checking,
-                    isEnabled: viewModel.settings.connectors.claudeCode.isEnabled,
-                    canDisconnect: viewModel.settings.connectors.claudeCode.isEnabled
-                        || viewModel.snapshots.contains(where: CachedProviderID.claude.snapshotPredicate),
-                    onEnabledChange: { enabled in
-                        let viewModel = self.viewModel
-                        Task { await viewModel.setConnector(.claude, enabled: enabled) }
+                    connectionActionTitle: connectorConnectionActionTitle(
+                        for: .claude,
+                        isEnabled: viewModel.settings.connectors.claudeCode.isEnabled
+                    ),
+                    connectionActionRole: viewModel.settings.connectors.claudeCode.isEnabled ? .destructive : nil,
+                    isConnectionActionDisabled: viewModel.connectorState == .checking,
+                    refreshActionTitle: viewModel.settings.connectors.claudeCode.isEnabled
+                        ? claudeActionTitle(for: viewModel.connectorState)
+                        : nil,
+                    isRefreshActionDisabled: viewModel.connectorState == .checking,
+                    connectionAction: {
+                        if viewModel.settings.connectors.claudeCode.isEnabled {
+                            pendingDisconnect = .claude
+                        } else {
+                            let viewModel = self.viewModel
+                            Task { await viewModel.connectClaudeCode() }
+                        }
                     },
-                    onDisconnect: {
-                        let viewModel = self.viewModel
-                        Task { await viewModel.disconnect(.claude) }
-                    },
-                    action: {
+                    refreshAction: {
                         let viewModel = self.viewModel
                         Task { await viewModel.connectClaudeCode() }
                     }
@@ -35,20 +41,25 @@ struct ConnectorsView: View {
                     stateTitle: CodexConnectorSetupCopy.title(for: viewModel.codexConnectorState),
                     detail: viewModel.codexConnectorStatusMessage,
                     trustMessage: ConnectorConsentCopy.codex,
-                    actionTitle: codexActionTitle(for: viewModel.codexConnectorState),
-                    isWorking: viewModel.codexConnectorState == .checking,
-                    isEnabled: viewModel.settings.connectors.codex.isEnabled,
-                    canDisconnect: viewModel.settings.connectors.codex.isEnabled
-                        || viewModel.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate),
-                    onEnabledChange: { enabled in
-                        let viewModel = self.viewModel
-                        Task { await viewModel.setConnector(.codex, enabled: enabled) }
+                    connectionActionTitle: connectorConnectionActionTitle(
+                        for: .codex,
+                        isEnabled: viewModel.settings.connectors.codex.isEnabled
+                    ),
+                    connectionActionRole: viewModel.settings.connectors.codex.isEnabled ? .destructive : nil,
+                    isConnectionActionDisabled: viewModel.codexConnectorState == .checking,
+                    refreshActionTitle: viewModel.settings.connectors.codex.isEnabled
+                        ? codexActionTitle(for: viewModel.codexConnectorState)
+                        : nil,
+                    isRefreshActionDisabled: viewModel.codexConnectorState == .checking,
+                    connectionAction: {
+                        if viewModel.settings.connectors.codex.isEnabled {
+                            pendingDisconnect = .codex
+                        } else {
+                            let viewModel = self.viewModel
+                            Task { await viewModel.connectCodex() }
+                        }
                     },
-                    onDisconnect: {
-                        let viewModel = self.viewModel
-                        Task { await viewModel.disconnect(.codex) }
-                    },
-                    action: {
+                    refreshAction: {
                         let viewModel = self.viewModel
                         Task { await viewModel.connectCodex() }
                     }
@@ -82,5 +93,54 @@ struct ConnectorsView: View {
             }
         }
         .formStyle(.grouped)
+        .alert(disconnectAlertTitle, isPresented: disconnectConfirmationPresented) {
+            Button("Cancel", role: .cancel) {
+                pendingDisconnect = nil
+            }
+            Button("Disconnect", role: .destructive) {
+                confirmDisconnect()
+            }
+        } message: {
+            Text(disconnectAlertMessage)
+        }
+    }
+
+    private var disconnectConfirmationPresented: Binding<Bool> {
+        Binding(
+            get: { pendingDisconnect != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDisconnect = nil
+                }
+            }
+        )
+    }
+
+    private var disconnectAlertTitle: String {
+        guard let pendingDisconnect else { return "Disconnect Connector?" }
+        return "Disconnect \(pendingDisconnect.displayName)?"
+    }
+
+    private var disconnectAlertMessage: String {
+        guard let pendingDisconnect else { return "" }
+        return "Disconnecting stops WhatTheToken from reading \(pendingDisconnect.dataDescription) and removes cached \(pendingDisconnect.dataDescription) from this app."
+    }
+
+    private func confirmDisconnect() {
+        guard let provider = pendingDisconnect else { return }
+        pendingDisconnect = nil
+        let viewModel = self.viewModel
+        Task { await viewModel.disconnect(provider) }
+    }
+}
+
+private extension CachedProviderID {
+    var dataDescription: String {
+        switch self {
+        case .claude:
+            return "Claude Code usage"
+        case .codex:
+            return "Codex rate-limit status"
+        }
     }
 }

@@ -5,13 +5,13 @@ struct ConnectorRowView: View {
     let stateTitle: String
     let detail: String
     let trustMessage: String
-    let actionTitle: String
-    let isWorking: Bool
-    let isEnabled: Bool
-    let canDisconnect: Bool
-    let onEnabledChange: (Bool) -> Void
-    let onDisconnect: () -> Void
-    let action: () -> Void
+    let connectionActionTitle: String
+    let connectionActionRole: ButtonRole?
+    let isConnectionActionDisabled: Bool
+    let refreshActionTitle: String?
+    let isRefreshActionDisabled: Bool
+    let connectionAction: () -> Void
+    let refreshAction: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -28,19 +28,22 @@ struct ConnectorRowView: View {
                 Text(trustMessage)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
-
-                Toggle("Enabled", isOn: Binding(
-                    get: { isEnabled },
-                    set: { enabled in onEnabledChange(enabled) }
-                ))
-
-                Button("Disconnect", role: .destructive, action: onDisconnect)
-                    .disabled(!canDisconnect)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button(actionTitle, action: action)
-                .disabled(isWorking || !isEnabled)
+            VStack(alignment: .trailing, spacing: 8) {
+                if let refreshActionTitle {
+                    Button(refreshActionTitle, action: refreshAction)
+                        .disabled(isRefreshActionDisabled)
+                }
+
+                Button(
+                    connectionActionTitle,
+                    role: connectionActionRole,
+                    action: connectionAction
+                )
+                .disabled(isConnectionActionDisabled)
+            }
         }
         .padding(.vertical, 6)
     }

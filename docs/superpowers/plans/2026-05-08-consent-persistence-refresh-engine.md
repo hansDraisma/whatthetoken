@@ -267,13 +267,15 @@ struct JSONFileAppSettingsStore: AppSettingsStore {
     }
 
     func save(_ settings: AppSettings) async {
+        let temporaryURL = url
+            .deletingLastPathComponent()
+            .appendingPathComponent("\(url.lastPathComponent).\(UUID().uuidString).tmp")
         do {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
             let data = try JSONEncoder.prettyStable.encode(settings)
-            let temporaryURL = url.appendingPathExtension("tmp")
             try data.write(to: temporaryURL, options: [.atomic])
             if FileManager.default.fileExists(atPath: url.path) {
                 _ = try FileManager.default.replaceItemAt(url, withItemAt: temporaryURL)
@@ -281,7 +283,7 @@ struct JSONFileAppSettingsStore: AppSettingsStore {
                 try FileManager.default.moveItem(at: temporaryURL, to: url)
             }
         } catch {
-            try? FileManager.default.removeItem(at: url.appendingPathExtension("tmp"))
+            try? FileManager.default.removeItem(at: temporaryURL)
         }
     }
 }
@@ -641,13 +643,15 @@ struct JSONFileSnapshotCacheStore: SnapshotCacheStore {
     }
 
     func save(_ cache: SnapshotCache) async {
+        let temporaryURL = url
+            .deletingLastPathComponent()
+            .appendingPathComponent("\(url.lastPathComponent).\(UUID().uuidString).tmp")
         do {
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
             let data = try JSONEncoder.cacheEncoder.encode(cache)
-            let temporaryURL = url.appendingPathExtension("tmp")
             try data.write(to: temporaryURL, options: [.atomic])
             if FileManager.default.fileExists(atPath: url.path) {
                 _ = try FileManager.default.replaceItemAt(url, withItemAt: temporaryURL)
@@ -655,7 +659,7 @@ struct JSONFileSnapshotCacheStore: SnapshotCacheStore {
                 try FileManager.default.moveItem(at: temporaryURL, to: url)
             }
         } catch {
-            try? FileManager.default.removeItem(at: url.appendingPathExtension("tmp"))
+            try? FileManager.default.removeItem(at: temporaryURL)
         }
     }
 }
@@ -840,6 +844,7 @@ private var cache: SnapshotCache
 private let settingsStore: AppSettingsStore
 private let cacheStore: SnapshotCacheStore
 private let now: @MainActor () -> Date
+private(set) var hasLoadedPersistedState = false
 ```
 
 Update `init(...)` parameters:
@@ -864,6 +869,12 @@ func loadPersistedState() async {
     cache = await cacheStore.load()
     applyCachedSnapshots()
     applyConnectorStatesFromSettings()
+    hasLoadedPersistedState = true
+}
+
+func loadPersistedStateIfNeeded() async {
+    guard !hasLoadedPersistedState else { return }
+    await loadPersistedState()
 }
 
 func setConnector(_ provider: CachedProviderID, enabled: Bool) async {
@@ -964,6 +975,8 @@ init(viewModel: StatusViewModel) {
     Task { await viewModel.loadPersistedState() }
 }
 ```
+
+The popover controller will also call `loadPersistedStateIfNeeded()` before its one-shot open refresh in Task 6. That avoids a race where a very fast first popover open would refresh against default disabled settings before persisted consent has loaded.
 
 - [ ] **Step 7: Run focused tests**
 
@@ -1134,6 +1147,7 @@ private func refreshClaude(reason: RefreshReason) async {
         connectorState = Self.setupState(for: result.status.source.state)
         connectorStatusMessage = result.status.message
         lastClaudeRefreshAt = now()
+        // Keep cache in sync before later settings changes can re-derive snapshots from cache.
         cache.replaceSnapshots(result.snapshots, for: .claude, at: lastClaudeRefreshAt!)
         await cacheStore.save(cache)
     } catch {
@@ -1175,6 +1189,7 @@ private func refreshCodex(reason: RefreshReason) async {
         codexConnectorState = Self.codexSetupState(for: result.status.source.state)
         codexConnectorStatusMessage = result.status.message
         lastCodexRefreshAt = now()
+        // Keep cache in sync before later settings changes can re-derive snapshots from cache.
         cache.replaceSnapshots(result.snapshots, for: .codex, at: lastCodexRefreshAt!)
         await cacheStore.save(cache)
     } catch {
@@ -1283,7 +1298,11 @@ extension StatusViewModel.RefreshReason {
 cd apps/mac && swift test --filter StatusViewModel
 ```
 
-Expected: pass. Existing `connectClaudeCode` and `connectCodex` tests should now assert that the provider's persisted enabled setting becomes `true` after a successful connect action.
+Expected: pass. Update existing `connectClaudeCode` and `connectCodex` tests for the new semantics:
+
+- Connect actions persist the provider's enabled setting as `true`.
+- Thrown refresh errors keep existing provider snapshots visible instead of clearing them.
+- Missing CLI still clears Claude snapshots because the connector cannot produce a meaningful Claude status without the local CLI.
 
 - [ ] **Step 6: Commit**
 
@@ -1377,16 +1396,23 @@ cd apps/mac && swift test --filter Backoff
 
 Expected: at least the repeated-failure test fails if cache state is not retained between failures.
 
-- [ ] **Step 3: Ensure failure records mutate in-memory cache**
+- [ ] **Step 3: Ensure failure records mutate in-memory cache before saving**
 
-In each provider failure path, update `cache` before saving:
+In each provider `catch` path, update the in-memory `cache` before saving so consecutive manual failures advance the persisted backoff count:
 
 ```swift
 cache.recordFailure(for: .claude, code: .network, message: connectorStatusMessage, now: now())
 await cacheStore.save(cache)
 ```
 
-For schema-changed source states returned by a successful connector result, record `.schemaChanged` instead of `.network` only if the connector state maps to `.schemaChanged`.
+Use the corresponding Codex line in the Codex `catch` path:
+
+```swift
+cache.recordFailure(for: .codex, code: .network, message: codexConnectorStatusMessage, now: now())
+await cacheStore.save(cache)
+```
+
+Do not create a backoff error entry for a successful connector result whose source state is `.schemaChanged`. In the current connector contract, that is still a sanitized provider determination, not a thrown refresh failure; the success path writes the returned snapshots and clears prior automatic backoff.
 
 - [ ] **Step 4: Ensure successful refresh resets backoff**
 
@@ -1477,6 +1503,33 @@ Add:
 }
 ```
 
+Add a load-before-refresh test:
+
+```swift
+@MainActor
+@Test func popoverDidOpen_loadsPersistedStateBeforeImmediateRefresh() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let settingsStore = InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
+    let counter = Counter()
+    let vm = StatusViewModel(
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        settingsStore: settingsStore
+    )
+    let controller = PopoverRefreshController(viewModel: vm, sleeper: { _ in })
+
+    controller.popoverDidOpen()
+    for _ in 0..<30 {
+        if counter.value > 0 { break }
+        await Task.yield()
+    }
+
+    #expect(vm.hasLoadedPersistedState == true)
+    #expect(counter.value == 1)
+}
+```
+
 Update `FakeSleeper`:
 
 ```swift
@@ -1513,11 +1566,18 @@ Expected: old hard-coded timer behavior fails.
 
 - [ ] **Step 3: Modify controller timer setup**
 
-In `PopoverRefreshController.popoverDidOpen()`, start the timer only when enabled:
+In `PopoverRefreshController.popoverDidOpen()`, remove the immediate `startTimer(...)` call. Start the timer from the one-shot task after persisted state has loaded, then refresh:
 
 ```swift
-if viewModel.settings.refresh.autoRefreshEnabled {
-    startTimer(expectedGeneration: expected, interval: viewModel.settings.refresh.intervalDuration)
+openRefreshTask = Task { [weak self] in
+    await viewModel.loadPersistedStateIfNeeded()
+    guard let self, self.isCurrentGeneration(expected) else { return }
+    if viewModel.settings.refresh.autoRefreshEnabled {
+        self.startTimer(expectedGeneration: expected, interval: viewModel.settings.refresh.intervalDuration)
+    }
+    await viewModel.refreshAll(reason: .popoverOpened)
+    guard self.isCurrentGeneration(expected) else { return }
+    self.clearOpenRefreshTask()
 }
 ```
 
@@ -1527,7 +1587,7 @@ Change `startTimer` signature:
 private func startTimer(expectedGeneration expected: Int, interval: Duration)
 ```
 
-Remove the stored `interval` property and the initializer `interval` parameter. Tests should control timing by setting `viewModel.settings.refresh.intervalSeconds`.
+Remove the stored `interval` property and the initializer `interval` parameter. Tests should control timing by setting `viewModel.settings.refresh.intervalSeconds`. Run `rg "PopoverRefreshController\\(" apps/mac` and update every call site that still passes `interval:`.
 
 - [ ] **Step 4: Run controller tests**
 
@@ -1858,10 +1918,15 @@ Append to `ConnectorActionTitleTests.swift`:
 
 ```swift
 @Test func connectorConsentCopyStatesStoredDataBoundary() {
-    #expect(ConnectorConsentCopy.claude.contains("Provider credentials stay in Claude Code storage."))
-    #expect(ConnectorConsentCopy.claude.contains("WhatTheToken stores only sanitized usage status."))
-    #expect(ConnectorConsentCopy.codex.contains("Codex auth stays inside Codex."))
-    #expect(ConnectorConsentCopy.codex.contains("WhatTheToken stores only sanitized usage status."))
+    let claude = ConnectorConsentCopy.claude.lowercased()
+    let codex = ConnectorConsentCopy.codex.lowercased()
+
+    #expect(claude.contains("credentials"))
+    #expect(claude.contains("claude code storage"))
+    #expect(claude.contains("sanitized usage status"))
+    #expect(codex.contains("auth"))
+    #expect(codex.contains("inside codex"))
+    #expect(codex.contains("sanitized usage status"))
 }
 ```
 
@@ -1992,6 +2057,8 @@ Section("Refresh") {
     .disabled(!viewModel.settings.refresh.autoRefreshEnabled)
 }
 ```
+
+Stage 2 applies `autoRefreshEnabled` and `intervalSeconds` changes on the next popover open. Do not add controller callbacks from Settings in this plan; the popover controller reads the latest persisted settings when it opens and when it starts a timer.
 
 Add `StatusViewModel.saveSettings(_:)`:
 

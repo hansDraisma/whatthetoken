@@ -2,7 +2,8 @@ import Foundation
 
 protocol AppSettingsStore: Sendable {
     func load() async -> AppSettings
-    func save(_ settings: AppSettings) async
+    @discardableResult
+    func save(_ settings: AppSettings) async -> Bool
 }
 
 struct JSONFileAppSettingsStore: AppSettingsStore {
@@ -21,7 +22,8 @@ struct JSONFileAppSettingsStore: AppSettingsStore {
         }
     }
 
-    func save(_ settings: AppSettings) async {
+    @discardableResult
+    func save(_ settings: AppSettings) async -> Bool {
         let temporaryURL = url
             .deletingLastPathComponent()
             .appendingPathComponent("\(url.lastPathComponent).\(UUID().uuidString).tmp")
@@ -37,8 +39,10 @@ struct JSONFileAppSettingsStore: AppSettingsStore {
             } else {
                 try FileManager.default.moveItem(at: temporaryURL, to: url)
             }
+            return true
         } catch {
             try? FileManager.default.removeItem(at: temporaryURL)
+            return false
         }
     }
 }
@@ -58,11 +62,13 @@ final class InMemoryAppSettingsStore: AppSettingsStore, @unchecked Sendable {
         }
     }
 
-    func save(_ settings: AppSettings) async {
-        let encoded = try? JSONEncoder.prettyStable.encode(settings)
+    @discardableResult
+    func save(_ settings: AppSettings) async -> Bool {
+        guard let encoded = try? JSONEncoder.prettyStable.encode(settings) else { return false }
         lock.withLock {
             data = encoded
         }
+        return true
     }
 }
 

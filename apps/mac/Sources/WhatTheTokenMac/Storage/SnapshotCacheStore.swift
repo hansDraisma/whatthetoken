@@ -2,7 +2,7 @@ import Foundation
 
 protocol SnapshotCacheStore: Sendable {
     func load() async -> SnapshotCache
-    func save(_ cache: SnapshotCache) async
+    func save(_ cache: SnapshotCache) async -> Bool
 }
 
 struct JSONFileSnapshotCacheStore: SnapshotCacheStore {
@@ -21,7 +21,7 @@ struct JSONFileSnapshotCacheStore: SnapshotCacheStore {
         }
     }
 
-    func save(_ cache: SnapshotCache) async {
+    func save(_ cache: SnapshotCache) async -> Bool {
         let temporaryURL = url
             .deletingLastPathComponent()
             .appendingPathComponent("\(url.lastPathComponent).\(UUID().uuidString).tmp")
@@ -37,8 +37,10 @@ struct JSONFileSnapshotCacheStore: SnapshotCacheStore {
             } else {
                 try FileManager.default.moveItem(at: temporaryURL, to: url)
             }
+            return true
         } catch {
             try? FileManager.default.removeItem(at: temporaryURL)
+            return false
         }
     }
 }
@@ -58,11 +60,12 @@ final class InMemorySnapshotCacheStore: SnapshotCacheStore, @unchecked Sendable 
         }
     }
 
-    func save(_ cache: SnapshotCache) async {
-        let encoded = try? JSONEncoder.cacheEncoder.encode(cache)
+    func save(_ cache: SnapshotCache) async -> Bool {
+        guard let encoded = try? JSONEncoder.cacheEncoder.encode(cache) else { return false }
         lock.withLock {
             data = encoded
         }
+        return true
     }
 }
 

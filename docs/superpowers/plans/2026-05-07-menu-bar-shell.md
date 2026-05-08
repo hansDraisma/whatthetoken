@@ -80,6 +80,68 @@ cd apps/mac && swift test
 
 ---
 
+## Phase 0 — Toolchain baseline (Task 0)
+
+### Task 0: Enable Swift 6 language mode and verify the baseline
+
+**Files:**
+- Modify: `apps/mac/Package.swift`
+
+`swift-tools-version: 6.0` is the *manifest API* version, not the language mode. Without `swiftLanguageModes: [.v6]`, the package compiles in Swift 5 mode with strict-concurrency *checking* — and `@MainActor`-implies-`Sendable` (SE-0434) does not apply. The Task closure patterns in Phase D and the SwiftUI views in Phase G assume Swift 6 isolation semantics. Set the language mode explicitly and confirm the existing tree still passes.
+
+- [ ] **Step 1: Update `Package.swift`**
+
+Replace the existing `Package(...)` block in `apps/mac/Package.swift` with:
+
+```swift
+// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+    name: "WhatTheTokenMac",
+    platforms: [
+        .macOS(.v14)
+    ],
+    products: [
+        .executable(name: "WhatTheTokenMac", targets: ["WhatTheTokenMac"])
+    ],
+    targets: [
+        .executableTarget(
+            name: "WhatTheTokenMac",
+            resources: [
+                .process("Resources")
+            ]
+        ),
+        .testTarget(
+            name: "WhatTheTokenMacTests",
+            dependencies: ["WhatTheTokenMac"]
+        )
+    ],
+    swiftLanguageModes: [.v6]
+)
+```
+
+- [ ] **Step 2: Run the existing test suite**
+
+```
+cd apps/mac && swift test
+```
+
+Expected: green (no new failures introduced by switching to Swift 6 mode).
+
+If Swift 6 mode surfaces concurrency errors in pre-existing files that this plan does not touch, fix them with the minimal annotation needed (`@MainActor` on a method, `Sendable` conformance on a value type, `@Sendable` on a closure). Keep the diff focused on isolation correctness; do not refactor structure.
+
+If the baseline does not turn green within ~30 minutes of focused fixes, revert this task (`git revert` the commit) and document the Swift 5 mode constraint in the plan as a known limitation, then drop the explicit `Sendable` claims from later tasks. Continuing forward without a green baseline is not acceptable.
+
+- [ ] **Step 3: Commit**
+
+```
+git add apps/mac/Package.swift
+git commit -m "build(mac): enable Swift 6 language mode"
+```
+
+---
+
 ## Phase A — Pure Presentation Models (Tasks 1–3)
 
 ### Task 1: BannerState enum + BannerCopy
@@ -226,9 +288,11 @@ import Testing
     }
 
     @Test func disconnectedReasonsAreDistinct() {
-        let a = ProviderTabModel.Body.disconnected(reason: .notConnected)
-        let b = ProviderTabModel.Body.disconnected(reason: .missingCredentials)
+        let a = ProviderTabModel.Body.disconnected(reason: .claude(.notConnected))
+        let b = ProviderTabModel.Body.disconnected(reason: .claude(.missingCredentials))
+        let c = ProviderTabModel.Body.disconnected(reason: .codex(.notConnected))
         #expect(a != b)
+        #expect(a != c)
     }
 
     @Test func errorKindsAreDistinct() {
@@ -262,13 +326,28 @@ struct ProviderTabModel: Equatable, Sendable {
         case error(kind: ErrorKind, lastSnapshots: [UsageSnapshot])
     }
 
+    // Provider-specific reasons keep impossible cross-provider combinations
+    // unrepresentable in the type system. Mapping for Claude only constructs
+    // `.claude(...)`; mapping for Codex only constructs `.codex(...)`. View
+    // switches are exhaustive per provider and grow safely when Gemini lands
+    // (add a `.gemini(...)` case; the compiler forces every consumer to handle it).
     enum DisconnectedReason: Equatable, Sendable {
+        case claude(ClaudeDisconnectedReason)
+        case codex(CodexDisconnectedReason)
+    }
+
+    enum ClaudeDisconnectedReason: Equatable, Sendable {
         case notConnected
         case missingCredentials
-        case missingClaudeCLI
+        case missingCLI
         case tokenInvalid
-        case permissionDenied
         case rateLimited
+    }
+
+    enum CodexDisconnectedReason: Equatable, Sendable {
+        case notConnected
+        case missingCredentials
+        case permissionDenied
     }
 
     enum ErrorKind: Equatable, Sendable {
@@ -435,7 +514,7 @@ git commit -m "feat(mac): mark StatusViewModel @MainActor; add per-provider refr
 
 ---
 
-### Task 5: Add derived `lastUpdatedAt` and `isAnyRefreshing`
+### Task 5: Add per-tab `lastRefreshAt(for:)` and derived `isAnyRefreshing`
 
 **Files:**
 - Modify: `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift`
@@ -447,23 +526,20 @@ Append to `StatusViewModelTests.swift`:
 
 ```swift
 @MainActor
-@Test func lastUpdatedAt_isMinOfPerProviderTimestamps() {
+@Test func lastRefreshAt_isPerTab() {
     let vm = StatusViewModel()
 
-    let earlier = Date(timeIntervalSince1970: 1_000)
-    let later   = Date(timeIntervalSince1970: 2_000)
+    let claudeAt = Date(timeIntervalSince1970: 1_000)
+    let codexAt  = Date(timeIntervalSince1970: 2_000)
 
-    #expect(vm.lastUpdatedAt == nil)
+    #expect(vm.lastRefreshAt(for: .claude) == nil)
+    #expect(vm.lastRefreshAt(for: .codex) == nil)
 
-    vm.testSet_lastClaudeRefreshAt(earlier)
-    #expect(vm.lastUpdatedAt == earlier)
+    vm.testSet_lastClaudeRefreshAt(claudeAt)
+    vm.testSet_lastCodexRefreshAt(codexAt)
 
-    vm.testSet_lastCodexRefreshAt(later)
-    #expect(vm.lastUpdatedAt == earlier) // min of (earlier, later) is earlier
-
-    vm.testSet_lastClaudeRefreshAt(later)
-    vm.testSet_lastCodexRefreshAt(earlier)
-    #expect(vm.lastUpdatedAt == earlier)
+    #expect(vm.lastRefreshAt(for: .claude) == claudeAt)
+    #expect(vm.lastRefreshAt(for: .codex) == codexAt)
 }
 
 @MainActor
@@ -479,9 +555,9 @@ Append to `StatusViewModelTests.swift`:
 - [ ] **Step 2: Run — verify compile failure**
 
 ```
-cd apps/mac && swift test --filter lastUpdatedAt_isMinOfPerProviderTimestamps
+cd apps/mac && swift test --filter lastRefreshAt_isPerTab
 ```
-Expected: `cannot find 'testSet_lastClaudeRefreshAt'`, `'lastUpdatedAt'`, etc.
+Expected: `cannot find 'testSet_lastClaudeRefreshAt'`, `'lastRefreshAt(for:)'`, etc.
 
 - [ ] **Step 3: Add computed props and test-only setters**
 
@@ -494,16 +570,13 @@ Add to `StatusViewModel.swift` immediately after the new stored properties from 
             || isRefreshAllInFlight
     }
 
-    var lastUpdatedAt: Date? {
-        switch (lastClaudeRefreshAt, lastCodexRefreshAt) {
-        case (nil, nil):
-            return nil
-        case let (a?, nil):
-            return a
-        case let (nil, b?):
-            return b
-        case let (a?, b?):
-            return min(a, b)
+    // Per-tab read; the popover's footer scopes "Last updated …" to whichever
+    // tab is selected so the label never claims freshness for a provider that
+    // wasn't part of the most recent refresh.
+    func lastRefreshAt(for tab: ProviderTab) -> Date? {
+        switch tab {
+        case .claude: return lastClaudeRefreshAt
+        case .codex:  return lastCodexRefreshAt
         }
     }
 
@@ -517,7 +590,7 @@ Add to `StatusViewModel.swift` immediately after the new stored properties from 
 - [ ] **Step 4: Run tests — verify pass**
 
 ```
-cd apps/mac && swift test --filter lastUpdatedAt_isMinOfPerProviderTimestamps
+cd apps/mac && swift test --filter lastRefreshAt_isPerTab
 cd apps/mac && swift test --filter isAnyRefreshing_reflectsAllPaths
 ```
 Expected: `0 failures` for each.
@@ -526,7 +599,7 @@ Expected: `0 failures` for each.
 
 ```
 git add apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift
-git commit -m "feat(mac): add derived lastUpdatedAt and isAnyRefreshing"
+git commit -m "feat(mac): add per-tab lastRefreshAt and derived isAnyRefreshing"
 ```
 
 ---
@@ -770,6 +843,25 @@ Append to `StatusViewModelTests.swift`:
 }
 
 @MainActor
+@Test func connectClaudeCode_cancelledMidRefresh_doesNotStampTimestamp() async {
+    let counter = Counter()
+    let vm = StatusViewModel(
+        snapshots: [],
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0")
+    )
+    #expect(vm.lastClaudeRefreshAt == nil)
+
+    let task = Task { await vm.connectClaudeCode() }
+    // Give the refresh a moment to enter the slow path (50ms sleep), then cancel.
+    try? await Task.sleep(nanoseconds: 5_000_000) // 5ms — enough to be in flight
+    task.cancel()
+    _ = await task.value
+
+    #expect(vm.lastClaudeRefreshAt == nil, "Cancelled mid-refresh must not stamp the timestamp.")
+}
+
+@MainActor
 @Test func connectClaudeCode_missingCLI_preservesCodexSnapshots() async {
     let codexSnapshot = UsageSnapshotFixture.codexSample()
     let claudeSnapshot = UsageSnapshotFixture.claudeSample()
@@ -861,7 +953,15 @@ func connectClaudeCode() async {
     guard connectorState != .checking else { return }   // dedup re-entry; no stamp
 
     var attempted = false
-    defer { if attempted { lastClaudeRefreshAt = Date() } }
+    // Skip the timestamp stamp if the surrounding Task was cancelled mid-refresh.
+    // Otherwise the user sees "Last updated: just now" for a refresh that never
+    // completed authoritatively. State mutations that already happened above
+    // remain in place — we only refuse to claim freshness we don't have.
+    defer {
+        if attempted && !Task.isCancelled {
+            lastClaudeRefreshAt = Date()
+        }
+    }
     attempted = true
 
     guard let claudeRefresher else {
@@ -967,7 +1067,11 @@ func connectCodex() async {
     guard codexConnectorState != .checking else { return }
 
     var attempted = false
-    defer { if attempted { lastCodexRefreshAt = Date() } }
+    defer {
+        if attempted && !Task.isCancelled {
+            lastCodexRefreshAt = Date()
+        }
+    }
     attempted = true
 
     guard let codexRefresher else {
@@ -1025,7 +1129,7 @@ Append to `ProviderTabModelTests.swift` (inside the existing `@Suite struct Prov
     @Test func claude_notConnected_mapsToDisconnectedNotConnected() {
         let vm = StatusViewModel(snapshots: [], connectorState: .notConnected)
         let model = ProviderTabModel.from(viewModel: vm, tab: .claude)
-        #expect(model.body == .disconnected(reason: .notConnected))
+        #expect(model.body == .disconnected(reason: .claude(.notConnected)))
     }
 
     @MainActor
@@ -1058,28 +1162,28 @@ Append to `ProviderTabModelTests.swift` (inside the existing `@Suite struct Prov
     @Test func claude_missingClaudeCli_mapsToDisconnectedMissingCLI() {
         let vm = StatusViewModel(snapshots: [], connectorState: .missingClaudeCli)
         let model = ProviderTabModel.from(viewModel: vm, tab: .claude)
-        #expect(model.body == .disconnected(reason: .missingClaudeCLI))
+        #expect(model.body == .disconnected(reason: .claude(.missingCLI)))
     }
 
     @MainActor
     @Test func claude_missingCredentials_mapsToDisconnected() {
         let vm = StatusViewModel(snapshots: [], connectorState: .missingCredentials)
         let model = ProviderTabModel.from(viewModel: vm, tab: .claude)
-        #expect(model.body == .disconnected(reason: .missingCredentials))
+        #expect(model.body == .disconnected(reason: .claude(.missingCredentials)))
     }
 
     @MainActor
     @Test func claude_tokenInvalid_mapsToDisconnected() {
         let vm = StatusViewModel(snapshots: [], connectorState: .tokenInvalid)
         let model = ProviderTabModel.from(viewModel: vm, tab: .claude)
-        #expect(model.body == .disconnected(reason: .tokenInvalid))
+        #expect(model.body == .disconnected(reason: .claude(.tokenInvalid)))
     }
 
     @MainActor
     @Test func claude_rateLimited_mapsToDisconnectedRateLimited() {
         let vm = StatusViewModel(snapshots: [], connectorState: .rateLimited)
         let model = ProviderTabModel.from(viewModel: vm, tab: .claude)
-        #expect(model.body == .disconnected(reason: .rateLimited))
+        #expect(model.body == .disconnected(reason: .claude(.rateLimited)))
     }
 
     @MainActor
@@ -1139,15 +1243,15 @@ extension ProviderTabModel {
                 body = .connected(snapshots: claudeSnapshots, worst: worst)
             }
         case .notConnected:
-            body = .disconnected(reason: .notConnected)
+            body = .disconnected(reason: .claude(.notConnected))
         case .missingCredentials:
-            body = .disconnected(reason: .missingCredentials)
+            body = .disconnected(reason: .claude(.missingCredentials))
         case .missingClaudeCli:
-            body = .disconnected(reason: .missingClaudeCLI)
+            body = .disconnected(reason: .claude(.missingCLI))
         case .tokenInvalid:
-            body = .disconnected(reason: .tokenInvalid)
+            body = .disconnected(reason: .claude(.tokenInvalid))
         case .rateLimited:
-            body = .disconnected(reason: .rateLimited)
+            body = .disconnected(reason: .claude(.rateLimited))
         case .networkError:
             body = .error(kind: .network, lastSnapshots: claudeSnapshots)
         case .schemaChanged:
@@ -1206,7 +1310,7 @@ Append:
     @Test func codex_notConnected_mapsToDisconnected() {
         let vm = StatusViewModel(snapshots: [], codexConnectorState: .notConnected)
         let model = ProviderTabModel.from(viewModel: vm, tab: .codex)
-        #expect(model.body == .disconnected(reason: .notConnected))
+        #expect(model.body == .disconnected(reason: .codex(.notConnected)))
     }
 
     @MainActor
@@ -1238,14 +1342,14 @@ Append:
     @Test func codex_missingCredentials_mapsToDisconnected() {
         let vm = StatusViewModel(snapshots: [], codexConnectorState: .missingCredentials)
         let model = ProviderTabModel.from(viewModel: vm, tab: .codex)
-        #expect(model.body == .disconnected(reason: .missingCredentials))
+        #expect(model.body == .disconnected(reason: .codex(.missingCredentials)))
     }
 
     @MainActor
     @Test func codex_permissionDenied_mapsToDisconnectedPermissionDenied() {
         let vm = StatusViewModel(snapshots: [], codexConnectorState: .permissionDenied)
         let model = ProviderTabModel.from(viewModel: vm, tab: .codex)
-        #expect(model.body == .disconnected(reason: .permissionDenied))
+        #expect(model.body == .disconnected(reason: .codex(.permissionDenied)))
     }
 
     @MainActor
@@ -1293,11 +1397,11 @@ Replace the `fromCodex` stub in `ProviderTabModel.swift`:
                 body = .connected(snapshots: codexSnapshots, worst: worst)
             }
         case .notConnected:
-            body = .disconnected(reason: .notConnected)
+            body = .disconnected(reason: .codex(.notConnected))
         case .missingCredentials:
-            body = .disconnected(reason: .missingCredentials)
+            body = .disconnected(reason: .codex(.missingCredentials))
         case .permissionDenied:
-            body = .disconnected(reason: .permissionDenied)
+            body = .disconnected(reason: .codex(.permissionDenied))
         case .networkError:
             body = .error(kind: .network, lastSnapshots: codexSnapshots)
         case .schemaChanged:
@@ -1395,6 +1499,15 @@ Append to `BannerStateTests.swift` (inside the existing suite):
         let banner = BannerState.from(viewModel: vm, selected: .claude)
         if case .low = banner { } else { Issue.record("Expected .low") }
     }
+
+    @MainActor
+    @Test func banner_empty_yieldsCriticalNotHidden() {
+        // 0% remaining must surface as a critical banner, not be silenced.
+        let snap = UsageSnapshotFixture.claudeEmptySample()
+        let vm = StatusViewModel(snapshots: [snap], connectorState: .connected)
+        let banner = BannerState.from(viewModel: vm, selected: .claude)
+        if case .critical = banner { } else { Issue.record("Expected .critical for 0% remaining") }
+    }
 ```
 
 Add to `StatusViewModelFakes.swift` (under `UsageSnapshotFixture`):
@@ -1419,6 +1532,18 @@ Add to `StatusViewModelFakes.swift` (under `UsageSnapshotFixture`):
             id: s.id, userAccountId: s.userAccountId, provider: s.provider, product: s.product,
             surface: s.surface, poolKey: s.poolKey, windowKey: s.windowKey, unit: "utilization",
             used: 80, limit: 100, remaining: 20, utilization: 0.80,
+            resetAt: s.resetAt, lastUpdatedAt: s.lastUpdatedAt,
+            confidence: s.confidence, undercountRisk: s.undercountRisk, staleReason: s.staleReason,
+            display: s.display, source: s.source
+        )
+    }
+
+    static func claudeEmptySample() -> UsageSnapshot {
+        let s = claudeSample()
+        return UsageSnapshot(
+            id: s.id, userAccountId: s.userAccountId, provider: s.provider, product: s.product,
+            surface: s.surface, poolKey: s.poolKey, windowKey: s.windowKey, unit: "utilization",
+            used: 100, limit: 100, remaining: 0, utilization: 1.0,
             resetAt: s.resetAt, lastUpdatedAt: s.lastUpdatedAt,
             confidence: s.confidence, undercountRisk: s.undercountRisk, staleReason: s.staleReason,
             display: s.display, source: s.source
@@ -1466,13 +1591,15 @@ extension BannerState {
                 return .stale(text: BannerCopy.stale)
             }
             switch worst {
-            case .critical:
+            case .empty, .critical:
+                // .empty means 0% remaining — semantically more severe than
+                // critical, not "no data." Both surface as a critical banner.
                 let text = BannerCopy.critical(provider: selected)
                 return .critical(text: appendHintIfApplicable(text, otherTab: otherTab, otherBody: otherModel.body))
             case .low:
                 let text = BannerCopy.low(provider: selected)
                 return .low(text: appendHintIfApplicable(text, otherTab: otherTab, otherBody: otherModel.body))
-            case .healthy, .empty:
+            case .healthy:
                 return .hidden
             }
 
@@ -1615,7 +1742,7 @@ Append:
     @MainActor
     @Test func footer_emptyState_hasNilTimestampAndCanRefresh() {
         let vm = StatusViewModel()
-        let s = PopoverFooterState.from(viewModel: vm)
+        let s = PopoverFooterState.from(viewModel: vm, selected: .claude)
         #expect(s.lastUpdatedAt == nil)
         #expect(s.isRefreshing == false)
         #expect(s.canRefresh == true)
@@ -1625,20 +1752,23 @@ Append:
     @Test func footer_whileRefreshing_disablesRefresh() {
         let vm = StatusViewModel()
         vm.testSet_isRefreshAllInFlight(true)
-        let s = PopoverFooterState.from(viewModel: vm)
+        let s = PopoverFooterState.from(viewModel: vm, selected: .claude)
         #expect(s.isRefreshing == true)
         #expect(s.canRefresh == false)
     }
 
     @MainActor
-    @Test func footer_lastUpdatedAt_reflectsMin() {
+    @Test func footer_lastUpdatedAt_isScopedToSelectedTab() {
+        // The asymmetric case: Claude refreshed long ago, Codex just refreshed.
+        // The footer must reflect the selected tab, not min(claude, codex).
         let vm = StatusViewModel()
-        let earlier = Date(timeIntervalSince1970: 1_000)
-        let later = Date(timeIntervalSince1970: 2_000)
-        vm.testSet_lastClaudeRefreshAt(later)
-        vm.testSet_lastCodexRefreshAt(earlier)
-        let s = PopoverFooterState.from(viewModel: vm)
-        #expect(s.lastUpdatedAt == earlier)
+        let oldClaude = Date(timeIntervalSince1970: 1_000)
+        let freshCodex = Date(timeIntervalSince1970: 2_000)
+        vm.testSet_lastClaudeRefreshAt(oldClaude)
+        vm.testSet_lastCodexRefreshAt(freshCodex)
+
+        #expect(PopoverFooterState.from(viewModel: vm, selected: .claude).lastUpdatedAt == oldClaude)
+        #expect(PopoverFooterState.from(viewModel: vm, selected: .codex).lastUpdatedAt == freshCodex)
     }
 ```
 
@@ -1656,9 +1786,9 @@ Append to `PopoverFooterState.swift`:
 ```swift
 extension PopoverFooterState {
     @MainActor
-    static func from(viewModel: StatusViewModel) -> PopoverFooterState {
+    static func from(viewModel: StatusViewModel, selected: ProviderTab) -> PopoverFooterState {
         PopoverFooterState(
-            lastUpdatedAt: viewModel.lastUpdatedAt,
+            lastUpdatedAt: viewModel.lastRefreshAt(for: selected),
             isRefreshing: viewModel.isAnyRefreshing,
             canRefresh: !viewModel.isAnyRefreshing
         )
@@ -2026,31 +2156,44 @@ Expected: failure — current `popoverDidOpen` is a no-op.
 Replace the placeholder `popoverDidOpen` / `popoverDidClose` and add private helpers:
 
 ```swift
+    // Generation counter: incremented on every open/close. Each timer task
+    // captures the generation at start; if a tick fires after a close-then-open
+    // (or after a stale `.onAppear` re-fire on macOS regressions), the captured
+    // generation no longer matches and the loop exits before triggering a refresh.
+    // This is defense in depth on top of `Task.cancel()` in case
+    // `.onDisappear` fails to fire on `MenuBarExtra(.window)` content under
+    // future macOS versions — see Risk H1 in the spec.
+    private var generation: Int = 0
+
     func popoverDidOpen() {
+        generation &+= 1
         let viewModel = self.viewModel
         Task { await viewModel.refreshAll(reason: .popoverOpened) }
-        startTimer()
+        startTimer(expectedGeneration: generation)
     }
 
     func popoverDidClose() {
+        generation &+= 1
         stopTimer()
     }
 
-    private func startTimer() {
+    private func startTimer(expectedGeneration expected: Int) {
         stopTimer()
         let sleeper = self.sleeper
         let interval = self.interval
         let viewModel = self.viewModel
-        // Controller lifetime equals AppModel lifetime (app-wide singleton),
-        // so a strong viewModel capture is intentional. Capturing `viewModel`
-        // directly rather than `[weak self]` avoids the Swift 6 hazard of
-        // accessing `self?.viewModel` from a non-actor-isolated Task closure;
-        // `@MainActor` on `StatusViewModel` makes the reference Sendable across
-        // actors, while the `await` on `refreshAll` performs the actor hop.
-        timerTask = Task {
+        // Capture `self` weakly only to read the generation counter — the
+        // reference is read-only and the entire access happens inside an
+        // explicit MainActor closure, so no Swift 6 isolation hazard.
+        timerTask = Task { [weak self] in
             while !Task.isCancelled {
                 await sleeper(interval)
                 if Task.isCancelled { break }
+                let stillValid: Bool = await MainActor.run {
+                    guard let self else { return false }
+                    return self.generation == expected
+                }
+                if !stillValid { break }
                 await viewModel.refreshAll(reason: .timerTick)
             }
         }
@@ -2089,6 +2232,42 @@ Add:
 
 ```swift
 extension PopoverRefreshControllerTests {
+    @MainActor
+    @Test func timer_skipsRefresh_ifGenerationChangedDuringSleep() async {
+        // If `popoverDidClose()` (or another `popoverDidOpen()`) increments the
+        // generation while the timer is sleeping, the next tick must NOT fire a
+        // refresh. This protects against `.onDisappear` regressions on
+        // `MenuBarExtra(.window)` where the timer task isn't cancelled directly.
+        let counter = Counter()
+        let vm = StatusViewModel(
+            snapshots: [],
+            claudeRefresher: SlowClaudeRefresher(counter: counter),
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+            codexRefresher: NoopCodexRefresher()
+        )
+        let fake = FakeSleeper()
+        let controller = PopoverRefreshController(viewModel: vm, sleeper: { d in await fake.sleep(d) })
+
+        controller.popoverDidOpen()
+        // Wait for the immediate refresh to land and the timer task to register a sleep.
+        for _ in 0..<20 {
+            if fake.pendingTicks > 0 { break }
+            await Task.yield()
+        }
+        let immediateCount = counter.value
+
+        // Mutate the generation while the timer is sleeping (simulates a missed
+        // close + reopen, or any reason `popoverDidClose` could not run).
+        controller.popoverDidOpen()  // generation increments; old timer's `expected` is now stale
+
+        // Fire the OLD timer's continuation. Its generation check should fail
+        // and the refresh should NOT execute.
+        fake.fireOneTick()
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(counter.value == immediateCount + 1, "Old timer must not refresh after generation invalidation; only the new immediate refresh from the second popoverDidOpen should add one increment.")
+    }
+
     @MainActor
     @Test func userTappedRefreshDuringInFlight_isDropped() async {
         let counter = Counter()
@@ -2571,24 +2750,26 @@ struct ProviderTabContentView: View {
     }
 
     private func headline(for reason: ProviderTabModel.DisconnectedReason) -> String {
-        switch model.tab {
-        case .claude:
-            switch reason {
-            case .notConnected:        return "Claude Code is not connected"
-            case .missingCredentials:  return "Claude Code credentials were not found"
-            case .missingClaudeCLI:    return "Claude Code CLI was not found"
-            case .tokenInvalid:        return "Claude Code credentials are invalid"
-            case .rateLimited:         return "Claude usage is rate limited"
-            case .permissionDenied:    return "Claude Code is unavailable"
+        switch (model.tab, reason) {
+        case let (.claude, .claude(claudeReason)):
+            switch claudeReason {
+            case .notConnected:       return "Claude Code is not connected"
+            case .missingCredentials: return "Claude Code credentials were not found"
+            case .missingCLI:         return "Claude Code CLI was not found"
+            case .tokenInvalid:       return "Claude Code credentials are invalid"
+            case .rateLimited:        return "Claude usage is rate limited"
             }
-        case .codex:
-            switch reason {
-            case .notConnected:        return "Codex is not connected"
-            case .missingCredentials:  return "Sign in to Codex locally"
-            case .permissionDenied:    return "Codex app-server could not be started"
-            case .missingClaudeCLI, .tokenInvalid, .rateLimited:
-                return "Codex is unavailable"
+        case let (.codex, .codex(codexReason)):
+            switch codexReason {
+            case .notConnected:       return "Codex is not connected"
+            case .missingCredentials: return "Sign in to Codex locally"
+            case .permissionDenied:   return "Codex app-server could not be started"
             }
+        case (.claude, .codex), (.codex, .claude):
+            // Mapping invariant violation. Covered by ProviderTabModel mapping
+            // tests; if we ever hit this in production it's a programmer error.
+            assertionFailure("Cross-provider reason in tab \(model.tab)")
+            return "\(model.tab.title) is unavailable"
         }
     }
 
@@ -2750,7 +2931,7 @@ struct PopoverRootView: View {
     var body: some View {
         let bannerState = BannerState.from(viewModel: viewModel, selected: selectedTab)
         let tabModel    = ProviderTabModel.from(viewModel: viewModel, tab: selectedTab)
-        let footerState = PopoverFooterState.from(viewModel: viewModel)
+        let footerState = PopoverFooterState.from(viewModel: viewModel, selected: selectedTab)
 
         VStack(spacing: 0) {
             StatusBannerView(state: bannerState)
@@ -3124,7 +3305,13 @@ import SwiftUI
 
 @main
 struct WhatTheTokenApp: App {
-    @State private var app: AppModel = .live()
+    // Use `let`, not `@State`. The App is constructed once per process; observation
+    // tracking flows through the @Observable reads inside the views, not through
+    // the App's storage. `@State` would add a Sendable requirement on the wrapped
+    // class and call the @MainActor `.live()` factory through SwiftUI's State init,
+    // which is unnecessary friction here.
+    private let app: AppModel = .live()
+
     @Environment(\.openWindow) private var openWindow
 
     init() {
@@ -3248,7 +3435,7 @@ Walk through the 11-item smoke checklist from spec §9:
 5. Repeat for Claude.
 6. Both connected & healthy → banner hidden; snapshot rows render.
 7. Tap refresh → spinner shows; "Last updated" advances.
-8. Leave popover open ~30s → second refresh fires. Close, wait 60s, reopen → exactly one refresh fires.
+8. Leave popover open ~30s → second refresh fires. Close, wait 60s, reopen → exactly one refresh fires. **Watch the "Last updated" label across the close → wait → reopen cycle: it must not advance during the closed period. If it does, `.onDisappear` is not firing reliably on this macOS version and the AppKit fallback (Risk H1, spec §13 follow-up) needs to land before ship.**
 9. `Cmd+,` opens Settings.
 10. `•••` overflow → Settings, About (system panel), Quit each work.
 11. DEBUG build only: `Open Developer Window` item present in `•••`. Release build: absent.

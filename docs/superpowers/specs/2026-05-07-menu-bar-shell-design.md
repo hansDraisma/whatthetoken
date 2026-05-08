@@ -25,7 +25,7 @@ These are settled. Do not re-litigate during implementation.
 - **Banner is selected-provider scoped, conditional, and deterministic.** When the active tab's body is `.disconnected`, banner shows `.disconnected`. When the active tab is connected with data, banner severity is derived from the worst-of `StatusUsageState` (`critical > low > healthy`); when data is stale or the provider is in a network/schema error state, banner shows `.stale`. The full evaluation table is in §4. A cross-provider hint is appended to a `.critical` / `.low` banner only when the *other* connected provider is `.connected(_, worst: .healthy)`. Disconnected text broadens to "Connect Claude or Codex in Settings" when both providers are disconnected.
 - **Single shared `StatusViewModel`** instance, owned by an `AppModel` that's instantiated once at app startup. `MenuBarExtra`, `Settings`, and (DEBUG) the developer window all read from it.
 - **Single serialized chrome refresh entry** (`StatusViewModel.refreshAll(reason:)`). Manual / popover-open / 30s in-popover timer share one outer in-flight guard. Settings actions bypass `refreshAll` and call provider-specific methods directly; the per-provider `.checking` guards prevent duplicate same-provider calls.
-- **Per-provider stored state** (`lastClaudeRefreshAt`, `lastCodexRefreshAt`); footer's `lastUpdatedAt` is derived as the older of the two. "Last updated" means "the time of the most recent meaningful determination of this provider's state," including local checks like missing CLI.
+- **Per-provider stored state** (`lastClaudeRefreshAt`, `lastCodexRefreshAt`). The popover's footer "Last updated …" is **scoped to the selected tab** — it shows that provider's last refresh time, not the older-of-the-two. This avoids the asymmetric-refresh case where the global label would lie ("Claude refreshed 10 min ago, user just connects Codex" → footer must say "just now" on the Codex tab, not "10 minutes ago"). "Last updated" means "the time of the most recent meaningful determination of this provider's state," including local checks like missing CLI.
 - **No background polling Phase 1.** Polling runs only while the popover is open, every 30s, and is cancelled on close.
 - **No production debug window.** The developer window is `#if DEBUG` only and not compiled into release builds.
 - **Copy uses "remaining usage / quota"**, never "spend"; the data contract is `UsageSnapshot`, not cost.
@@ -94,7 +94,9 @@ final class AppModel {
 
 @main
 struct WhatTheTokenApp: App {
-    @State private var app: AppModel = .live()
+    // App is constructed once per process. Use `let` rather than `@State` —
+    // observation tracking flows through the @Observable reads in the views.
+    private let app: AppModel = .live()
 
     init() {
         // 1. smoke-mode handling first (Claude and Codex both)
@@ -209,13 +211,13 @@ Snapshot filter predicates match the existing `replaceSnapshots` calls: `provide
 | `.connected(_, worst: .critical)` | `.critical(text:)` |
 | `.connected(_, worst: .low)` | `.low(text:)` |
 | `.connected(_, worst: .healthy)` | `.hidden` |
-| `.connected(_, worst: .empty)` | `.hidden` (the tab content surfaces "no usage to report"; a banner here would be noise) |
+| `.connected(_, worst: .empty)` | `.critical` — `.empty` means **0% remaining**, semantically more severe than critical (<10%). Both surface as a critical banner. |
 | `.empty` | `.hidden` |
 | `.checking` | `.hidden` (transient; refresh will resolve) |
 
 **Cross-provider hint** is appended to a `.critical` or `.low` banner only when the *other* provider's body is `.connected(_, worst: .healthy)`. Format: "Claude is running low — Codex has more room." If the other provider is itself low/critical/disconnected, no hint is appended.
 
-**`PopoverFooterState`**: straight projection of `viewModel.lastUpdatedAt`, `viewModel.isAnyRefreshing`. `canRefresh = !isRefreshing`.
+**`PopoverFooterState`**: `lastUpdatedAt = viewModel.lastRefreshAt(for: selected)` (per-tab); `isRefreshing = viewModel.isAnyRefreshing`; `canRefresh = !isRefreshing`. Constructed via `from(viewModel:selected:)`.
 
 ### Banner copy (centralized in a `BannerCopy` enum for future localization)
 
@@ -254,11 +256,13 @@ final class StatusViewModel {
             || isRefreshAllInFlight
     }
 
-    var lastUpdatedAt: Date? {
-        switch (lastClaudeRefreshAt, lastCodexRefreshAt) {
-        case (nil, nil): return nil
-        case (let a?, nil), (nil, let a?): return a
-        case (let a?, let b?): return min(a, b)
+    // Per-tab read; the popover's footer scopes "Last updated …" to whichever
+    // tab is selected, so the label never claims freshness for a provider that
+    // wasn't part of the most recent refresh.
+    func lastRefreshAt(for tab: ProviderTab) -> Date? {
+        switch tab {
+        case .claude: return lastClaudeRefreshAt
+        case .codex:  return lastCodexRefreshAt
         }
     }
 }
@@ -476,7 +480,7 @@ The popover's `•••` overflow menu adds, in DEBUG builds only, an `Open Dev
 |---|---|
 | `ProviderTabModel.from(viewModel:tab:)` | One case per `ClaudeConnectorSetupState` (×9) and `CodexConnectorSetupState` (×7). For `.connected`, sub-cases with and without snapshots. |
 | `BannerState.from(viewModel:selected:)` | One assert per `Body` case (table in §4); both-providers-disconnected broadens copy; cross-provider hint fires only when other provider is `.connected(_, worst: .healthy)`; `.hidden` when active tab is healthy and no hint applies; `.hidden` for `.empty` and `.checking`. |
-| `PopoverFooterState.from(viewModel:)` | `lastUpdatedAt` projection (nil/one/two timestamps → `min`); `canRefresh` mirrors `!isAnyRefreshing`. |
+| `PopoverFooterState.from(viewModel:selected:)` | `lastUpdatedAt` is the selected tab's per-provider timestamp (nil/Date); `canRefresh` mirrors `!isAnyRefreshing`. Includes the asymmetric-refresh case (one tab fresh, one stale) to confirm scope-to-selected behavior. |
 | `claudeActionTitle(for:)` / `codexActionTitle(for:)` | One assert per setup-state case (table in §6). |
 
 ### `StatusViewModel` async tests
@@ -490,7 +494,7 @@ The popover's `•••` overflow menu adds, in DEBUG builds only, an `Open Dev
 - `connectClaudeCode_stampsTimestamp_onNoRefresherPath`.
 - `connectClaudeCode_doesNotStamp_onCheckingGuardReentry`.
 - `connectCodex_stampsTimestamp_onNoRefresherPath`.
-- `lastUpdatedAt_isMinOfPerProviderTimestamps`.
+- `lastRefreshAt_isPerTab`.
 - `connectClaudeCode_missingCLI_preservesCodexSnapshots` — seed `snapshots` with one Claude snapshot and one Codex snapshot; trigger the missing-CLI path; assert the Claude snapshot is gone and the Codex snapshot is unchanged. **(Fixes the existing bug at `apps/mac/Sources/WhatTheTokenMac/ViewModels/StatusViewModel.swift:52` where `snapshots = []` wipes both providers' rows.)**
 
 ### `PopoverRefreshController` tests
@@ -537,12 +541,12 @@ Phase 1 does not add SwiftUI snapshot or `ViewInspector` tests. Coverage comes f
 
 | # | Risk | L | I | Mitigation |
 |---|------|---|---|---|
-| 1 | `.onAppear` / `.onDisappear` on popover root unreliable across macOS versions | Low | Medium | AppKit fallback (`NSStatusItem.button.window?.isVisible`) documented but not implemented Phase 1; manual smoke on macOS 14 + 15 in the release checklist. |
+| 1 | `.onAppear` / `.onDisappear` on popover root unreliable across macOS versions for `MenuBarExtra(.window)` (Apple has not committed to popover-vs-scene lifecycle semantics) | Medium | Medium (a stuck timer breaks "no background polling Phase 1") | (a) `PopoverRefreshController` carries a generation counter incremented on every open/close; the timer task verifies the captured generation before firing, so a missed `.onDisappear` cannot keep refreshing forever past a subsequent reopen. (b) Manual smoke step #8 explicitly watches "Last updated" across a close → wait → reopen cycle; if it advances during the closed period, the AppKit fallback (`NSStatusItem.button.window?.isVisible` observation, §13 follow-up) is required before ship. |
 | 2 | Future move to concurrent provider legs hits Swift 6 strict-concurrency diagnostics | Low | Low (Phase 1 stays sequential) | Phase 1 ships sequential awaits, which the existing codebase already proves compile under the current toolchain. Concurrent legs are a documented future optimization, not a Phase 1 dependency. Re-validate against the then-current Swift before promoting. |
 | 3 | `LSUIElement` only takes effect at bundle build; SwiftPM `swift run` shows Dock | High | Low | Programmatic `.accessory` in `MacAppLauncher` is the runtime source of truth; bundle-time `Info.plist` mirrors it. Documented in the dev README. |
 | 4 | Refresh stampede when popover is opened/closed rapidly | Low | Low | `popoverDidClose` cancels the timer; `isRefreshAllInFlight` drops re-entrant `refreshAll`; per-provider `.checking` dedups inside legs. Covered by tests. |
 | 5 | Disconnect deferred → users with stale Keychain credentials have no in-app clear path | Medium | Medium | Existing `tokenInvalid` / `missingCredentials` setup-states already surface "credentials are invalid"; user fixes credentials in the source CLI and clicks Retry. Disconnect/reconnect is a follow-up spec; gap is documented. |
-| 6 | `lastUpdatedAt = min(...)` shows the older provider — feels stale if one provider lags | Medium | Low | Correct semantics ("everything you see is at least this fresh"). Per-provider tooltip is a follow-up. |
+| 6 | "Last updated …" footer is scoped to the selected tab — switching tabs may surface a much-older timestamp on a rarely-viewed provider | Low | Low | Behavior is intentional: each tab's footer reflects that provider's freshness. The visible jump on tab switch is acceptable signal, not a bug. |
 | 7 | DEBUG developer window introduces dev/prod behavior divergence | Medium | Low (intended) | Diagnostic-only: limited to refresh actions and state inspection that are already available in production. No mutating affordances. Reviewed before merge. |
 | 8 | Banner / setup-copy strings hardcoded (no localization) | High | Low | Strings centralized in setup-copy enums and a new `BannerCopy` enum so localization is a future change without touching views. |
 | 9 | Cross-provider hint copy could mislead in edge cases | Low | Medium | Hint fires only when other provider's body is `.connected(_, worst: .healthy)`; `.rateLimited` is `.disconnected`, not connected. Unit-tested. |
@@ -584,9 +588,10 @@ Wireframes are layout and information-density only. SwiftUI defaults will resolv
 
 ## 13. Future Optimizations
 
+- **AppKit-bridged popover-visibility observation.** If `.onAppear` / `.onDisappear` on the `MenuBarExtra(.window)` content prove unreliable on a future macOS release (manual smoke step #8 catches this), replace the SwiftUI lifecycle hook with `NSStatusItem.button.window?.isVisible` KVO behind a small protocol so `PopoverRefreshController` can swap signal sources without changing call sites.
 - **Concurrent provider legs in `refreshAll`** via `async let` — re-validate under the then-current Swift toolchain before promoting; saves `min(Claude, Codex)` of refresh latency.
 - **Menu-bar-icon badge** until at least one provider is connected.
-- **Per-provider `lastUpdatedAt` tooltip** in the footer when one provider lags the other.
+- **Compound footer label** (e.g., "Codex 30s · Claude 12 min ago") if users find tab-scoped timestamps insufficient; only worth doing if real usage data shows confusion.
 - **Provenance UI** in Settings showing the existing `ConnectorSourceState` detail.
 - **Keyboard shortcuts** — `Cmd+R` (refresh), `Cmd+1` / `Cmd+2` (tab switching).
 - **Disconnect / reconnect** actions in Settings, once backing model APIs exist.

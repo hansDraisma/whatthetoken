@@ -719,6 +719,42 @@ private func sensitiveKeyMatches(
 }
 
 @MainActor
+@Test func enableNotificationsRequestsPermissionBeforeSavingEnabledState() async {
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    let store = InMemoryAppSettingsStore()
+    let vm = StatusViewModel(settingsStore: store, notificationDelivery: delivery)
+
+    let result = await vm.setNotificationsEnabled(true)
+
+    #expect(result == .granted)
+    #expect(vm.settings.notifications.isEnabled == true)
+}
+
+@MainActor
+@Test func deniedNotificationPermissionKeepsNotificationsDisabled() async {
+    let delivery = RecordingNotificationDelivery(permissionResult: .denied)
+    let vm = StatusViewModel(notificationDelivery: delivery)
+
+    let result = await vm.setNotificationsEnabled(true)
+
+    #expect(result == .denied)
+    #expect(vm.settings.notifications.isEnabled == false)
+}
+
+@MainActor
+@Test func disablingNotificationsDoesNotReportDeniedPermission() async {
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    var settings = AppSettings.defaults
+    settings.notifications.isEnabled = true
+    let vm = StatusViewModel(settings: settings, notificationDelivery: delivery)
+
+    let result = await vm.setNotificationsEnabled(false)
+
+    #expect(result == .notDetermined)
+    #expect(vm.settings.notifications.isEnabled == false)
+}
+
+@MainActor
 @Test func failedRefreshKeepsLastKnownGoodSnapshotsAndStoresSanitizedError() async {
     var settings = AppSettings.defaults
     settings.connectors.claudeCode.isEnabled = true

@@ -7,6 +7,7 @@ struct AppSettings: Codable, Equatable, Sendable {
     var connectors: ConnectorSettings
     var refresh: RefreshSettings
     var notifications: NotificationSettings
+    var launchAtLogin: LaunchAtLoginSettings
     var menuBar: MenuBarSettings
 
     static let defaults = AppSettings(
@@ -25,8 +26,45 @@ struct AppSettings: Codable, Equatable, Sendable {
                 codex: ProviderAlertToggle(isEnabled: true)
             )
         ),
+        launchAtLogin: LaunchAtLoginSettings(isEnabled: false),
         menuBar: MenuBarSettings(displayMode: .statusIcon)
     )
+
+    enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case connectors
+        case refresh
+        case notifications
+        case launchAtLogin
+        case menuBar
+    }
+
+    init(
+        schemaVersion: Int,
+        connectors: ConnectorSettings,
+        refresh: RefreshSettings,
+        notifications: NotificationSettings,
+        launchAtLogin: LaunchAtLoginSettings,
+        menuBar: MenuBarSettings
+    ) {
+        self.schemaVersion = schemaVersion
+        self.connectors = connectors
+        self.refresh = refresh
+        self.notifications = notifications
+        self.launchAtLogin = launchAtLogin
+        self.menuBar = menuBar
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        connectors = try container.decode(ConnectorSettings.self, forKey: .connectors)
+        refresh = try container.decode(RefreshSettings.self, forKey: .refresh)
+        notifications = try container.decode(NotificationSettings.self, forKey: .notifications)
+        launchAtLogin = try container.decodeIfPresent(LaunchAtLoginSettings.self, forKey: .launchAtLogin)
+            ?? .defaults
+        menuBar = try container.decode(MenuBarSettings.self, forKey: .menuBar)
+    }
 
     static func decodeValidated(from data: Data) throws -> AppSettings {
         let envelope = try JSONDecoder().decode(SettingsVersionEnvelope.self, from: data)
@@ -61,6 +99,7 @@ struct AppSettings: Codable, Equatable, Sendable {
                     codex: ProviderAlertToggle(isEnabled: true)
                 )
             ),
+            launchAtLogin: .defaults,
             menuBar: v1.menuBar
         )
     }
@@ -132,6 +171,12 @@ struct ProviderAlertSettings: Codable, Equatable, Sendable {
 }
 
 struct ProviderAlertToggle: Codable, Equatable, Sendable {
+    var isEnabled: Bool
+}
+
+struct LaunchAtLoginSettings: Codable, Equatable, Sendable {
+    static let defaults = LaunchAtLoginSettings(isEnabled: false)
+
     var isEnabled: Bool
 }
 

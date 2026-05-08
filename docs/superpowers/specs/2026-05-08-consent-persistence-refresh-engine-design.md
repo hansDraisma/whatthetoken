@@ -95,7 +95,7 @@ It stores:
 - `notifications.criticalThreshold`
 - `menuBar.displayMode`
 
-Stage 2 may add notification preferences without delivering notifications; Stage 3 owns notification permission and delivery. Defaults must keep auto-refresh disabled.
+Stage 2 may add notification preferences and menu bar display mode without using them in UI behavior. These fields ship inert in Stage 2 so the persisted schema is ready for Stage 3 and later display-mode work, but no notification delivery or alternate menu bar display is implemented here. Defaults must keep auto-refresh disabled.
 
 `AppSettings` must not store provider credentials, provider auth state, copied cookies, bearer tokens, session tokens, raw provider payloads, prompts, responses, or local database contents.
 
@@ -109,7 +109,7 @@ It stores only sanitized `UsageSnapshot` values and cache metadata:
 - `snapshots`
 - `updatedAtByProvider`
 - `lastSuccessfulRefreshAtByProvider`
-- `lastErrorByProvider`, containing a sanitized code and user-safe message only
+- `lastErrorByProvider`, containing a sanitized code, user-safe message, consecutive failure count, and next automatic refresh time
 
 Cached snapshots must follow the existing data contract. They may include provider, product, surface, pool/window identifiers, numeric usage fields, confidence, undercount risk, stale reason, display labels, and source metadata. They must not include raw provider responses or copied provider credentials.
 
@@ -123,6 +123,8 @@ Stage 2 should use simple local JSON files through small protocols:
 The default live stores should write under the user's application support directory for WhatTheToken. Tests use in-memory or temporary-directory stores.
 
 Writes should be atomic from the app's perspective: encode to data, write to a temporary file in the same directory, then replace the destination. If decoding fails, the app should fall back to safe defaults for settings and an empty cache, while surfacing a sanitized local error for developer diagnostics later.
+
+Unknown `schemaVersion` values are treated like decode failures in Stage 2. The app falls back safely rather than attempting partial migration.
 
 ## Consent And Connector State
 
@@ -144,12 +146,14 @@ Manual refresh should refresh only enabled connectors. It must not enable a conn
 
 Refresh triggers:
 
-- user taps refresh
-- user taps retry
-- popover opens
-- auto-refresh timer fires, only when explicit auto-refresh is enabled
+- user taps refresh: manual, bypasses automatic backoff
+- user taps retry: manual, bypasses automatic backoff
+- popover opens: one-shot foreground refresh, subject to automatic backoff
+- auto-refresh timer fires: automatic, only when explicit auto-refresh is enabled, subject to automatic backoff
 
-Stage 2 replaces the Stage 1 in-popover 30-second polling model with the persisted refresh preference model. The default is no automatic refresh. When auto-refresh is enabled, the default interval is 5 minutes.
+Stage 2 replaces the Stage 1 in-popover 30-second polling model with the persisted refresh preference model. The default is no automatic timer-based refresh. Opening the popover may still perform a one-shot foreground refresh for enabled connectors so users see current status when they ask to view the popover, but repeated opens respect provider backoff and do not defeat it.
+
+When auto-refresh is enabled, `refresh.intervalSeconds` defaults to 300 seconds.
 
 Refreshes are deduplicated:
 
@@ -162,6 +166,8 @@ Backoff is per provider:
 - first failure: next automatic retry after 5 minutes
 - second consecutive failure: 15 minutes
 - third and later consecutive failures: 60 minutes
+
+Backoff metadata is persisted in the sanitized snapshot cache so relaunch does not immediately defeat automatic retry suppression. The persisted metadata contains only provider id, sanitized error code/message, consecutive failure count, and next automatic refresh time.
 
 Manual refresh should bypass the wait until the next automatic retry, but it should not start if the same provider is already refreshing.
 
@@ -196,7 +202,7 @@ Rules:
 - If a provider has snapshots and refresh starts, keep the current rows visible.
 - While background refresh is active for the selected provider, show a subtle 2px indeterminate progress line near the top of the provider content.
 - While background refresh is active, the footer label changes from "Last updated ..." to "Updating values...".
-- The refresh button is disabled while an all-provider or same-provider refresh is in flight.
+- The refresh button is disabled while an all-provider or same-provider refresh is in flight. This prevents duplicate work; the thin progress line and footer text explain why the control is temporarily unavailable.
 - When new sanitized snapshots arrive, row values update in place.
 - If refresh fails, existing values remain visible and stale/error copy appears through the existing banner and error affordances.
 
@@ -205,7 +211,7 @@ Rules:
 ```swift
 enum Body: Equatable, Sendable {
     case connected(snapshots: [UsageSnapshot], worst: StatusUsageState, isRefreshing: Bool)
-    case empty(isRefreshing: Bool)
+    case empty
     case loading
     case disconnected(reason: DisconnectedReason)
     case error(kind: ErrorKind, lastSnapshots: [UsageSnapshot], isRefreshing: Bool)
@@ -213,6 +219,13 @@ enum Body: Equatable, Sendable {
 ```
 
 Existing values must remain visible during refresh whenever `snapshots` or `lastSnapshots` is non-empty.
+
+The existing connector setup states keep their `.checking` cases. `ProviderTabModel.from(viewModel:tab:)` maps connector `.checking` into presentation cases:
+
+- `.checking` with non-empty current snapshots maps to `.connected(..., isRefreshing: true)`.
+- `.checking` with non-empty last error snapshots maps to `.error(..., isRefreshing: true)`.
+- `.checking` with no snapshots maps to `.loading`.
+- `.connected` with empty snapshots maps to `.empty`.
 
 ## Architecture
 
@@ -237,7 +250,7 @@ Provider connector services still own provider-specific fetching and mapping. Th
 
 `PopoverRefreshController` no longer owns a hard-coded 30-second timer. It reads the persisted auto-refresh preference from `StatusViewModel` and uses the configured interval only while the popover is open. It does not start an automatic timer when `autoRefreshEnabled` is false.
 
-The behavior is fixed for Stage 2: no automatic refresh unless the user explicitly enables it, and the default interval is 5 minutes when enabled.
+The behavior is fixed for Stage 2: no timer-based automatic refresh unless the user explicitly enables it, and the default interval is 300 seconds when enabled. Popover-open refresh is a one-shot foreground refresh, not an auto-refresh timer, and it is subject to automatic backoff.
 
 ### Settings Views
 
@@ -262,6 +275,7 @@ Display rules:
 - stale snapshots clearly indicate that values may be outdated
 - cache decode failure falls back to empty cache and does not crash the app
 - settings decode failure falls back to defaults and does not enable connectors automatically
+- unknown settings or cache schema versions are handled as decode failures
 
 Logs and diagnostics must not contain raw provider payloads, auth headers, cookies, bearer tokens, provider session tokens, prompts, responses, or raw local databases.
 
@@ -280,8 +294,10 @@ Add focused tests for:
 - failed refresh keeps last-known-good snapshots visible
 - manual refresh does not enable disabled connectors
 - auto-refresh does not run unless explicitly enabled
-- auto-refresh uses the configured 5-minute default when enabled
+- auto-refresh uses the configured 300-second default when enabled
+- popover-open refresh is subject to automatic backoff
 - per-provider backoff progresses 5, 15, 60 minutes
+- per-provider backoff metadata survives relaunch without storing raw provider data
 - manual refresh bypasses automatic retry delay
 - provider tab content keeps rows visible during background refresh
 - footer shows "Updating values..." during selected-provider refresh
@@ -292,9 +308,11 @@ Use synthetic fixtures only. Live provider checks remain manual and opt-in.
 ## Acceptance Criteria
 
 - Relaunch preserves connector enabled state and sanitized last-known-good values.
-- Default launch does not enable connectors or start auto-refresh without explicit consent.
+- Default launch does not enable connectors or start timer-based auto-refresh without explicit consent.
 - Manual refresh refreshes enabled connectors without changing consent state.
 - Auto-refresh is explicit, configurable, and disabled by default.
+- Popover-open foreground refresh is subject to per-provider backoff.
+- Per-provider automatic backoff metadata is persisted as sanitized cache metadata.
 - Provider credentials and raw provider data are never stored in WhatTheToken settings or cache.
 - Cached values become visibly stale when freshness expires.
 - Refreshing with existing values no longer blanks the provider panel.

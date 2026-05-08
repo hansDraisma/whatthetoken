@@ -509,3 +509,76 @@ private func localUpdatedLabel(for isoString: String) -> String {
     #expect(persisted.lastErrorByProvider[CachedProviderID.claude.rawValue]?.code == .network)
     #expect(persisted.lastErrorByProvider[CachedProviderID.claude.rawValue]?.message == "Claude Code usage could not be refreshed")
 }
+
+@MainActor
+@Test func popoverOpenRefreshRespectsPersistedBackoff() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.recordFailure(
+        for: .claude,
+        code: .network,
+        message: "Claude Code usage could not be refreshed",
+        now: Date(timeIntervalSince1970: 1_000)
+    )
+    let counter = Counter()
+    let vm = StatusViewModel(
+        settings: settings,
+        cache: cache,
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        now: { Date(timeIntervalSince1970: 1_100) }
+    )
+
+    await vm.refreshAll(reason: .popoverOpened)
+
+    #expect(counter.value == 0)
+}
+
+@MainActor
+@Test func manualRefreshBypassesBackoff() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.recordFailure(
+        for: .claude,
+        code: .network,
+        message: "Claude Code usage could not be refreshed",
+        now: Date(timeIntervalSince1970: 1_000)
+    )
+    let counter = Counter()
+    let vm = StatusViewModel(
+        settings: settings,
+        cache: cache,
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        now: { Date(timeIntervalSince1970: 1_100) }
+    )
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(counter.value == 1)
+}
+
+@MainActor
+@Test func repeatedFailuresProgressBackoffToSixtyMinutes() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let cacheStore = InMemorySnapshotCacheStore()
+    let vm = StatusViewModel(
+        settings: settings,
+        claudeRefresher: ThrowingClaudeRefresher(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        cacheStore: cacheStore,
+        now: { Date(timeIntervalSince1970: 1_000) }
+    )
+
+    await vm.refreshAll(reason: .manual)
+    await vm.refreshAll(reason: .manual)
+    await vm.refreshAll(reason: .manual)
+    let cache = await cacheStore.load()
+    let error = cache.lastErrorByProvider[CachedProviderID.claude.rawValue]
+
+    #expect(error?.consecutiveFailureCount == 3)
+    #expect(error?.nextAutomaticRefreshAt == Date(timeIntervalSince1970: 4_600))
+}

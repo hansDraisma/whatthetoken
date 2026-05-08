@@ -21,6 +21,7 @@ final class StatusViewModel {
     private(set) var lastCodexRefreshAt: Date?
     private(set) var isRefreshAllInFlight = false
     private(set) var hasLoadedPersistedState = false
+    var onSettingsChanged: (@MainActor () -> Void)?
 
     var isAnyRefreshing: Bool {
         connectorState == .checking
@@ -40,6 +41,8 @@ final class StatusViewModel {
             return nil
         }
     }
+
+    var currentDate: Date { now() }
 
     func lastRefreshAt(for tab: ProviderTab) -> Date? {
         switch tab {
@@ -138,6 +141,7 @@ final class StatusViewModel {
         settings = nextSettings
         applyCachedSnapshots()
         applyConnectorStatesFromSettings()
+        onSettingsChanged?()
         return true
     }
 
@@ -157,6 +161,7 @@ final class StatusViewModel {
         settings = nextSettings
         applyCachedSnapshots()
         applyConnectorStatesFromSettings()
+        onSettingsChanged?()
         return true
     }
 
@@ -169,6 +174,7 @@ final class StatusViewModel {
         if previousConnectorSettings != settings.connectors {
             applyConnectorStatesFromSettings()
         }
+        onSettingsChanged?()
         return true
     }
 
@@ -195,6 +201,7 @@ final class StatusViewModel {
         cache = nextCache
         applyCachedSnapshots()
         applyConnectorStatesFromSettings()
+        onSettingsChanged?()
     }
 
     func connectClaudeCode() async {
@@ -206,6 +213,7 @@ final class StatusViewModel {
             nextSettings.connectors.claudeCode.isPaused = false
             guard await settingsStore.save(nextSettings) else { return }
             settings = nextSettings
+            onSettingsChanged?()
             connectorState = .connected
             connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .connected)
         }
@@ -222,6 +230,7 @@ final class StatusViewModel {
             nextSettings.connectors.codex.isPaused = false
             guard await settingsStore.save(nextSettings) else { return }
             settings = nextSettings
+            onSettingsChanged?()
             codexConnectorState = .connected
             codexConnectorStatusMessage = CodexConnectorSetupCopy.title(for: .connected)
         }

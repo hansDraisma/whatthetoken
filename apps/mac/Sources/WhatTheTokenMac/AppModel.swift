@@ -26,7 +26,15 @@ final class AppModel {
         let directory = applicationSupportDirectory()
         let settingsStore = JSONFileAppSettingsStore(url: directory.appendingPathComponent("settings.json"))
         let cacheStore = JSONFileSnapshotCacheStore(url: directory.appendingPathComponent("snapshot-cache.json"))
-        return AppModel(viewModel: .live(settingsStore: settingsStore, cacheStore: cacheStore))
+        let notificationStateStore = JSONFileNotificationStateStore(url: directory.appendingPathComponent("notification-state.json"))
+        return AppModel(
+            viewModel: .live(
+                settingsStore: settingsStore,
+                cacheStore: cacheStore,
+                notificationStateStore: notificationStateStore,
+                notificationDelivery: UserNotificationDelivery()
+            )
+        )
     }
 
     private static func applicationSupportDirectory() -> URL {

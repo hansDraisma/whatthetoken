@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 
+@MainActor
 @Observable
 final class StatusViewModel {
     var snapshots: [UsageSnapshot]
@@ -11,6 +12,52 @@ final class StatusViewModel {
     private let claudeRefresher: ClaudeConnectorRefreshing?
     private let claudeVersionProvider: ClaudeVersionProviding?
     private let codexRefresher: CodexConnectorRefreshing?
+    private(set) var lastClaudeRefreshAt: Date?
+    private(set) var lastCodexRefreshAt: Date?
+    private(set) var isRefreshAllInFlight = false
+
+    var isAnyRefreshing: Bool {
+        connectorState == .checking
+            || codexConnectorState == .checking
+            || isRefreshAllInFlight
+    }
+
+    var lastUpdatedAt: Date? {
+        switch (lastClaudeRefreshAt, lastCodexRefreshAt) {
+        case let (claude?, codex?):
+            return min(claude, codex)
+        case let (claude?, nil):
+            return claude
+        case let (nil, codex?):
+            return codex
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    func lastRefreshAt(for tab: ProviderTab) -> Date? {
+        switch tab {
+        case .claude:
+            return lastClaudeRefreshAt
+        case .codex:
+            return lastCodexRefreshAt
+        }
+    }
+
+    #if DEBUG
+    func testSet_lastClaudeRefreshAt(_ date: Date?) { lastClaudeRefreshAt = date }
+    func testSet_lastCodexRefreshAt(_ date: Date?) { lastCodexRefreshAt = date }
+    func testSet_isRefreshAllInFlight(_ value: Bool) { isRefreshAllInFlight = value }
+    func testSet_connectorStateToChecking() { connectorState = .checking }
+    func testSet_codexConnectorStateToChecking() { codexConnectorState = .checking }
+    #endif
+
+    enum RefreshReason: Equatable, Sendable {
+        case popoverOpened
+        case manual
+        case timerTick
+        case retry
+    }
 
     var snapshotSections: [UsageSnapshotSection] {
         Self.snapshotSections(for: snapshots)
@@ -36,11 +83,24 @@ final class StatusViewModel {
         self.codexConnectorStatusMessage = codexConnectorStatusMessage
     }
 
-    @MainActor
     func connectClaudeCode() async {
-        guard connectorState != .checking else {
-            return
+        guard connectorState != .checking else { return }
+
+        var attempted = false
+        var didEnterChecking = false
+        let previousState = connectorState
+        let previousMessage = connectorStatusMessage
+        defer {
+            if attempted && Task.isCancelled {
+                if didEnterChecking && connectorState == .checking {
+                    connectorState = previousState
+                    connectorStatusMessage = previousMessage
+                }
+            } else if attempted {
+                lastClaudeRefreshAt = Date()
+            }
         }
+        attempted = true
 
         guard let claudeRefresher else {
             connectorState = .notConnected
@@ -49,7 +109,7 @@ final class StatusViewModel {
         }
 
         if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
-            snapshots = []
+            replaceSnapshots(matching: { $0.provider == "anthropic" && $0.product == "claude_code" }, with: [])
             connectorState = .missingClaudeCli
             connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
             return
@@ -57,24 +117,40 @@ final class StatusViewModel {
 
         connectorState = .checking
         connectorStatusMessage = "Checking Claude Code"
+        didEnterChecking = true
 
         do {
             let result = try await claudeRefresher.refresh()
+            guard !Task.isCancelled else { return }
             replaceSnapshots(matching: { $0.provider == "anthropic" && $0.product == "claude_code" }, with: result.snapshots)
             connectorState = Self.setupState(for: result.status.source.state)
             connectorStatusMessage = result.status.message
         } catch {
+            guard !Task.isCancelled else { return }
             replaceSnapshots(matching: { $0.provider == "anthropic" && $0.product == "claude_code" }, with: [])
             connectorState = .networkError
             connectorStatusMessage = "Claude Code usage could not be refreshed"
         }
     }
 
-    @MainActor
     func connectCodex() async {
-        guard codexConnectorState != .checking else {
-            return
+        guard codexConnectorState != .checking else { return }
+
+        var attempted = false
+        var didEnterChecking = false
+        let previousState = codexConnectorState
+        let previousMessage = codexConnectorStatusMessage
+        defer {
+            if attempted && Task.isCancelled {
+                if didEnterChecking && codexConnectorState == .checking {
+                    codexConnectorState = previousState
+                    codexConnectorStatusMessage = previousMessage
+                }
+            } else if attempted {
+                lastCodexRefreshAt = Date()
+            }
         }
+        attempted = true
 
         guard let codexRefresher else {
             codexConnectorState = .notConnected
@@ -84,20 +160,33 @@ final class StatusViewModel {
 
         codexConnectorState = .checking
         codexConnectorStatusMessage = "Checking Codex"
+        didEnterChecking = true
 
         do {
             let result = try await codexRefresher.refresh()
+            guard !Task.isCancelled else { return }
             replaceSnapshots(matching: { $0.provider == "openai" && $0.product == "codex" }, with: result.snapshots)
             codexConnectorState = Self.codexSetupState(for: result.status.source.state)
             codexConnectorStatusMessage = result.status.message
         } catch {
+            guard !Task.isCancelled else { return }
             replaceSnapshots(matching: { $0.provider == "openai" && $0.product == "codex" }, with: [])
             codexConnectorState = .networkError
             codexConnectorStatusMessage = "Codex usage could not be refreshed"
         }
     }
 
-    static func loadFixtureData() throws -> Data {
+    func refreshAll(reason: RefreshReason) async {
+        guard !isRefreshAllInFlight else { return }
+        isRefreshAllInFlight = true
+        defer { isRefreshAllInFlight = false }
+
+        await connectClaudeCode()
+        guard !Task.isCancelled else { return }
+        await connectCodex()
+    }
+
+    nonisolated static func loadFixtureData() throws -> Data {
         guard let url = Bundle.module.url(forResource: "usage-snapshot.fixture", withExtension: "json") else {
             throw FixtureError.missingFixture
         }
@@ -105,7 +194,7 @@ final class StatusViewModel {
         return try Data(contentsOf: url)
     }
 
-    static func loadFixtureSnapshot() throws -> UsageSnapshot {
+    nonisolated static func loadFixtureSnapshot() throws -> UsageSnapshot {
         let data = try loadFixtureData()
         return try JSONDecoder().decode(UsageSnapshot.self, from: data)
     }

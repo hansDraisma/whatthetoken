@@ -6,6 +6,7 @@ import AppKit
 
 enum MacAppActivationPolicy: Equatable, Sendable {
     case regular
+    case accessory
 }
 
 @MainActor
@@ -16,16 +17,27 @@ protocol MacApplicationActivating: AnyObject {
 
 enum MacAppLauncher {
     @MainActor
+    static func configureLaunch(
+        arguments: [String] = CommandLine.arguments,
+        application: MacApplicationActivating = SystemMacApplication.shared
+    ) {
+        if ClaudeConnectorSmokeCommand.shouldRun(arguments: arguments) { return }
+        if CodexConnectorSmokeCommand.shouldRun(arguments: arguments) { return }
+
+        if arguments.contains("--developer-window") {
+            application.setActivationPolicy(.regular)
+            application.activateIgnoringOtherApps()
+        } else {
+            application.setActivationPolicy(.accessory)
+        }
+    }
+
+    @MainActor
     static func configureForInteractiveLaunch(
         arguments: [String] = CommandLine.arguments,
         application: MacApplicationActivating = SystemMacApplication.shared
     ) {
-        guard !ClaudeConnectorSmokeCommand.shouldRun(arguments: arguments) else {
-            return
-        }
-
-        application.setActivationPolicy(.regular)
-        application.activateIgnoringOtherApps()
+        configureLaunch(arguments: arguments, application: application)
     }
 }
 
@@ -40,6 +52,8 @@ private final class SystemMacApplication: MacApplicationActivating {
         switch policy {
         case .regular:
             NSApplication.shared.setActivationPolicy(.regular)
+        case .accessory:
+            NSApplication.shared.setActivationPolicy(.accessory)
         }
         #endif
     }

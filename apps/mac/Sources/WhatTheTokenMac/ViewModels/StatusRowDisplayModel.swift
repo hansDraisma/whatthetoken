@@ -51,10 +51,13 @@ struct StatusRowDisplayModel: Equatable, Sendable {
     init(
         snapshot: UsageSnapshot,
         sectionDefault: StatusSectionDefault?,
-        now: Date
+        now: Date,
+        providerAvailability: ProviderAvailability = .available
     ) {
         let state = StatusUsageState(snapshot: snapshot)
         let balanceOnly = Self.isBalanceOnly(snapshot: snapshot)
+        let emptyFallbackCredits = Self.isFallbackCredits(snapshot) && state == .empty
+        let neutralEmptyFallback = emptyFallbackCredits && providerAvailability != .critical
         id = snapshot.id
         name = Self.windowName(for: snapshot)
         resetHint = StatusRowCopy.resetHint(resetAt: snapshot.resetAt, now: now)
@@ -63,9 +66,13 @@ struct StatusRowDisplayModel: Equatable, Sendable {
         progressValue = Self.progressValue(snapshot: snapshot)
         self.state = state
         statusWord = StatusRowCopy.statusWord(state: state)
-        heroTintsRed = !balanceOnly && (state == .critical || state == .empty)
-        showsBar = Self.showsBar(snapshot: snapshot)
-        showsStatus = !balanceOnly
+        if emptyFallbackCredits {
+            heroTintsRed = providerAvailability == .critical
+        } else {
+            heroTintsRed = !balanceOnly && (state == .critical || state == .empty)
+        }
+        showsBar = neutralEmptyFallback ? false : Self.showsBar(snapshot: snapshot)
+        showsStatus = neutralEmptyFallback ? false : !balanceOnly
         badges = Self.badges(snapshot: snapshot, sectionDefault: sectionDefault)
         staleReason = snapshot.staleReason
     }
@@ -132,6 +139,11 @@ struct StatusRowDisplayModel: Equatable, Sendable {
             && snapshot.used == nil
             && snapshot.limit == nil
             && snapshot.remaining != nil
+    }
+
+    private static func isFallbackCredits(_ snapshot: UsageSnapshot) -> Bool {
+        snapshot.poolKey == "anthropic_claude_extra_usage"
+            || snapshot.poolKey == "openai_codex_credits"
     }
 
     private static func badges(

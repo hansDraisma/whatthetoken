@@ -473,6 +473,91 @@ private func sensitiveKeyMatches(
 }
 
 @MainActor
+@Test func pauseConnectorKeepsCachedSnapshotsButSkipsRefresh() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1))
+    let counter = Counter()
+    let vm = StatusViewModel(
+        settings: settings,
+        cache: cache,
+        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    )
+
+    await vm.loadPersistedState()
+    await vm.setConnector(.claude, paused: true)
+    await vm.refreshAll(reason: .manual)
+
+    #expect(vm.snapshots.contains(where: CachedProviderID.claude.snapshotPredicate))
+    #expect(counter.value == 0)
+}
+
+@MainActor
+@Test func disconnectWhilePausedRemovesProviderCache() async {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    settings.connectors.codex.isPaused = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1))
+    let cacheStore = InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    let settingsStore = InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
+    let vm = StatusViewModel(settingsStore: settingsStore, cacheStore: cacheStore)
+
+    await vm.loadPersistedState()
+    await vm.disconnect(.codex)
+
+    #expect(vm.settings.connectors.codex.isEnabled == false)
+    #expect(vm.settings.connectors.codex.isPaused == false)
+    #expect(vm.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate) == false)
+}
+
+@MainActor
+@Test func pausedConnectorShowsPausedStatusWhileKeepingCachedSnapshots() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.claudeCode.isPaused = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1))
+    let vm = StatusViewModel(
+        settings: settings,
+        cache: cache,
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.snapshots.contains(where: CachedProviderID.claude.snapshotPredicate))
+    #expect(vm.connectorState == .connected)
+    #expect(vm.connectorStatusMessage == "Claude Code paused")
+}
+
+@MainActor
+@Test func successfulManualRefreshClearsProviderBackoff() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.recordFailure(for: .claude, code: .network, message: "Network", now: Date(timeIntervalSince1970: 1))
+    let cacheStore = InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    let vm = StatusViewModel(
+        settings: settings,
+        claudeRefresher: NoopClaudeRefresher(),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        cacheStore: cacheStore,
+        now: { Date(timeIntervalSince1970: 2) }
+    )
+
+    await vm.refreshAll(reason: .manual)
+    let saved = await cacheStore.load()
+
+    #expect(saved.lastErrorByProvider[CachedProviderID.claude.rawValue] == nil)
+}
+
+@MainActor
 @Test func disconnectKeepsConsentWhenCacheWipeCannotBePersisted() async throws {
     var settings = AppSettings.defaults
     settings.connectors.codex.isEnabled = true

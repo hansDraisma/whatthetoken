@@ -67,11 +67,31 @@ import Testing
 
         let stale = cache.snapshotsEvaluatingStaleness(
             now: ISO8601DateFormatter().date(from: "2026-05-07T01:01:00Z")!,
-            staleAfterMinutes: 60
+            policy: SnapshotStalePolicy(staleAfterMinutes: 60)
         )
 
         #expect(stale.first?.confidence == "stale")
         #expect(stale.first?.staleReason == "Last update was 61 minutes ago.")
+    }
+
+    @Test func stalePolicyForAutoRefreshUsesMaxOfTwoIntervalsAndFifteenMinutes() {
+        var fiveMinuteSettings = AppSettings.defaults
+        fiveMinuteSettings.refresh.autoRefreshEnabled = true
+        fiveMinuteSettings.refresh.intervalSeconds = 300
+
+        var twentyMinuteSettings = AppSettings.defaults
+        twentyMinuteSettings.refresh.autoRefreshEnabled = true
+        twentyMinuteSettings.refresh.intervalSeconds = 1_200
+
+        #expect(SnapshotStalePolicy.from(settings: fiveMinuteSettings).staleAfterMinutes == 15)
+        #expect(SnapshotStalePolicy.from(settings: twentyMinuteSettings).staleAfterMinutes == 40)
+    }
+
+    @Test func stalePolicyForManualOnlyUsesSixtyMinutes() {
+        var settings = AppSettings.defaults
+        settings.refresh.autoRefreshEnabled = false
+
+        #expect(SnapshotStalePolicy.from(settings: settings).staleAfterMinutes == 60)
     }
 
     @Test func cachedJSONDoesNotContainSensitiveKeys() throws {

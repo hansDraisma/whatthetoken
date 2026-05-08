@@ -14,12 +14,12 @@ import Testing
     #expect(snapshot.source.parserVersion == "fixture-v1")
 }
 
-@Test func sectionTrustLineHoistsConfidenceConnectorLabelAndUpdatedTime() throws {
+@Test func sectionTrustLineHoistsConfidenceConnectorLabelOnly() throws {
     let snapshot = try StatusViewModel.loadFixtureSnapshot()
     let section = StatusSectionDisplayModel(snapshots: [snapshot], now: Date())
-    let expected = localUpdatedLabel(for: snapshot.lastUpdatedAt)
 
-    #expect(section.trustLine == "Verified by Fixture · \(expected)")
+    #expect(section.trustLine == "Verified by Fixture")
+    #expect(section.trustLine?.contains("Updated") == false)
 }
 
 @Test func fixtureJSONDoesNotContainSensitiveKeys() throws {
@@ -85,18 +85,6 @@ private func sensitiveKeyMatches(
     }
 
     return []
-}
-
-private func localUpdatedLabel(for isoString: String) -> String {
-    let fractional = ISO8601DateFormatter()
-    fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let plain = ISO8601DateFormatter()
-    plain.formatOptions = [.withInternetDateTime]
-    let date = fractional.date(from: isoString) ?? plain.date(from: isoString)!
-    let formatter = DateFormatter()
-    formatter.dateFormat = "HH:mm"
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    return "Updated \(formatter.string(from: date))"
 }
 
 @MainActor

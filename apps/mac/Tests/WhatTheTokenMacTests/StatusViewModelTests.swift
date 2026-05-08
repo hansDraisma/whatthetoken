@@ -324,3 +324,102 @@ private func localUpdatedLabel(for isoString: String) -> String {
     #expect(vm.codexConnectorState == .connected)
     #expect(vm.codexConnectorStatusMessage == "Codex connected")
 }
+
+@MainActor
+@Test func loadPersistedStateAppliesSettingsAndEnabledCachedSnapshots() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache)),
+        now: { ISO8601DateFormatter().date(from: "2026-05-07T00:10:00Z")! }
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.settings.connectors.claudeCode.isEnabled == true)
+    #expect(vm.connectorState == .connected)
+    #expect(vm.snapshots.map(\.id) == [UsageSnapshotFixture.claudeSample().id])
+}
+
+@MainActor
+@Test func loadPersistedStateDoesNotRenderDisabledProviderCache() async {
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.settings.connectors.codex.isEnabled == false)
+    #expect(vm.snapshots.isEmpty)
+    #expect(vm.codexConnectorState == .notConnected)
+}
+
+@MainActor
+@Test func loadPersistedStateRestoresSanitizedErrorStateWithCachedSnapshots() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+    cache.recordFailure(
+        for: .claude,
+        code: .network,
+        message: "Claude Code usage could not be refreshed",
+        now: Date(timeIntervalSince1970: 1_100)
+    )
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache)),
+        now: { Date(timeIntervalSince1970: 1_120) }
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.connectorState == .networkError)
+    #expect(vm.connectorStatusMessage == "Claude Code usage could not be refreshed")
+    #expect(vm.snapshots.map(\.id) == [UsageSnapshotFixture.claudeSample().id])
+}
+
+@MainActor
+@Test func setConnectorEnabledPersistsConsentWithoutRefreshing() async {
+    let settingsStore = InMemoryAppSettingsStore()
+    let refresher = RecordingClaudeRefresher()
+    let vm = StatusViewModel(
+        claudeRefresher: refresher,
+        settingsStore: settingsStore,
+        cacheStore: InMemorySnapshotCacheStore()
+    )
+
+    await vm.setConnector(.claude, enabled: true)
+    let persisted = await settingsStore.load()
+
+    #expect(persisted.connectors.claudeCode.isEnabled == true)
+    #expect(vm.connectorState == .connected)
+    #expect(vm.snapshots.isEmpty)
+}
+
+@MainActor
+@Test func disconnectClearsConsentAndProviderCache() async {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))
+    let cacheStore = InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    let settingsStore = InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
+    let vm = StatusViewModel(settingsStore: settingsStore, cacheStore: cacheStore)
+
+    await vm.loadPersistedState()
+    await vm.disconnect(.codex)
+
+    let persistedSettings = await settingsStore.load()
+    let persistedCache = await cacheStore.load()
+    #expect(persistedSettings.connectors.codex.isEnabled == false)
+    #expect(!persistedCache.snapshots.contains { $0.provider == "openai" })
+    #expect(vm.codexConnectorState == .notConnected)
+}

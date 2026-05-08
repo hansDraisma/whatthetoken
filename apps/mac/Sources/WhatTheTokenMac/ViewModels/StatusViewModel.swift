@@ -134,6 +134,13 @@ final class StatusViewModel {
         applyConnectorStatesFromSettings()
     }
 
+    func saveSettings(_ newSettings: AppSettings) async {
+        settings = newSettings
+        await settingsStore.save(settings)
+        applyCachedSnapshots()
+        applyConnectorStatesFromSettings()
+    }
+
     func disconnect(_ provider: CachedProviderID) async {
         await setConnector(provider, enabled: false)
         cache.removeProvider(provider)

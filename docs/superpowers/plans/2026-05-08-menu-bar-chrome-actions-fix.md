@@ -4,7 +4,7 @@
 
 **Goal:** Fix the popover overflow menu's Settings and About items so they actually open / show in `.accessory` activation mode. Today, clicking "Settings…" does nothing and "About WhatTheToken" can render behind other windows.
 
-**Architecture:** Two narrow changes in `WhatTheTokenApp.swift`. Adopt SwiftUI's macOS 14 `@Environment(\.openSettings)` for the Settings flow (canonical, avoids string selectors), and activate the app *before* dispatching the action in both Settings and About paths. Quit is unaffected — `terminate(nil)` works regardless of activation state.
+**Architecture:** Three narrow changes across `WhatTheTokenApp.swift` and `Views/Popover/PopoverFooterView.swift`. Adopt SwiftUI's macOS 14 `@Environment(\.openSettings)` for the Settings flow (canonical, avoids string selectors), and activate the app *before* dispatching the action in **all three** affected paths: Settings, About, and (DEBUG) Open Developer Window. Quit is unaffected — `terminate(nil)` works regardless of activation state.
 
 **Tech Stack:** Swift 6.0, SwiftUI (`@Environment(\.openSettings)`, `Settings { … }` scene), AppKit interop (`NSApplication.shared.activate(ignoringOtherApps:)`, `orderFrontStandardAboutPanel`).
 
@@ -37,7 +37,7 @@ This plan fixes both by activating first and switching Settings to the SwiftUI-b
 
 ```
 apps/mac/Sources/WhatTheTokenMac/
-  WhatTheTokenApp.swift                              # MODIFY (Tasks 1, 2)
+  WhatTheTokenApp.swift                              # MODIFY (Task 1)
   Views/
     Popover/
       PopoverFooterView.swift                        # MODIFY (Task 2)
@@ -131,7 +131,15 @@ struct WhatTheTokenApp: App {
 
     private var developerWindowOpener: (() -> Void)? {
         #if DEBUG
-        return { openWindow(id: "developer") }
+        let openWindow = self.openWindow
+        return {
+            #if canImport(AppKit)
+            // Activate before opening so the developer window comes to front
+            // in `.accessory` mode, same as Settings and About.
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            #endif
+            openWindow(id: "developer")
+        }
         #else
         return nil
         #endif
@@ -139,7 +147,7 @@ struct WhatTheTokenApp: App {
 }
 ```
 
-The old `private func openSettings()` is removed entirely. The `PopoverRootView` call site now passes `openSettingsAction` (the new helper) — the parameter name `onOpenSettings` is unchanged so no upstream change is needed.
+The old `private func openSettings()` is removed entirely. The `PopoverRootView` call site now passes `openSettingsAction` (the new helper) — the parameter name `onOpenSettings` is unchanged so no upstream change is needed. The `developerWindowOpener` mirrors the activate-then-open pattern.
 
 - [ ] **Step 3: Build to confirm no regressions**
 

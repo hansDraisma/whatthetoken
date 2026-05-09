@@ -4,9 +4,10 @@ struct MenuBarStatusLabel: View {
     let viewModel: StatusViewModel
 
     var body: some View {
+        let isCritical = PopoverChromeState.hasCriticalProvider(viewModel: viewModel)
         Label(
-            PopoverChromeState.menuBarTitle(viewModel: viewModel),
-            systemImage: PopoverChromeState.menuBarSystemImage(viewModel: viewModel)
+            PopoverChromeState.menuBarTitle(isCritical: isCritical),
+            systemImage: PopoverChromeState.menuBarSystemImage(isCritical: isCritical)
         )
     }
 }

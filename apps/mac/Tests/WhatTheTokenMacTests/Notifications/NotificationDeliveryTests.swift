@@ -24,4 +24,19 @@ import Testing
 
         #expect(await delivery.deliveredIntents == [intent])
     }
+
+    @Test func userNotificationDeliveryFailsClosedWhenNotificationCenterIsUnavailable() async {
+        let delivery = UserNotificationDelivery(isNotificationCenterAvailable: { false })
+        let intent = NotificationIntent(
+            id: "test",
+            provider: .claude,
+            level: .warning,
+            title: "Claude Code is below 20% remaining",
+            body: "Claude Code is below 20% remaining. Verified from local Claude Code usage status."
+        )
+
+        #expect(await delivery.authorizationStatus() == .denied)
+        #expect(await delivery.requestAuthorization() == .denied)
+        await delivery.deliver([intent])
+    }
 }

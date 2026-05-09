@@ -19,10 +19,6 @@ struct ConnectorsView: View {
                     ),
                     connectionActionRole: nil,
                     isConnectionActionDisabled: viewModel.connectorState == .checking,
-                    refreshActionTitle: viewModel.settings.connectors.claudeCode.isEnabled
-                        ? claudeActionTitle(for: viewModel.connectorState)
-                        : nil,
-                    isRefreshActionDisabled: viewModel.connectorState == .checking || viewModel.settings.connectors.claudeCode.isPaused,
                     disconnectActionTitle: viewModel.settings.connectors.claudeCode.isEnabled
                         ? connectorDisconnectActionTitle(for: .claude)
                         : nil,
@@ -37,10 +33,6 @@ struct ConnectorsView: View {
                             let viewModel = self.viewModel
                             Task { await viewModel.setConnector(.claude, paused: true) }
                         }
-                    },
-                    refreshAction: {
-                        let viewModel = self.viewModel
-                        Task { await viewModel.connectClaudeCode() }
                     },
                     disconnectAction: {
                         pendingDisconnect = .claude
@@ -59,10 +51,6 @@ struct ConnectorsView: View {
                     ),
                     connectionActionRole: nil,
                     isConnectionActionDisabled: viewModel.codexConnectorState == .checking,
-                    refreshActionTitle: viewModel.settings.connectors.codex.isEnabled
-                        ? codexActionTitle(for: viewModel.codexConnectorState)
-                        : nil,
-                    isRefreshActionDisabled: viewModel.codexConnectorState == .checking || viewModel.settings.connectors.codex.isPaused,
                     disconnectActionTitle: viewModel.settings.connectors.codex.isEnabled
                         ? connectorDisconnectActionTitle(for: .codex)
                         : nil,
@@ -78,10 +66,6 @@ struct ConnectorsView: View {
                             Task { await viewModel.setConnector(.codex, paused: true) }
                         }
                     },
-                    refreshAction: {
-                        let viewModel = self.viewModel
-                        Task { await viewModel.connectCodex() }
-                    },
                     disconnectAction: {
                         pendingDisconnect = .codex
                     }
@@ -89,7 +73,7 @@ struct ConnectorsView: View {
             }
 
             Section("Refresh") {
-                Toggle("Auto-refresh while popover is open", isOn: Binding(
+                Toggle("Auto-refresh while app is running", isOn: Binding(
                     get: { viewModel.settings.refresh.autoRefreshEnabled },
                     set: { enabled in
                         var settings = viewModel.settings
@@ -151,13 +135,13 @@ struct ConnectorsView: View {
                             var settings = viewModel.settings
                             settings.notifications.warningThreshold = value
                             if settings.notifications.criticalThreshold >= value {
-                                settings.notifications.criticalThreshold = max(value - 0.01, 0.01)
+                                settings.notifications.criticalThreshold = max(value - NotificationThresholdSteps.critical, 0.01)
                             }
                             Task { await viewModel.saveSettings(settings) }
                         }
                     ),
                     in: 0.10...0.50,
-                    step: 0.05
+                    step: NotificationThresholdSteps.warning
                 )
                 .disabled(!viewModel.settings.notifications.isEnabled)
 
@@ -169,13 +153,13 @@ struct ConnectorsView: View {
                             var settings = viewModel.settings
                             settings.notifications.criticalThreshold = value
                             if settings.notifications.warningThreshold <= value {
-                                settings.notifications.warningThreshold = min(value + 0.01, 0.50)
+                                settings.notifications.warningThreshold = NotificationThresholdSteps.warningStepAbove(value)
                             }
                             Task { await viewModel.saveSettings(settings) }
                         }
                     ),
                     in: 0.01...0.25,
-                    step: 0.01
+                    step: NotificationThresholdSteps.critical
                 )
                 .disabled(!viewModel.settings.notifications.isEnabled)
             }
@@ -230,5 +214,15 @@ private extension CachedProviderID {
         case .codex:
             return "Codex rate-limit status"
         }
+    }
+}
+
+private enum NotificationThresholdSteps {
+    static let warning = 0.05
+    static let critical = 0.01
+
+    static func warningStepAbove(_ value: Double) -> Double {
+        let candidate = ((value / warning).rounded(.down) + 1) * warning
+        return min(candidate, 0.50)
     }
 }

@@ -3,15 +3,16 @@ import Testing
 
 @Suite struct MacChromeActionTests {
     @MainActor
-    @Test func openSettingsActivatesBeforeOpeningScene() {
+    @Test func openSettingsDismissesPopoverBeforeActivatingAndOpeningScene() {
         let recorder = ChromeActionRecorder()
 
         MacChromeActions.openSettings(
+            dismissPopover: { recorder.record("dismissPopover") },
             activate: { recorder.record("activate") },
             openSettings: { recorder.record("openSettings") }
         )
 
-        #expect(recorder.calls == ["activate", "openSettings"])
+        #expect(recorder.calls == ["dismissPopover", "activate", "openSettings"])
     }
 
     @MainActor

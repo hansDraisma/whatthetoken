@@ -96,25 +96,56 @@ extension PopoverChromeState {
     }
 
     @MainActor
+    static func menuBarTitle(isCritical: Bool) -> String {
+        isCritical ? "WhatTheToken - Critical" : "WhatTheToken"
+    }
+
+    @MainActor
+    static func menuBarSystemImage(isCritical: Bool) -> String {
+        isCritical ? "gauge.with.dots.needle.67percent" : "gauge"
+    }
+
+    @MainActor
     static func menuBarTitle(viewModel: StatusViewModel) -> String {
-        hasCriticalProvider(viewModel: viewModel) ? "WhatTheToken - Critical" : "WhatTheToken"
+        menuBarTitle(isCritical: hasCriticalProvider(viewModel: viewModel))
     }
 
     @MainActor
     static func menuBarSystemImage(viewModel: StatusViewModel) -> String {
-        hasCriticalProvider(viewModel: viewModel) ? "gauge.with.dots.needle.67percent" : "gauge"
+        menuBarSystemImage(isCritical: hasCriticalProvider(viewModel: viewModel))
     }
 
     @MainActor
-    private static func hasCriticalProvider(viewModel: StatusViewModel) -> Bool {
-        let claude = ProviderAvailability.from(
-            snapshots: viewModel.snapshots.filter(CachedProviderID.claude.snapshotPredicate),
-            tab: .claude
+    static func hasCriticalProvider(viewModel: StatusViewModel) -> Bool {
+        isProviderCritical(
+            viewModel: viewModel,
+            tab: .claude,
+            isPaused: viewModel.settings.connectors.claudeCode.isPaused
         )
-        let codex = ProviderAvailability.from(
-            snapshots: viewModel.snapshots.filter(CachedProviderID.codex.snapshotPredicate),
-            tab: .codex
+        || isProviderCritical(
+            viewModel: viewModel,
+            tab: .codex,
+            isPaused: viewModel.settings.connectors.codex.isPaused
         )
-        return claude == .critical || codex == .critical
+    }
+
+    @MainActor
+    private static func isProviderCritical(
+        viewModel: StatusViewModel,
+        tab: ProviderTab,
+        isPaused: Bool
+    ) -> Bool {
+        guard !isPaused else { return false }
+        let providerID = CachedProviderID.from(tab: tab)
+        let availability = ProviderAvailability.from(
+            snapshots: viewModel.snapshots.filter(providerID.snapshotPredicate),
+            tab: tab
+        )
+        switch availability {
+        case .critical, .criticalWithFallback, .fallbackOnly:
+            return true
+        case .available, .low, .stale:
+            return false
+        }
     }
 }

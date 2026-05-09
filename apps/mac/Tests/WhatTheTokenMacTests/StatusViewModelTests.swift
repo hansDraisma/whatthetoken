@@ -473,6 +473,76 @@ private func sensitiveKeyMatches(
 }
 
 @MainActor
+@Test func disconnectClearsProviderNotificationState() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
+    let codexKey = NotificationDedupeKey(provider: .codex, poolKey: "openai_codex_included", windowKey: "rolling_5h")
+    let claudeKey = NotificationDedupeKey(provider: .claude, poolKey: "anthropic_claude_subscription", windowKey: "rolling_5h")
+    var state = NotificationState.empty
+    state.records[codexKey.storageKey] = NotificationRecord(
+        key: codexKey,
+        lastNotifiedLevel: .critical,
+        lastNotifiedAt: Date(timeIntervalSince1970: 1),
+        lastObservedLevel: .critical,
+        recoveredAt: nil
+    )
+    state.records[claudeKey.storageKey] = NotificationRecord(
+        key: claudeKey,
+        lastNotifiedLevel: .warning,
+        lastNotifiedAt: Date(timeIntervalSince1970: 1),
+        lastObservedLevel: .warning,
+        recoveredAt: nil
+    )
+    let stateStore = InMemoryNotificationStateStore(data: try! JSONEncoder.notificationStateEncoder.encode(state))
+    let settingsStore = InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
+    let vm = StatusViewModel(settingsStore: settingsStore, notificationStateStore: stateStore)
+
+    await vm.loadPersistedState()
+    await vm.disconnect(.codex)
+
+    let persisted = await stateStore.load()
+    #expect(persisted.records[codexKey.storageKey] == nil)
+    #expect(persisted.records[claudeKey.storageKey] != nil)
+}
+
+@MainActor
+@Test func disconnectKeepsConsentWhenNotificationStateCannotBePersisted() async {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.codexSample()], for: .codex, at: Date(timeIntervalSince1970: 1_000))
+    let codexKey = NotificationDedupeKey(provider: .codex, poolKey: "openai_codex_included", windowKey: "rolling_5h")
+    var state = NotificationState.empty
+    state.records[codexKey.storageKey] = NotificationRecord(
+        key: codexKey,
+        lastNotifiedLevel: .critical,
+        lastNotifiedAt: Date(timeIntervalSince1970: 1),
+        lastObservedLevel: .critical,
+        recoveredAt: nil
+    )
+    let settingsStore = InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
+    let cacheStore = InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache))
+    let stateStore = FailingSaveNotificationStateStore(state: state)
+    let vm = StatusViewModel(
+        settingsStore: settingsStore,
+        cacheStore: cacheStore,
+        notificationStateStore: stateStore
+    )
+
+    await vm.loadPersistedState()
+    await vm.disconnect(.codex)
+
+    let persistedSettings = await settingsStore.load()
+    let persistedCache = await cacheStore.load()
+    #expect(vm.settings.connectors.codex.isEnabled == true)
+    #expect(persistedSettings.connectors.codex.isEnabled == true)
+    #expect(vm.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate))
+    #expect(persistedCache.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate))
+    #expect(vm.codexConnectorState == .connected)
+}
+
+@MainActor
 @Test func pauseConnectorKeepsCachedSnapshotsButSkipsRefresh() async {
     var settings = AppSettings.defaults
     settings.connectors.claudeCode.isEnabled = true
@@ -698,6 +768,33 @@ private func sensitiveKeyMatches(
 }
 
 @MainActor
+@Test func claudeRefreshEvaluatorIgnoresCachedCodexCriticalSnapshot() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
+    settings.notifications.isEnabled = true
+    settings.notifications.providerAlerts.claudeCode.isEnabled = true
+    settings.notifications.providerAlerts.codex.isEnabled = true
+    let cachedCodex = UsageSnapshotFixture.codexIncludedSample(remaining: 8, utilization: 0.92)
+    let claudeCritical = UsageSnapshotFixture.claudeIncludedSample(remaining: 5, utilization: 0.95)
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    let vm = StatusViewModel(
+        snapshots: [cachedCodex],
+        settings: settings,
+        claudeRefresher: SnapshotClaudeRefresher(snapshots: [claudeCritical]),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        notificationStateStore: InMemoryNotificationStateStore(),
+        notificationDelivery: delivery
+    )
+
+    await vm.refreshAll(reason: .manual)
+
+    let intents = await delivery.deliveredIntents
+    #expect(intents.contains(where: { $0.provider == .codex }) == false)
+    #expect(intents.contains(where: { $0.provider == .claude && $0.level == .critical }))
+}
+
+@MainActor
 @Test func loadPersistedStateSuppressesNotificationsWhenNotificationStateDecodeFails() async {
     var settings = AppSettings.defaults
     settings.connectors.codex.isEnabled = true
@@ -728,6 +825,22 @@ private func sensitiveKeyMatches(
 
     #expect(result == .granted)
     #expect(vm.settings.notifications.isEnabled == true)
+}
+
+@MainActor
+@Test func enableNotificationsPreservesUserDisabledProviderAlerts() async {
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    var settings = AppSettings.defaults
+    settings.notifications.providerAlerts.claudeCode.isEnabled = false
+    settings.notifications.providerAlerts.codex.isEnabled = false
+    let vm = StatusViewModel(settings: settings, notificationDelivery: delivery)
+
+    let result = await vm.setNotificationsEnabled(true)
+
+    #expect(result == .granted)
+    #expect(vm.settings.notifications.isEnabled == true)
+    #expect(vm.settings.notifications.providerAlerts.claudeCode.isEnabled == false)
+    #expect(vm.settings.notifications.providerAlerts.codex.isEnabled == false)
 }
 
 @MainActor
@@ -849,4 +962,113 @@ private func sensitiveKeyMatches(
 
     #expect(error?.consecutiveFailureCount == 3)
     #expect(error?.nextAutomaticRefreshAt == Date(timeIntervalSince1970: 4_600))
+}
+
+private final class FailingSaveNotificationStateStore: NotificationStateStore, @unchecked Sendable {
+    private let state: NotificationState
+
+    init(state: NotificationState) {
+        self.state = state
+    }
+
+    var didFallbackOnLoad: Bool {
+        get async { false }
+    }
+
+    func load() async -> NotificationState {
+        state
+    }
+
+    func save(_ state: NotificationState) async -> Bool {
+        return false
+    }
+}
+
+final class FlakyNotificationStateStore: NotificationStateStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var failNextSaves: Int
+    private var savedState = NotificationState.empty
+    private(set) var saveCallCount = 0
+
+    init(failingSaves: Int) {
+        self.failNextSaves = failingSaves
+    }
+
+    var didFallbackOnLoad: Bool {
+        get async { false }
+    }
+
+    func load() async -> NotificationState {
+        lock.withLock { savedState }
+    }
+
+    func save(_ state: NotificationState) async -> Bool {
+        lock.withLock {
+            saveCallCount += 1
+            if failNextSaves > 0 {
+                failNextSaves -= 1
+                return false
+            }
+            savedState = state
+            return true
+        }
+    }
+}
+
+@MainActor
+@Test func notificationStateSaveRetriesAfterTransientFailure() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.notifications.isEnabled = true
+    settings.notifications.providerAlerts.claudeCode.isEnabled = true
+    let stateStore = FlakyNotificationStateStore(failingSaves: 1)
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    var current = Date(timeIntervalSince1970: 1_000)
+    let vm = StatusViewModel(
+        settings: settings,
+        claudeRefresher: SnapshotClaudeRefresher(snapshots: [
+            UsageSnapshotFixture.claudeIncludedSample(remaining: 8, utilization: 0.92)
+        ]),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        notificationStateStore: stateStore,
+        notificationDelivery: delivery,
+        now: { current }
+    )
+
+    await vm.refreshAll(reason: StatusViewModel.RefreshReason.manual)
+    let firstPersisted = await stateStore.load()
+    #expect(firstPersisted.records.isEmpty)
+
+    current = Date(timeIntervalSince1970: 1_120)
+    await vm.refreshAll(reason: StatusViewModel.RefreshReason.manual)
+    let secondPersisted = await stateStore.load()
+    #expect(secondPersisted.records.isEmpty == false)
+}
+
+@MainActor
+@Test func notificationStateSaveDoesNotRetryWithinBackoffWindow() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.notifications.isEnabled = true
+    settings.notifications.providerAlerts.claudeCode.isEnabled = true
+    let stateStore = FlakyNotificationStateStore(failingSaves: 5)
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    var current = Date(timeIntervalSince1970: 1_000)
+    let vm = StatusViewModel(
+        settings: settings,
+        claudeRefresher: SnapshotClaudeRefresher(snapshots: [
+            UsageSnapshotFixture.claudeIncludedSample(remaining: 8, utilization: 0.92)
+        ]),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        notificationStateStore: stateStore,
+        notificationDelivery: delivery,
+        now: { current }
+    )
+
+    await vm.refreshAll(reason: StatusViewModel.RefreshReason.manual)
+    let initialCount = stateStore.saveCallCount
+    current = Date(timeIntervalSince1970: 1_010)
+    await vm.refreshAll(reason: StatusViewModel.RefreshReason.manual)
+
+    #expect(stateStore.saveCallCount == initialCount)
 }

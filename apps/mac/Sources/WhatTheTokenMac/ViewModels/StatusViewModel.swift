@@ -26,6 +26,8 @@ final class StatusViewModel {
     private(set) var hasLoadedPersistedState = false
     private var suppressCacheLoadNotifications = false
     private var lastBackgroundRefreshAtByProvider: [CachedProviderID: Date] = [:]
+    private var unsavedNotificationState = false
+    private var lastFailedNotificationStateSaveAt: Date?
     var onSettingsChanged: (@MainActor () -> Void)?
 
     var isAnyRefreshing: Bool {
@@ -223,14 +225,22 @@ final class StatusViewModel {
 
         var nextCache = cache
         nextCache.removeProvider(provider)
+        var nextNotificationState = notificationState
+        nextNotificationState.records = nextNotificationState.records.filter { $0.value.key.provider != provider }
         guard await cacheStore.save(nextCache) else { return }
         guard await settingsStore.save(nextSettings) else {
+            _ = await cacheStore.save(cache)
+            return
+        }
+        guard await notificationStateStore.save(nextNotificationState) else {
+            _ = await settingsStore.save(settings)
             _ = await cacheStore.save(cache)
             return
         }
 
         settings = nextSettings
         cache = nextCache
+        notificationState = nextNotificationState
         applyCachedSnapshots()
         applyConnectorStatesFromSettings()
         onSettingsChanged?()
@@ -318,7 +328,7 @@ final class StatusViewModel {
             if reason == .timerTick {
                 lastBackgroundRefreshAtByProvider[.claude] = lastClaudeRefreshAt
             }
-            await evaluateNotifications(suppressDelivery: false)
+            await evaluateNotifications(suppressDelivery: false, scopedTo: .claude)
         } catch {
             guard !Task.isCancelled else {
                 connectorState = previousState
@@ -362,7 +372,7 @@ final class StatusViewModel {
             if reason == .timerTick {
                 lastBackgroundRefreshAtByProvider[.codex] = lastCodexRefreshAt
             }
-            await evaluateNotifications(suppressDelivery: false)
+            await evaluateNotifications(suppressDelivery: false, scopedTo: .codex)
         } catch {
             guard !Task.isCancelled else {
                 codexConnectorState = previousState
@@ -541,16 +551,29 @@ final class StatusViewModel {
             : nil
     }
 
-    private func evaluateNotifications(suppressDelivery: Bool) async {
+    private func evaluateNotifications(
+        suppressDelivery: Bool,
+        scopedTo scopedProvider: CachedProviderID? = nil
+    ) async {
+        let previousState = notificationState
         let result = NotificationEvaluator.evaluate(
             snapshots: snapshots,
             settings: settings,
             state: notificationState,
             now: now(),
-            suppressDelivery: suppressDelivery || suppressCacheLoadNotifications
+            suppressDelivery: suppressDelivery || suppressCacheLoadNotifications,
+            scopedTo: scopedProvider
         )
         notificationState = result.state
-        _ = await notificationStateStore.save(result.state)
+        let stateChanged = result.state != previousState
+        let evaluatedAt = now()
+        let retryAllowed = lastFailedNotificationStateSaveAt.map { evaluatedAt.timeIntervalSince($0) >= 60 } ?? true
+        let shouldAttemptSave = stateChanged || (unsavedNotificationState && retryAllowed)
+        if shouldAttemptSave {
+            let saved = await notificationStateStore.save(result.state)
+            unsavedNotificationState = !saved
+            lastFailedNotificationStateSaveAt = saved ? nil : evaluatedAt
+        }
         if !result.intents.isEmpty {
             await notificationDelivery.deliver(result.intents)
         }

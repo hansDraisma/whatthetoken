@@ -8,11 +8,8 @@ struct ConnectorRowView: View {
     let connectionActionTitle: String
     let connectionActionRole: ButtonRole?
     let isConnectionActionDisabled: Bool
-    let refreshActionTitle: String?
-    let isRefreshActionDisabled: Bool
     let disconnectActionTitle: String?
     let connectionAction: () -> Void
-    let refreshAction: () -> Void
     let disconnectAction: (() -> Void)?
 
     var body: some View {
@@ -34,11 +31,6 @@ struct ConnectorRowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .trailing, spacing: 8) {
-                if let refreshActionTitle {
-                    Button(refreshActionTitle, action: refreshAction)
-                        .disabled(isRefreshActionDisabled)
-                }
-
                 Button(
                     connectionActionTitle,
                     role: connectionActionRole,

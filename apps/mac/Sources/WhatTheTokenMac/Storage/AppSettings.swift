@@ -21,8 +21,8 @@ struct AppSettings: Codable, Equatable, Sendable {
             warningThreshold: 0.20,
             criticalThreshold: 0.10,
             providerAlerts: ProviderAlertSettings(
-                claudeCode: ProviderAlertToggle(isEnabled: false),
-                codex: ProviderAlertToggle(isEnabled: false)
+                claudeCode: ProviderAlertToggle(isEnabled: true),
+                codex: ProviderAlertToggle(isEnabled: true)
             )
         ),
         menuBar: MenuBarSettings(displayMode: .statusIcon)
@@ -51,14 +51,14 @@ struct AppSettings: Codable, Equatable, Sendable {
                 claudeCode: ConnectorConsentSettings(isEnabled: v1.connectors.claudeCode.isEnabled, isPaused: false),
                 codex: ConnectorConsentSettings(isEnabled: v1.connectors.codex.isEnabled, isPaused: false)
             ),
-            refresh: v1.refresh,
+            refresh: RefreshSettings(autoRefreshEnabled: false, intervalSeconds: v1.refresh.intervalSeconds),
             notifications: NotificationSettings(
                 isEnabled: v1.notifications.isEnabled,
                 warningThreshold: warningThreshold,
                 criticalThreshold: v1.notifications.criticalThreshold,
                 providerAlerts: ProviderAlertSettings(
-                    claudeCode: ProviderAlertToggle(isEnabled: v1.connectors.claudeCode.isEnabled),
-                    codex: ProviderAlertToggle(isEnabled: v1.connectors.codex.isEnabled)
+                    claudeCode: ProviderAlertToggle(isEnabled: true),
+                    codex: ProviderAlertToggle(isEnabled: true)
                 )
             ),
             menuBar: v1.menuBar

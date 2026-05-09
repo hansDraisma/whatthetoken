@@ -318,9 +318,20 @@ Tasks:
 - Add DMG packaging script.
 - Add release checklist.
 - Publish signed/notarized free DMG through GitHub Releases.
-- Add manual update instructions before Sparkle is enabled.
-- Add Sparkle auto-update only after at least one stable signed release flow is proven.
+- Host the Public V1 Sparkle appcast on GitHub Pages from the repository `/docs` folder.
+- Add a manual Sparkle `Check for Updates` action for Public V1; keep automatic background checks and silent installs disabled.
+- Add Sparkle auto-update only after at least one stable signed release flow and manual signed update path are proven.
+- Add a long-term Stage 5D distribution item for an owned site/custom domain such as `whatthetoken.app`; do not move `SUFeedURL` away from GitHub Pages until a redirect and migration design exists for already-installed apps.
+- Extend the existing About panel in V1.x with build commit, Sparkle version, and license attribution.
 - Add launch-at-login with `SMAppService`.
+
+Stage 5A repo foundation is complete when release metadata, Xcode target, Sparkle-ready wiring, launch-at-login, scripts, release checklist, app icon, sandbox matrix, rollback rules, and tests are committed.
+
+Stage 5B credentialed rehearsal remains gated on maintainer Xcode setup, Developer ID certificate access, notarization profile, real archive/export, notarized DMG, Gatekeeper verification, and fresh-account smoke.
+
+Stage 5C public launch remains gated on GitHub Release publication, checksum publication, public docs, repository visibility scan, and Sparkle appcast publication only after signed update smoke passes.
+
+Stage 5D owned distribution remains a later refinement: evaluate a product site, custom domain, analytics-free download page, redirect policy, and appcast migration after Public V1 is stable on GitHub-hosted infrastructure.
 
 Exit criteria:
 

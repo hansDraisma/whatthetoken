@@ -167,7 +167,7 @@ import Testing
         let decoded = try AppSettings.decodeValidated(from: json)
 
         #expect(decoded.connectors.claudeCode.isEnabled)
-        #expect(decoded.refresh.autoRefreshEnabled)
+        #expect(decoded.refresh.autoRefreshEnabled == false)
         #expect(decoded.launchAtLogin.isEnabled == false)
     }
 

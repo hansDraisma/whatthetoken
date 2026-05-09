@@ -22,8 +22,12 @@
 - Apple notarization reference: `https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution`
 - Apple packaging reference: `https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution`
 - Apple disk image signing reference: `https://developer.apple.com/library/archive/technotes/tn2206/_index.html`
+- GitHub Releases reference: `https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases`
+- GitHub release asset link reference: `https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases`
+- GitHub Pages publishing source reference: `https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site`
 - Sparkle official setup reference: `https://sparkle-project.org/documentation/`
 - Sparkle official customization reference: `https://sparkle-project.org/documentation/customization/`
+- Sparkle publishing update reference: `https://sparkle-project.org/documentation/publishing/`
 
 ## Recommendation And Tradeoffs
 
@@ -31,13 +35,14 @@ Recommended Public V1 posture:
 
 - Ship a signed, notarized, stapled DMG through GitHub Releases.
 - Keep App Sandbox disabled for Public V1 unless the compatibility matrix passes.
-- Keep Sparkle packaged but inert for Public V1: no automatic checks, no silent installs, no visible `Check for Updates` UI, and no background network behavior.
-- Do not publish an appcast until Sparkle EdDSA custody, stable HTTPS hosting, and signed old-build to new-build update smoke are complete.
+- Host Sparkle's stable `appcast.xml` on GitHub Pages at `https://hansdraisma.github.io/whatthetoken/appcast.xml`.
+- Point appcast download URLs at the versioned DMG asset on GitHub Releases, for example `https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/WhatTheToken-0.1.0.dmg`.
+- Ship Sparkle manual update checks in Public V1 once the signed old-build to new-build smoke passes: visible `Check for Updates`, no silent installs, and no automatic background checks.
 - Treat the existing `package-app.sh` path as development-only and make that explicit in docs/tests.
 
 Tradeoffs:
 
-- This delays in-app updates, but avoids adding first-launch network behavior and updater prompts before the first trusted public install path is proven.
+- Manual Sparkle checks give users a real update path without first-launch network behavior or silent installs.
 - Shipping without App Sandbox reduces platform isolation, but preserves local developer-tool interoperability. Hardened runtime, notarization, explicit connector consent, and public source review carry the Public V1 trust story.
 - Requiring a real Xcode archive/export rehearsal before launch costs maintainer time, but it is the only reliable proof that Sparkle helpers, nested code signing, asset catalogs, hardened runtime, and notarization work together.
 - Keeping Sparkle private key generation outside the repo prevents automation of one step, but that is the correct security boundary. The repo should document the exact command and custody record; it should not hold private update-signing material.
@@ -49,6 +54,8 @@ Agent-executable in this workspace:
 - Add and wire the public app icon asset catalog.
 - Split release guard tests into focused files.
 - Add an unsigned Xcode archive smoke script, signed-DMG step, mount/layout verification, and a release rehearsal wrapper.
+- Pin Xcode Swift package resolution, verify CPU architectures, capture notarization logs, and enforce clean release provenance.
+- Add the simplest GitHub-hosted update channel: GitHub Releases for DMGs, GitHub Pages for `appcast.xml`, and manual Sparkle checks in the app.
 - Add sandbox compatibility, Sparkle key custody, rollback, and release docs.
 - Update tests so accidental Sparkle/network/appcast behavior cannot slip in.
 - Run Swift, TypeScript, plist, scheme, script dry-run, and documentation checks.
@@ -59,8 +66,9 @@ Maintainer-gated on the signing machine:
 - Select and install Developer ID Application certificate access.
 - Configure `NOTARY_KEYCHAIN_PROFILE`.
 - Generate and custody Sparkle EdDSA private key material in Keychain and a secure backup outside the repo.
+- Enable GitHub Pages from the `main` branch `/docs` folder.
 - Run real `xcodebuild archive` and `xcodebuild -exportArchive`.
-- Notarize, staple, verify Gatekeeper, install from the DMG on a fresh macOS account, and publish GitHub Release artifacts.
+- Notarize, staple, verify Gatekeeper, install from the DMG on a fresh macOS account, publish GitHub Release artifacts, publish `docs/appcast.xml`, and smoke test manual Sparkle update.
 
 ## File Structure
 
@@ -76,11 +84,21 @@ Maintainer-gated on the signing machine:
 - Modify: `apps/mac/WhatTheToken.xcodeproj/project.pbxproj` - add the asset catalog file reference and resource build phase entry.
 - Modify: `apps/mac/Packaging/Info.plist` - bind the compiled asset catalog icon with `CFBundleIconName = AppIcon`.
 - Create: `apps/mac/Scripts/smoke-archive-unsigned.sh` - local Xcode archive proof that does not require signing credentials.
+- Create: `apps/mac/Scripts/verify-release-provenance.sh` - clean source, exact tag, package-resolution, and release manifest guard.
 - Create: `apps/mac/Scripts/sign-dmg.sh` - Developer ID sign and verify the final DMG before notarization.
 - Create: `apps/mac/Scripts/rehearse-release.sh` - wrapper for dry-run, unsigned-smoke, and signed release rehearsal flows.
 - Modify: `apps/mac/Scripts/verify-release-artifacts.sh` - verify, mount, inspect, checksum, and detach the DMG.
+- Modify: `apps/mac/Scripts/notarize-dmg.sh` - capture notary submission JSON and sanitized notary log under ignored build artifacts.
 - Modify: `apps/mac/Scripts/package-app.sh` - label it as development-only in output/help comments.
+- Create: `apps/mac/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` - pinned Xcode Swift package resolution for Sparkle.
+- Modify: `apps/mac/Sources/WhatTheTokenMac/AppModel.swift` - own the Sparkle update controller.
+- Modify: `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift` - pass a manual update action into the popover.
+- Modify: `apps/mac/Sources/WhatTheTokenMac/Views/Popover/PopoverRootView.swift` - pass manual update action into the footer.
+- Modify: `apps/mac/Sources/WhatTheTokenMac/Views/Popover/PopoverFooterView.swift` - expose `Check for Updates` after release smoke enables it.
+- Create: `docs/.nojekyll` - keep GitHub Pages static for appcast hosting.
+- Create: `docs/appcast.xml` - generated Sparkle appcast committed only after release artifact publication.
 - Create: `docs/release/app-sandbox-compatibility-matrix.md` - explicit sandbox test matrix and Public V1 unsandboxed decision rule.
+- Create: `docs/release/github-hosting-and-updates.md` - exact GitHub Releases plus GitHub Pages hosting model.
 - Create: `docs/release/sparkle-key-custody.md` - Sparkle EdDSA generation, public-key embedding gate, appcast gate, and private-key custody record.
 - Create: `docs/release/rollback-and-hotfix.md` - build number, appcast, DMG, and GitHub Release rollback rules.
 - Modify: `docs/release/public-v1-checklist.md` - include app icon, sandbox, Sparkle, release rehearsal, rollback, and fresh-machine gates.
@@ -393,7 +411,8 @@ import Testing
                 "archive",
                 "-exportArchive",
                 "ExportOptions.DeveloperID.plist",
-                "DEVELOPER_ID_TEAM_ID"
+                "DEVELOPER_ID_TEAM_ID",
+                "lipo -verify_arch"
             ]
         ),
         (
@@ -408,6 +427,8 @@ import Testing
             "notarize-dmg.sh",
             [
                 "xcrun notarytool submit",
+                "xcrun notarytool log",
+                "--output-format json",
                 "xcrun stapler staple",
                 "NOTARY_KEYCHAIN_PROFILE"
             ]
@@ -417,6 +438,7 @@ import Testing
             [
                 "codesign --force --sign",
                 "DEVELOPER_ID_SIGNING_IDENTITY",
+                "DEVELOPER_ID_SIGNING_IDENTITY is required",
                 "hdiutil verify",
                 "codesign --verify"
             ]
@@ -431,8 +453,18 @@ import Testing
                 "hdiutil verify",
                 "hdiutil attach",
                 "hdiutil detach",
+                "lipo -verify_arch",
                 "CFBundleIconName",
                 "Assets.car"
+            ]
+        ),
+        (
+            "verify-release-provenance.sh",
+            [
+                "git status --porcelain",
+                "git rev-parse HEAD",
+                "git rev-parse \"refs/tags/v$VERSION\"",
+                "Package.resolved"
             ]
         ),
         (
@@ -455,6 +487,7 @@ import Testing
             "rehearse-release.sh",
             [
                 "smoke-archive-unsigned.sh",
+                "verify-release-provenance.sh",
                 "archive-release.sh",
                 "sign-dmg.sh",
                 "notarize-dmg.sh",
@@ -841,6 +874,7 @@ xcodebuild \
 APP_PATH="$ARCHIVE_PATH/Products/Applications/WhatTheToken.app"
 INFO_PLIST="$APP_PATH/Contents/Info.plist"
 ASSETS_CAR="$APP_PATH/Contents/Resources/Assets.car"
+BINARY_PATH="$APP_PATH/Contents/MacOS/WhatTheTokenMac"
 
 if [[ ! -d "$APP_PATH" ]]; then
     printf 'Archived app not found: %s\n' "$APP_PATH" >&2
@@ -856,6 +890,7 @@ fi
 /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST" | grep -Fx "$BUILD" >/dev/null
 /usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$INFO_PLIST" | grep -Fx "true" >/dev/null
 /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$INFO_PLIST" | grep -Fx "AppIcon" >/dev/null
+lipo -verify_arch arm64 x86_64 "$BINARY_PATH"
 
 if [[ ! -f "$ASSETS_CAR" ]]; then
     printf 'Compiled asset catalog not found: %s\n' "$ASSETS_CAR" >&2
@@ -874,7 +909,7 @@ Create `apps/mac/Scripts/sign-dmg.sh`:
 set -euo pipefail
 
 DMG_PATH=""
-SIGNING_IDENTITY="${DEVELOPER_ID_SIGNING_IDENTITY:-Developer ID Application}"
+SIGNING_IDENTITY="${DEVELOPER_ID_SIGNING_IDENTITY:-}"
 DRY_RUN=0
 
 usage() {
@@ -922,6 +957,11 @@ done
 if [[ -z "$DMG_PATH" ]]; then
     usage >&2
     exit 64
+fi
+
+if [[ "$DRY_RUN" -eq 0 && -z "$SIGNING_IDENTITY" ]]; then
+    printf 'DEVELOPER_ID_SIGNING_IDENTITY is required for DMG signing. Use the exact certificate name, for example "Developer ID Application: Hans Draisma (TEAMID)".\n' >&2
+    exit 65
 fi
 
 if [[ "$DRY_RUN" -eq 0 && ! -f "$DMG_PATH" ]]; then
@@ -1042,6 +1082,7 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
     spctl -a -vv -t exec "$COPY_DIR/WhatTheToken.app"
     /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$COPY_DIR/WhatTheToken.app/Contents/Info.plist" | grep -Fx "AppIcon" >/dev/null
     test -f "$COPY_DIR/WhatTheToken.app/Contents/Resources/Assets.car"
+    lipo -verify_arch arm64 x86_64 "$COPY_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac"
 else
     quote_command hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint /tmp/whatthetoken-dmg
     quote_command test -d /tmp/whatthetoken-dmg/WhatTheToken.app
@@ -1306,7 +1347,7 @@ git commit -m "docs(release): document app sandbox decision matrix"
 
 ---
 
-### Task 6: Document Sparkle Key Custody And Inert Public V1 Posture
+### Task 6: Document Sparkle Key Custody And Manual Public V1 Updates
 
 **Files:**
 - Create: `docs/release/sparkle-key-custody.md`
@@ -1321,11 +1362,11 @@ Create `docs/release/sparkle-key-custody.md`:
 ````markdown
 # Sparkle Key Custody
 
-Public V1 includes Sparkle as release architecture but keeps update behavior inert:
+Public V1 includes Sparkle with manual update checks:
 
 - `SUEnableAutomaticChecks` is `false`.
 - `SUAutomaticallyUpdate` is `false`.
-- No visible `Check for Updates` UI ships until signed old-build to new-build update smoke passes.
+- `Check for Updates` is visible after the signed old-build to new-build update smoke passes.
 - No appcast is published until release artifacts are already available and the update archive is signed.
 
 ## Maintainer Key Generation
@@ -1391,7 +1432,7 @@ Replace the `## Sparkle Appcast` section in `docs/release/public-v1-checklist.md
 ````markdown
 ## Sparkle Appcast
 
-Public V1 keeps Sparkle inert unless the signed update path has already passed. See `docs/release/sparkle-key-custody.md`.
+Public V1 uses manual Sparkle checks after the signed update path has passed. See `docs/release/sparkle-key-custody.md` and `docs/release/github-hosting-and-updates.md`.
 
 Before adding `SUPublicEDKey`:
 
@@ -1403,7 +1444,7 @@ test -n "$SPARKLE_BIN_DIR"
 
 Before adding `SUFeedURL`:
 
-- Confirm the appcast URL is stable HTTPS infrastructure controlled by the project.
+- Confirm GitHub Pages is enabled from `main` branch `/docs`.
 - Confirm the URL is not a local path, private attachment URL, release-candidate URL, or internal workspace URL.
 
 Generate an appcast entry only after a signed old-build to signed new-build update smoke test passes:
@@ -1411,7 +1452,9 @@ Generate an appcast entry only after a signed old-build to signed new-build upda
 ```bash
 apps/mac/Scripts/generate-appcast.sh \
   --updates-dir "$HOME/ReleaseArtifacts/WhatTheToken/updates" \
-  --download-url-prefix https://hansdraisma.github.io/whatthetoken/
+  --output docs/appcast.xml \
+  --download-url-prefix https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/ \
+  --release-notes-url https://github.com/hansDraisma/whatthetoken/releases/tag/v0.1.0
 ```
 
 Before publishing appcast changes:
@@ -1432,7 +1475,7 @@ mkdir -p "$HOME/ReleaseArtifacts/WhatTheToken/updates"
 Ensure `README.md` install/update language contains this exact posture:
 
 ```markdown
-Public V1 ships as a signed and notarized DMG attached to GitHub Releases. Updates are manual for Public V1: download the newest signed and notarized DMG from GitHub Releases and replace the installed app. Sparkle is prepared in the release target for a future manual update path, but automatic background checks and silent installs remain disabled.
+Public V1 ships as a signed and notarized DMG attached to GitHub Releases. Updates use a manual Sparkle check from the menu bar popover. The Sparkle appcast is hosted on GitHub Pages at `https://hansdraisma.github.io/whatthetoken/appcast.xml`; the appcast points to versioned DMG assets on GitHub Releases. Automatic background checks and silent installs remain disabled.
 ```
 
 - [ ] **Step 4: Verify metadata tests cover Sparkle safety**
@@ -1657,7 +1700,402 @@ git commit -m "docs(release): sync Public V1 readiness gates"
 
 ---
 
-### Task 9: Full Repo-Side Verification
+### Task 9: GitHub Hosting, Provenance, And Manual Sparkle Updates
+
+**Files:**
+- Create: `docs/.nojekyll`
+- Create: `docs/release/github-hosting-and-updates.md`
+- Create after release artifact publication: `docs/appcast.xml`
+- Create: `apps/mac/Scripts/verify-release-provenance.sh`
+- Modify: `apps/mac/Scripts/archive-release.sh`
+- Modify: `apps/mac/Scripts/notarize-dmg.sh`
+- Modify: `apps/mac/Scripts/rehearse-release.sh`
+- Modify: `apps/mac/Scripts/verify-release-artifacts.sh`
+- Modify: `apps/mac/Packaging/Info.plist`
+- Modify: `apps/mac/Sources/WhatTheTokenMac/AppModel.swift`
+- Modify: `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift`
+- Modify: `apps/mac/Sources/WhatTheTokenMac/Views/Popover/PopoverRootView.swift`
+- Modify: `apps/mac/Sources/WhatTheTokenMac/Views/Popover/PopoverFooterView.swift`
+- Modify: `apps/mac/Tests/WhatTheTokenMacTests/MacBundleMetadataTests.swift`
+- Modify: `apps/mac/Tests/WhatTheTokenMacTests/MacReleaseScriptTests.swift`
+
+- [ ] **Step 1: Document the simplest hosting model**
+
+Create `docs/.nojekyll` as an empty file.
+
+Create `docs/release/github-hosting-and-updates.md`:
+
+```markdown
+# GitHub Hosting And Updates
+
+WhatTheToken uses GitHub only for Public V1 distribution:
+
+- GitHub Releases hosts the signed, notarized, stapled DMG.
+- GitHub Pages hosts Sparkle's stable appcast feed.
+- No separate server is required.
+
+## Public URLs
+
+- Download page: `https://github.com/hansDraisma/whatthetoken/releases`
+- Versioned DMG asset pattern: `https://github.com/hansDraisma/whatthetoken/releases/download/v<version>/WhatTheToken-<version>.dmg`
+- Sparkle appcast: `https://hansdraisma.github.io/whatthetoken/appcast.xml`
+
+## GitHub Pages Setup
+
+In GitHub repository settings, enable Pages with:
+
+- Source: `Deploy from a branch`
+- Branch: `main`
+- Folder: `/docs`
+
+GitHub Pages must be enabled before shipping a build whose `SUFeedURL` points to `https://hansdraisma.github.io/whatthetoken/appcast.xml`.
+
+## Release Flow
+
+1. Build and verify `WhatTheToken-<version>.dmg`.
+2. Publish a GitHub Release tagged `v<version>`.
+3. Attach `WhatTheToken-<version>.dmg` and `WhatTheToken-<version>.dmg.sha256`.
+4. Stage the same DMG in a local update directory.
+5. Run Sparkle `generate_appcast` with the GitHub Release asset URL prefix for that version.
+6. Commit the generated appcast as `docs/appcast.xml`.
+7. Wait for GitHub Pages to publish the new appcast.
+8. Install the previous signed build and use `Check for Updates` to verify the app sees the new release.
+
+## Public V1 Update Behavior
+
+Public V1 ships with manual Sparkle checks enabled:
+
+- `SUFeedURL` points to GitHub Pages.
+- `SUPublicEDKey` contains the public EdDSA key generated by the maintainer.
+- `SUEnableAutomaticChecks` remains `false`.
+- `SUAutomaticallyUpdate` remains `false`.
+- The user chooses `Check for Updates` from the menu bar popover.
+
+The first public DMG cannot update to itself. It must include the feed URL and public key so it can update to the next release.
+```
+
+- [ ] **Step 2: Pin Xcode Swift package resolution**
+
+Run on an initialized Xcode installation:
+
+```bash
+xcodebuild -resolvePackageDependencies \
+  -project apps/mac/WhatTheToken.xcodeproj \
+  -scheme WhatTheToken
+test -f apps/mac/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+rg -n '"identity" : "sparkle"|"location" : "https://github.com/sparkle-project/Sparkle"' apps/mac/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+```
+
+Expected:
+
+- `Package.resolved` exists.
+- It records Sparkle and the exact resolved version/revision.
+
+- [ ] **Step 3: Add release provenance script**
+
+Create `apps/mac/Scripts/verify-release-provenance.sh`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$ROOT_DIR/../.." && pwd)"
+VERSION=""
+BUILD=""
+
+usage() {
+    printf 'Usage: %s --version <version> --build <build>\n' "$0"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version)
+            VERSION="${2:-}"
+            shift 2
+            ;;
+        --build)
+            BUILD="${2:-}"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            exit 64
+            ;;
+    esac
+done
+
+if [[ -z "$VERSION" || -z "$BUILD" ]]; then
+    usage >&2
+    exit 64
+fi
+
+cd "$REPO_ROOT"
+
+if [[ -n "$(git status --porcelain)" ]]; then
+    printf 'Release source must be clean before creating public artifacts.\n' >&2
+    git status --short >&2
+    exit 65
+fi
+
+TAG="v$VERSION"
+HEAD_SHA="$(git rev-parse HEAD)"
+TAG_SHA="$(git rev-list -n 1 "refs/tags/$TAG")"
+
+if [[ "$HEAD_SHA" != "$TAG_SHA" ]]; then
+    printf 'Release tag %s does not point at HEAD.\n' "$TAG" >&2
+    exit 65
+fi
+
+git verify-tag "$TAG" >/dev/null 2>&1 || {
+    printf 'Release tag %s must be signed and verifiable on the release machine.\n' "$TAG" >&2
+    exit 65
+}
+
+PACKAGE_RESOLVED="$ROOT_DIR/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+if [[ ! -f "$PACKAGE_RESOLVED" ]]; then
+    printf 'Package.resolved is required for release reproducibility: %s\n' "$PACKAGE_RESOLVED" >&2
+    exit 66
+fi
+
+rg -n '"identity" : "sparkle"|"location" : "https://github.com/sparkle-project/Sparkle"' "$PACKAGE_RESOLVED" >/dev/null
+
+MANIFEST_DIR="$ROOT_DIR/.build/release-manifests"
+mkdir -p "$MANIFEST_DIR"
+MANIFEST="$MANIFEST_DIR/WhatTheToken-$VERSION-build-$BUILD.txt"
+PACKAGE_RESOLVED_SHA="$(shasum -a 256 "$PACKAGE_RESOLVED" | awk '{print $1}')"
+
+{
+    printf 'version=%s\n' "$VERSION"
+    printf 'build=%s\n' "$BUILD"
+    printf 'tag=%s\n' "$TAG"
+    printf 'commit=%s\n' "$HEAD_SHA"
+    printf 'package_resolved_sha256=%s\n' "$PACKAGE_RESOLVED_SHA"
+} > "$MANIFEST"
+
+printf '%s\n' "$MANIFEST"
+```
+
+- [ ] **Step 4: Call provenance and verify Universal 2 in release scripts**
+
+In `apps/mac/Scripts/archive-release.sh`, after the real export command succeeds and before printing the app path, add:
+
+```bash
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    lipo -verify_arch arm64 x86_64 "$EXPORT_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac"
+fi
+```
+
+In `apps/mac/Scripts/rehearse-release.sh`, add this as the first command in the `signed)` block:
+
+```bash
+"$ROOT_DIR/Scripts/verify-release-provenance.sh" --version "$VERSION" --build "$BUILD"
+```
+
+- [ ] **Step 5: Capture notary submission logs**
+
+In `apps/mac/Scripts/notarize-dmg.sh`, add this variable near the top:
+
+```bash
+NOTARY_LOG_DIR="${NOTARY_LOG_DIR:-"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.build/notary"}"
+```
+
+Replace the real submit/staple execution block with:
+
+```bash
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    run_command "${submit_command[@]}"
+    run_command "${staple_command[@]}"
+    run_command "${validate_command[@]}"
+    printf 'Dry run only. No notarization request was submitted.\n'
+    exit 0
+fi
+
+mkdir -p "$NOTARY_LOG_DIR"
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+submit_json="$NOTARY_LOG_DIR/notary-submit-$timestamp.json"
+
+xcrun notarytool submit "$DMG_PATH" --keychain-profile "$KEYCHAIN_PROFILE" --wait --output-format json | tee "$submit_json"
+submission_id="$(plutil -extract id raw -o - "$submit_json")"
+log_json="$NOTARY_LOG_DIR/notary-log-$submission_id.json"
+xcrun notarytool log "$submission_id" --keychain-profile "$KEYCHAIN_PROFILE" > "$log_json"
+
+"${staple_command[@]}"
+"${validate_command[@]}"
+printf '%s\n' "$log_json"
+```
+
+- [ ] **Step 6: Embed Sparkle feed URL and public EdDSA key**
+
+After the maintainer runs Sparkle `generate_keys`, copy only the printed public key to the clipboard. Then run:
+
+```bash
+PUBLIC_ED_KEY="$(pbpaste | tr -d '\n')"
+test -n "$PUBLIC_ED_KEY"
+printf '%s' "$PUBLIC_ED_KEY" | rg '^[A-Za-z0-9+/=]+$' >/dev/null
+/usr/libexec/PlistBuddy -c 'Delete :SUFeedURL' apps/mac/Packaging/Info.plist 2>/dev/null || true
+/usr/libexec/PlistBuddy -c 'Delete :SUPublicEDKey' apps/mac/Packaging/Info.plist 2>/dev/null || true
+/usr/libexec/PlistBuddy -c 'Add :SUFeedURL string https://hansdraisma.github.io/whatthetoken/appcast.xml' apps/mac/Packaging/Info.plist
+/usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $PUBLIC_ED_KEY" apps/mac/Packaging/Info.plist
+plutil -lint apps/mac/Packaging/Info.plist
+```
+
+Expected:
+
+- `Info.plist` contains `SUFeedURL`.
+- `Info.plist` contains `SUPublicEDKey`.
+- `SUEnableAutomaticChecks` remains `false`.
+- `SUAutomaticallyUpdate` remains `false`.
+
+- [ ] **Step 7: Expose manual Check for Updates**
+
+Modify `apps/mac/Sources/WhatTheTokenMac/AppModel.swift`:
+
+```swift
+@MainActor
+@Observable
+final class AppModel {
+    let viewModel: StatusViewModel
+    let refreshController: PopoverRefreshController
+    let updateController: SparkleUpdateController
+
+    init(
+        viewModel: StatusViewModel,
+        updateController: SparkleUpdateController = SparkleUpdateController()
+    ) {
+        self.viewModel = viewModel
+        self.refreshController = PopoverRefreshController(viewModel: viewModel)
+        self.updateController = updateController
+        Task { await viewModel.loadPersistedState() }
+    }
+```
+
+Modify the `PopoverRootView` call in `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift`:
+
+```swift
+PopoverRootView(
+    viewModel: app.viewModel,
+    controller: app.refreshController,
+    onOpenSettings: openSettingsAction,
+    onCheckForUpdates: { app.updateController.checkForUpdates(nil) },
+    onOpenDeveloperWindow: developerWindowOpener
+)
+```
+
+Modify `apps/mac/Sources/WhatTheTokenMac/Views/Popover/PopoverRootView.swift`:
+
+```swift
+let onCheckForUpdates: () -> Void
+```
+
+and pass it to the footer:
+
+```swift
+PopoverFooterView(
+    state: footerState,
+    onRefresh: { controller.userTappedRefresh() },
+    onOpenSettings: onOpenSettings,
+    onCheckForUpdates: onCheckForUpdates,
+    onOpenDeveloperWindow: onOpenDeveloperWindow
+)
+```
+
+Modify `apps/mac/Sources/WhatTheTokenMac/Views/Popover/PopoverFooterView.swift`:
+
+```swift
+let onCheckForUpdates: () -> Void
+```
+
+Add this menu item above `Settings...`:
+
+```swift
+Button("Check for Updates", action: onCheckForUpdates)
+Divider()
+```
+
+- [ ] **Step 8: Add update-hosting tests**
+
+In `apps/mac/Tests/WhatTheTokenMacTests/MacBundleMetadataTests.swift`, add:
+
+```swift
+@Test func publicReleaseEmbedsSparkleFeedAndPublicKey() throws {
+    let plist = try packagingInfoPlist()
+
+    #expect(plist["SUFeedURL"] as? String == "https://hansdraisma.github.io/whatthetoken/appcast.xml")
+    let publicKey = try #require(plist["SUPublicEDKey"] as? String)
+    #expect(publicKey.count >= 32)
+    #expect(!publicKey.contains("$("))
+    #expect(plist["SUEnableAutomaticChecks"] as? Bool == false)
+    #expect(plist["SUAutomaticallyUpdate"] as? Bool == false)
+}
+```
+
+In `apps/mac/Tests/WhatTheTokenMacTests/MacXcodeProjectTests.swift`, add:
+
+```swift
+@Test func xcodeSwiftPackageResolutionPinsSparkle() throws {
+    let resolved = try macFileContents("WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
+
+    #expect(resolved.contains("\"sparkle\"") || resolved.contains("sparkle-project/Sparkle"))
+    #expect(resolved.contains("\"version\""))
+    #expect(resolved.contains("\"revision\""))
+}
+```
+
+In `apps/mac/Tests/WhatTheTokenMacTests/MacXcodeProjectTests.swift`, add:
+
+```swift
+@Test func popoverMenuExposesManualUpdateCheck() throws {
+    let appSource = try macFileContents("Sources/WhatTheTokenMac/WhatTheTokenApp.swift")
+    let rootSource = try macFileContents("Sources/WhatTheTokenMac/Views/Popover/PopoverRootView.swift")
+    let footerSource = try macFileContents("Sources/WhatTheTokenMac/Views/Popover/PopoverFooterView.swift")
+
+    #expect(appSource.contains("updateController.checkForUpdates"))
+    #expect(rootSource.contains("onCheckForUpdates"))
+    #expect(footerSource.contains("Button(\"Check for Updates\""))
+}
+```
+
+- [ ] **Step 9: Generate the public appcast after the GitHub Release asset exists**
+
+Run this after Task 11 has produced the signed/notarized DMG and after the GitHub Release asset is uploaded. The appcast must reference a public asset URL that an installed app can download without GitHub authentication.
+
+After publishing the GitHub Release and uploading the DMG asset, run:
+
+```bash
+mkdir -p "$HOME/ReleaseArtifacts/WhatTheToken/updates"
+cp apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg "$HOME/ReleaseArtifacts/WhatTheToken/updates/WhatTheToken-0.1.0.dmg"
+apps/mac/Scripts/generate-appcast.sh \
+  --updates-dir "$HOME/ReleaseArtifacts/WhatTheToken/updates" \
+  --output docs/appcast.xml \
+  --download-url-prefix https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/ \
+  --release-notes-url https://github.com/hansDraisma/whatthetoken/releases/tag/v0.1.0
+xmllint --noout docs/appcast.xml
+rg -n "sparkle:edSignature|WhatTheToken-0.1.0.dmg|github.com/hansDraisma/whatthetoken/releases/download/v0.1.0" docs/appcast.xml
+```
+
+Expected:
+
+- `docs/appcast.xml` is valid XML.
+- The appcast points at the public GitHub Release DMG asset.
+- The appcast contains a Sparkle EdDSA signature.
+
+- [ ] **Step 10: Commit checkpoint**
+
+Run:
+
+```bash
+git add docs/.nojekyll docs/appcast.xml docs/release/github-hosting-and-updates.md apps/mac
+git commit -m "build(mac): add GitHub-hosted Sparkle update channel"
+```
+
+---
+
+### Task 10: Full Repo-Side Verification
 
 **Files:**
 - Verify all modified files.
@@ -1792,7 +2230,7 @@ If prior task commits already captured every change, skip this commit and record
 
 ---
 
-### Task 10: Maintainer-Gated Credentialed Release Rehearsal
+### Task 11: Maintainer-Gated Credentialed Release Rehearsal
 
 **Files:**
 - Read: `docs/release/public-v1-checklist.md`
@@ -1818,7 +2256,7 @@ Maintainer runs:
 
 ```bash
 security find-identity -v -p codesigning | rg "Developer ID Application"
-export DEVELOPER_ID_SIGNING_IDENTITY="${DEVELOPER_ID_SIGNING_IDENTITY:-Developer ID Application}"
+: "${DEVELOPER_ID_SIGNING_IDENTITY:?Set DEVELOPER_ID_SIGNING_IDENTITY to the exact Developer ID Application identity, including team suffix}"
 : "${NOTARY_KEYCHAIN_PROFILE:?Set NOTARY_KEYCHAIN_PROFILE to the existing notarytool Keychain profile name in this shell}"
 xcrun notarytool history --keychain-profile "$NOTARY_KEYCHAIN_PROFILE"
 ```
@@ -1826,7 +2264,7 @@ xcrun notarytool history --keychain-profile "$NOTARY_KEYCHAIN_PROFILE"
 Expected:
 
 - At least one Developer ID Application identity appears.
-- `DEVELOPER_ID_SIGNING_IDENTITY` resolves to the intended Developer ID Application identity for DMG signing.
+- `DEVELOPER_ID_SIGNING_IDENTITY` is the exact intended Developer ID Application identity for DMG signing.
 - `notarytool history` authenticates without printing credentials.
 
 - [ ] **Step 3: Generate Sparkle key if Public V1 will embed update metadata**
@@ -1846,8 +2284,7 @@ Expected:
 
 Repo action after maintainer approval:
 
-- Add `SUPublicEDKey` to `apps/mac/Packaging/Info.plist`.
-- Add `SUFeedURL` only if stable appcast hosting is live.
+- Complete Task 9 Step 6.
 - Keep automatic checks and automatic update installs disabled.
 
 - [ ] **Step 4: Run signed release rehearsal**
@@ -1857,11 +2294,11 @@ Maintainer runs:
 ```bash
 : "${DEVELOPER_ID_TEAM_ID:?Set DEVELOPER_ID_TEAM_ID to the Apple Developer Team ID in this shell}"
 : "${NOTARY_KEYCHAIN_PROFILE:?Set NOTARY_KEYCHAIN_PROFILE to the existing notarytool Keychain profile name in this shell}"
-export DEVELOPER_ID_SIGNING_IDENTITY="${DEVELOPER_ID_SIGNING_IDENTITY:-Developer ID Application}"
+: "${DEVELOPER_ID_SIGNING_IDENTITY:?Set DEVELOPER_ID_SIGNING_IDENTITY to the exact Developer ID Application identity, including team suffix}"
 apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode signed
 ```
 
-The two exported values are shell-session variables on the maintainer machine. They are not committed.
+The three shell-session values are maintainer-machine configuration. They are not committed.
 
 Expected:
 
@@ -1874,6 +2311,8 @@ Expected:
 - `spctl` accepts the exported app, signed DMG, and copied app from the mounted DMG.
 - DMG mounts read-only and contains `WhatTheToken.app` plus an `Applications` symlink.
 - Copied app from the mounted DMG contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
+- Copied app binary contains both `arm64` and `x86_64`.
+- Notary submission JSON and notary log JSON are saved under `apps/mac/.build/notary`.
 - DMG checksum is created.
 
 - [ ] **Step 5: Fresh macOS account smoke**
@@ -1903,7 +2342,9 @@ open "$DOWNLOADED_DMG"
 - Codex remains disconnected until explicit connection.
 - Disconnect removes provider cache.
 - Relaunch preserves settings and sanitized cache only.
-- No automatic Sparkle prompt appears.
+- `Check for Updates` is visible in the menu bar popover.
+- `Check for Updates` reads `https://hansdraisma.github.io/whatthetoken/appcast.xml`.
+- A previous signed build can update to the new signed/notarized build after `docs/appcast.xml` publishes through GitHub Pages.
 - No background update network request occurs.
 
 - [ ] **Step 6: Public launch gate**
@@ -1925,6 +2366,9 @@ plutil -lint apps/mac/Packaging/ExportOptions.DeveloperID.plist
 plutil -lint apps/mac/Packaging/WhatTheToken.entitlements
 plutil -lint apps/mac/WhatTheToken.xcodeproj/project.pbxproj
 xmllint --noout apps/mac/WhatTheToken.xcodeproj/xcshareddata/xcschemes/WhatTheToken.xcscheme
+test -f apps/mac/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+rg -n '"identity" : "sparkle"|"location" : "https://github.com/sparkle-project/Sparkle"' apps/mac/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+rg -n "SUFeedURL|SUPublicEDKey|Check for Updates|github-hosting-and-updates" apps/mac docs/release
 apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode dry-run
 apps/mac/Scripts/sign-dmg.sh --dry-run --dmg apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg
 git diff --check
@@ -1934,9 +2378,12 @@ Credentialed Public V1 completion additionally requires:
 
 ```bash
 apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode signed
+xmllint --noout docs/appcast.xml
+rg -n "sparkle:edSignature|WhatTheToken-0.1.0.dmg|github.com/hansDraisma/whatthetoken/releases/download/v0.1.0" docs/appcast.xml
 ```
 
 Plus the fresh macOS account smoke in `docs/release/public-v1-checklist.md`.
+Plus the manual Sparkle update smoke using GitHub Pages `appcast.xml` and a GitHub Release DMG asset.
 
 The release DMG is considered shareable only after the signed rehearsal verifies all of these:
 
@@ -1951,12 +2398,12 @@ The release DMG is considered shareable only after the signed rehearsal verifies
 ## Self-Review
 
 - App icon gap is covered by Task 3.
-- Shareable/openable DMG verification is covered by Task 4, Task 9, and Task 10.
+- Shareable/openable DMG verification is covered by Task 4, Task 10, and Task 11.
 - Sandbox compatibility matrix gap is covered by Task 5.
-- Sparkle inert-vs-enabled decision, EdDSA generation, key custody, public key, feed URL, and appcast gates are covered by Task 6 and Task 10.
-- Public version/build origin is covered by Task 2 metadata tests and Task 8 checklist updates.
-- Real archive proof is covered by Task 4 unsigned smoke and Task 10 signed rehearsal.
-- Release script chain moves beyond dry-run with Task 4 unsigned smoke and Task 10 signed mode.
+- Sparkle manual update decision, EdDSA generation, key custody, public key, feed URL, appcast generation, and GitHub hosting are covered by Task 6, Task 9, and Task 11.
+- Public version/build origin and release provenance are covered by Task 2, Task 8, Task 9, and Task 11.
+- Real archive proof is covered by Task 4 unsigned smoke and Task 11 signed rehearsal.
+- Release script chain moves beyond dry-run with Task 4 unsigned smoke and Task 11 signed mode.
 - Rollback and hotfix rules are covered by Task 7.
 - `package-app.sh` is documented as development-only rather than treated as public release infrastructure.
 - The plan separates repo-executable work from maintainer-gated credentialed release work.

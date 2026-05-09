@@ -27,6 +27,14 @@ Include only sanitized details:
 
 Provider credentials stay local. Connectors may use local provider credentials or app-server state in memory only after explicit user consent. WhatTheToken stores sanitized usage status, connector settings, and preferences, not copied provider credentials.
 
+## Official Builds
+
+Public V1 official builds are the signed and notarized DMGs published by the project on GitHub Releases. Release checksums are published beside the DMG.
+
+Developer ID signing, notarization credentials, and Sparkle EdDSA private material must stay outside the repository. Sparkle appcast publishing is part of the release checklist and must not point to unpublished or unverified artifacts.
+
+Unsupported forks, local builds, modified DMGs, and re-signed apps are outside the official build trust boundary.
+
 ## Out Of Scope
 
 Reports that require collecting forbidden sensitive data are out of scope until a privacy-preserving reproduction exists. Unsupported forks and modified builds are outside the official support boundary.

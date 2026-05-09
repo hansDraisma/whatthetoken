@@ -83,6 +83,14 @@ Live provider checks are manual and opt-in. CI uses synthetic fixtures only.
 
 Claude Code and Codex connectors must discard raw provider responses after parsing and must never persist copied provider credentials in WhatTheToken storage.
 
+## Install And Updates
+
+Public V1 will ship as a signed and notarized DMG attached to GitHub Releases. Install by opening the DMG and moving `WhatTheToken.app` to `/Applications`.
+
+For Public V1, updates are manual: download the newest signed and notarized DMG from GitHub Releases and replace the installed app. Sparkle is being prepared for a future manual `Check for Updates` path, but automatic background checks and silent installs remain disabled until the signed update path has been proven.
+
+Official release steps are documented in `docs/release/public-v1-checklist.md`.
+
 ## Roadmap
 
 - Canonical roadmap: `docs/roadmap/development-roadmap.md`

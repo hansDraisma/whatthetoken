@@ -25,11 +25,8 @@ import Testing
     #expect(plist["SUEnableAutomaticChecks"] as? Bool == false)
     #expect(plist["SUAutomaticallyUpdate"] as? Bool == false)
     #expect(plist["SUEnableSystemProfiling"] == nil)
-
-    if plist["SUFeedURL"] != nil {
-        let publicKey = plist["SUPublicEDKey"] as? String
-        #expect(publicKey?.isEmpty == false)
-    }
+    #expect(plist["SUFeedURL"] as? String == "https://hansdraisma.github.io/whatthetoken/appcast.xml")
+    #expect(plist["SUPublicEDKey"] as? String == "rwQnge6z/GQvR9NwGuQFBpN44ZcaUBzixfISv77Z2hg=")
 }
 
 @Test func releaseEntitlementsStayMinimal() throws {

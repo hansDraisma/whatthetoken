@@ -2,11 +2,13 @@
 
 Date: 2026-05-09
 
-Status: draft Stage 5 design for review.
+Status: Stage 5 release-readiness spec. Repo-side foundation is implemented; credentialed release rehearsal and public launch are still pending.
 
 ## Purpose
 
 Stage 5 turns WhatTheToken from a developer-run SwiftPM app into a trusted public Mac download.
+
+This spec defines release readiness, not just repository configuration. Passing unit tests and release-script dry-runs is necessary but not enough to claim Public V1 is ready. Public readiness requires a real Developer ID archive/export, notarized DMG, Gatekeeper verification, fresh-machine smoke test, and explicit release artifact review.
 
 The public release must be a signed and notarized direct-distribution build that a non-developer can install without Gatekeeper friction. The release path must preserve the product's local-first trust story: no copied provider credentials, no raw provider payload persistence, no default telemetry, and no hidden update or network behavior that weakens the privacy promise.
 
@@ -16,11 +18,11 @@ Sparkle is part of the Stage 5 architecture. Public V1 should be Sparkle-ready a
 
 Use direct distribution through GitHub Releases for Public V1:
 
-- signed and notarized `.app`
-- signed and notarized DMG with an `/Applications` symlink
+- Developer ID signed `.app`
+- notarized and stapled DMG with an `/Applications` symlink
 - public release notes and checksums
 - documented manual update instructions
-- Sparkle framework integrated only after nested signing, notarization, appcast signing, and update smoke tests pass
+- Sparkle-capable release target, with any user-visible update check gated on appcast signing and old-build to new-build update smoke tests
 - Sparkle automatic checks disabled by default for Public V1
 - no Mac App Store submission for Public V1
 - no paid DMG, trial, license key, or local-provider paywall
@@ -29,29 +31,28 @@ This keeps the first public launch aligned with the open-source trust strategy w
 
 ## Current State
 
-Current app packaging:
+Implemented repo-side foundation:
 
-- SwiftPM executable product: `apps/mac/Package.swift`
-- manual app bundle script: `apps/mac/Scripts/package-app.sh`
-- bundle metadata: `apps/mac/Packaging/Info.plist`
-- menu bar utility behavior through `LSUIElement = true` and runtime `.accessory` activation policy
+- SwiftPM executable product remains the local development and unit-test path: `apps/mac/Package.swift`
+- Xcode release app target exists: `apps/mac/WhatTheToken.xcodeproj`
+- release metadata, entitlements, Developer ID export options, and xcconfigs exist under `apps/mac/Packaging`
+- release scripts exist under `apps/mac/Scripts`
+- launch-at-login setting uses `SMAppService.mainApp`
+- Sparkle is wired into the Xcode target and bridged behind a manual-check controller
+- public release checklist exists at `docs/release/public-v1-checklist.md`
+- menu bar utility behavior remains enforced through `LSUIElement = true` and runtime `.accessory` activation policy
 
-Missing for Stage 5:
+Remaining before Public V1:
 
-- app icon and asset catalog
-- Xcode app target for public release archives
-- entitlements file
-- Developer ID signing script
-- hardened runtime signing configuration
-- sandbox compatibility test matrix
-- notarization script using `xcrun notarytool`
-- stapling and Gatekeeper verification script
-- DMG creation script
-- checksum generation
-- release checklist
-- Sparkle dependency and nested signing support
-- Sparkle EdDSA public key and appcast URL configuration
-- launch-at-login settings via `SMAppService`
+- app icon and asset catalog for public packaging
+- initialized local Xcode installation capable of `xcodebuild archive`
+- real Developer ID archive/export with maintainer certificate access
+- notarization submission, stapling, and Gatekeeper acceptance on the real DMG
+- sandbox compatibility matrix, if sandboxing is reconsidered
+- Sparkle EdDSA public key and stable appcast URL decision
+- signed old-build to new-build Sparkle update smoke before exposing `Check for Updates`
+- fresh-machine install and launch smoke from the notarized DMG
+- repository public-visibility scan for internal workspace names and release secrets
 
 ## Source Facts
 
@@ -161,6 +162,29 @@ Out of scope:
 - automatic background Sparkle checks before one public release path is proven
 - silent automatic update installs
 
+## Completion Model
+
+Stage 5 must be tracked in three gates so the project does not confuse repository readiness with public release readiness.
+
+### Stage 5A: Repo Foundation
+
+Complete when the repository contains the release target, metadata, entitlements, launch-at-login setting, Sparkle-ready wiring, release scripts, tests, and release checklist. This gate can pass without maintainer signing credentials. It does not produce an official public build.
+
+### Stage 5B: Credentialed Release Rehearsal
+
+Complete when the maintainer runs the release flow with real credentials on a clean checkout:
+
+- Xcode archive/export succeeds for explicit version and build values
+- exported app is Developer ID signed with hardened runtime
+- DMG is created, notarized, stapled, and accepted by Gatekeeper
+- checksums are generated from final artifacts
+- launch, quit, settings, connector opt-in, disconnect, relaunch, and launch-at-login smoke tests pass on a fresh macOS account
+- Sparkle remains hidden unless signed update smoke passes
+
+### Stage 5C: Public Launch
+
+Complete when the notarized DMG and checksum are published on GitHub Releases, public docs point to the official artifacts, support/security boundaries are accurate, and the repository can be made public without exposing internal paths, diagnostics, or secret material.
+
 ## Release Architecture
 
 The release pipeline should produce these artifacts from a clean checkout:
@@ -173,6 +197,10 @@ The release pipeline should produce these artifacts from a clean checkout:
 6. optional Sparkle `appcast.xml` entry after Sparkle update verification passes
 
 The public release channel is GitHub Releases. The appcast can be hosted from a stable HTTPS URL controlled by the project. If GitHub Pages is used for the first appcast, the appcast path must not expose internal workspace names and must be documented as public release infrastructure.
+
+Release artifacts must be created from committed source, not from untracked local files. A release tag must point at the exact commit used for the archive. If a release candidate fails notarization, Gatekeeper, Sparkle, or fresh-machine smoke, cut a new build number rather than reusing the failed public build number.
+
+The current `package-app.sh` path is development-only. It may remain for unsigned local smoke tests, but the public release owner is the Xcode archive/export flow.
 
 ## Bundle And Metadata
 
@@ -190,10 +218,11 @@ Versioning rules:
 - `CFBundleVersion` is a monotonically increasing integer build number.
 - Every release script must accept explicit version and build values.
 - Sparkle compares bundle versions, so `CFBundleVersion` must never go backward in public builds.
+- Once a build number appears in a public artifact or appcast, do not reuse it for a different binary.
 
 Public release builds must use a thin Xcode app target that references the existing Swift source tree and archives with `xcodebuild archive`. Release export must use `xcodebuild -exportArchive` with Developer ID export options.
 
-SwiftPM remains the fast local development and unit-test path. The current `package-app.sh` may remain temporarily for unsigned developer bundle smoke tests, but it is not the Public V1 release path. Once the Xcode release flow is proven, either delete `package-app.sh` or rename/document it as development-only so it cannot be mistaken for a notarizable release path.
+SwiftPM remains the fast local development and unit-test path. Once the Xcode release flow is proven, either delete `package-app.sh` or rename/document it as development-only so it cannot be mistaken for a notarizable release path.
 
 Sparkle's docs recommend Xcode archive/export because Sparkle helper tools and framework code must be embedded and signed correctly. The Xcode target should add Sparkle through Swift Package Manager and use Xcode's Embed & Sign behavior for `Sparkle.framework`. Hand-written release scripts should wrap `xcodebuild`, `notarytool`, `stapler`, `hdiutil`, `spctl`, checksum generation, and Sparkle appcast tooling; they should not reimplement Xcode's nested framework embedding.
 
@@ -203,11 +232,21 @@ Public builds must be signed with a Developer ID Application certificate. The si
 
 - enable hardened runtime
 - include secure timestamping
-- sign nested code before the outer app
+- sign nested code before the outer app; `--deep` may verify but must not be used to mask incorrect nested signing ownership
 - verify the resulting app with `codesign --verify --deep --strict --verbose=2`
 - reject ad hoc, Apple Development, Mac App Store distribution, or self-signed identities for public release artifacts
+- use `xcrun notarytool` for notarization; do not add legacy `altool` flows
+- staple the accepted ticket to the final DMG and validate the staple before publishing
+- verify Gatekeeper acceptance for both the app and the DMG
 
 Release scripts must never require signing secrets to be committed. Developer ID certificate private keys live in the developer's login Keychain or CI secret store if CI signing is added later. Notarization credentials live in Keychain profiles or CI secrets, not the repo.
+
+Credential handling rules:
+
+- scripts may read `DEVELOPER_ID_TEAM_ID` and `NOTARY_KEYCHAIN_PROFILE`
+- scripts must not echo notary credentials, certificate private material, Sparkle private keys, provider tokens, or local provider state
+- CI signing is out of scope until a separate CI secret model and maintainer approval exist
+- the release checklist is the authority for who can run a public signing flow
 
 ## Entitlements
 
@@ -219,6 +258,7 @@ Required initial posture:
 - no App Sandbox entitlement in Public V1 until connector tests prove it works
 - no `com.apple.security.get-task-allow` in release builds
 - no network server entitlement unless a future connector requires inbound connections
+- no file-system entitlement beyond what is proven necessary for the release target
 
 Likely release needs:
 
@@ -251,6 +291,13 @@ If sandboxing breaks the connector model, Public V1 should ship unsandboxed with
 
 Sparkle is the chosen updater framework. Stage 5 should make the app Sparkle-capable while avoiding background update behavior as a Public V1 launch risk.
 
+Sparkle integration has two separate decisions:
+
+- packaging Sparkle safely in the Xcode app target
+- exposing an update-checking user experience
+
+The app target may link and embed Sparkle before Public V1 if signing and notarization still pass. User-visible update checks must remain hidden until the app has a stable feed URL, public EdDSA key, signed update archive, and passing old-build to new-build smoke test.
+
 Required Sparkle setup:
 
 - choose Sparkle 2.x
@@ -260,7 +307,7 @@ Required Sparkle setup:
 - add `SUPublicEDKey` to `Info.plist` once the EdDSA key is generated
 - add `SUFeedURL` only after the public appcast URL is chosen
 - set `SUEnableAutomaticChecks` to `false` for Public V1 builds
-- do not set `SUAutomaticallyUpdate` for Public V1
+- set `SUAutomaticallyUpdate` to `false` for Public V1 builds
 - keep the Sparkle private EdDSA key outside the repo
 - document key backup and custody
 
@@ -270,7 +317,8 @@ Public V1 behavior:
 - no silent updates
 - no automatic background checks
 - no first-launch updater prompt
-- optional `Check for Updates` UI only after a signed old-build to signed new-build update smoke passes
+- no user-visible `Check for Updates` UI unless a signed old-build to signed new-build update smoke passes
+- no Sparkle network request unless the user explicitly invokes an approved manual update check
 
 Post-Public V1 behavior:
 
@@ -286,6 +334,8 @@ Appcast rules:
 - includes release notes that do not expose sensitive diagnostics or internal workspace names
 - update archives are EdDSA signed
 - appcast changes are part of the release checklist
+- appcast is published only after the referenced artifact and checksum are already available
+- appcast rollback means publishing a corrected feed entry, not reusing a lower build number
 
 ## DMG Design
 
@@ -337,6 +387,15 @@ Stage 5 should introduce scripts that can be run locally by the maintainer:
 
 The scripts should fail fast when required environment variables, signing identities, Keychain profiles, version values, or artifact paths are missing. They should print actionable sanitized errors and must not print notary credentials, private keys, or local credential material.
 
+Required script posture:
+
+- support dry-runs for command review without credentials
+- require explicit version and build values for archives
+- never create public artifacts from uncommitted source
+- write artifacts under ignored build output directories
+- make final artifact paths clear enough for the release checklist
+- leave real signing, notarization, and appcast signing credential-gated
+
 CI should continue running synthetic tests. Public signing and notarization may remain local/manual until secret handling is designed explicitly for CI.
 
 ## Documentation
@@ -366,7 +425,10 @@ Automated verification:
 
 - `swift test` from `apps/mac`
 - `pnpm --filter @whatthetoken/core test`
+- `plutil -lint` for release plists and Xcode project syntax where applicable
+- scheme XML validation for shared Xcode schemes
 - Xcode project configuration tests verify release metadata, entitlements, and Sparkle settings
+- Xcode Debug build with signing disabled on a machine whose Xcode first-launch packages are installed
 - development app bundle script is clearly labeled as non-release if it remains
 - release script dry-run validates required inputs
 - entitlements test verifies release builds do not contain `get-task-allow`
@@ -376,6 +438,7 @@ Automated verification:
 Manual verification:
 
 - build release app from clean checkout
+- confirm the release commit is clean and tagged
 - sign with Developer ID Application
 - verify signature
 - create DMG
@@ -393,10 +456,19 @@ Manual verification:
 - verify launch-at-login off by default
 - toggle launch-at-login and verify expected login item behavior
 - if Sparkle UI ships, test update from an older signed/notarized build to a newer signed/notarized build using a test appcast
+- inspect final DMG contents for logs, diagnostics, local paths, or untracked files
 
 ## Acceptance Criteria
 
-Stage 5 is complete when:
+Stage 5A repo foundation is complete when:
+
+- release target, metadata, entitlements, scripts, launch-at-login setting, Sparkle-ready wiring, tests, and release checklist are committed
+- TypeScript and Swift test suites pass
+- release script dry-runs pass
+- Xcode project and scheme files parse cleanly
+- outstanding credentialed release tasks are documented explicitly
+
+Public V1 distribution is complete when:
 
 - a non-developer user can install the official DMG without Gatekeeper friction
 - `WhatTheToken.app` is Developer ID signed
@@ -406,7 +478,7 @@ Stage 5 is complete when:
 - release scripts and docs are repeatable by the maintainer
 - signing/notarization/Sparkle private material is not in the repo
 - Public V1 docs explain official builds, manual updates, and the future Sparkle update path
-- Sparkle is either fully integrated in manual-check-only mode with passing update smoke tests, or explicitly staged with keys/appcast decisions documented and no background update behavior enabled
+- Sparkle is either exposed in manual-check-only mode with passing update smoke tests, or explicitly hidden with keys/appcast decisions documented and no background update behavior enabled
 - launch at login is implemented as an explicit opt-in setting
 - repository visibility can flip public without exposing internal workspace names or release secrets
 
@@ -419,8 +491,11 @@ Stage 5 is complete when:
 | Sparkle private key leaks | attacker may sign malicious update archives if appcast/download hosting is compromised | keep private key off hosting machines and out of CI until secret model exists |
 | App Sandbox breaks connectors | Claude/Codex stop working in public builds | test sandbox matrix before enabling; document unsandboxed direct-distribution rationale if needed |
 | Notarization fails late | public launch blocked | add local verification and notary dry-run checklist before release day |
+| Xcode installation is not initialized | archive/export cannot start | run Xcode first-launch setup before release rehearsal; do not treat dry-run success as archive proof |
+| Missing public app icon | public build looks unfinished or fails app review expectations | add asset catalog before release rehearsal and include icon smoke in the checklist |
 | Update feed URL changes after public launch | installed apps cannot find updates | choose stable appcast URL before embedding `SUFeedURL` |
 | Appcast says update exists before artifact is ready | users see broken update flow | release checklist publishes artifacts before appcast update |
+| Build number is reused | Sparkle or user support cannot distinguish binaries | require monotonic `CFBundleVersion`; cut a new build after every failed public candidate |
 | Launch-at-login starts refresh before consent | privacy regression | reuse existing consent gates; test launch path with disconnected settings |
 
 ## Self-Review
@@ -429,6 +504,8 @@ Stage 5 is complete when:
 - Public V1 remains free.
 - Mac App Store work is explicitly out of scope.
 - Sparkle is included in the architecture without requiring automatic background update checks at first launch.
+- User-visible Sparkle checks are separated from Sparkle packaging.
 - The App Sandbox decision is evidence-based, not assumed.
+- Stage 5A repo readiness is separated from credentialed Public V1 distribution readiness.
 - Signing secrets, notary credentials, and Sparkle private keys stay outside the repo.
 - The spec has no placeholder requirements.

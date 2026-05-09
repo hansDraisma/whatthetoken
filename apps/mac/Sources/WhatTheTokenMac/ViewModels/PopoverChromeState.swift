@@ -94,4 +94,58 @@ extension PopoverChromeState {
             return .none
         }
     }
+
+    @MainActor
+    static func menuBarTitle(isCritical: Bool) -> String {
+        isCritical ? "WhatTheToken - Critical" : "WhatTheToken"
+    }
+
+    @MainActor
+    static func menuBarSystemImage(isCritical: Bool) -> String {
+        isCritical ? "gauge.with.dots.needle.67percent" : "gauge"
+    }
+
+    @MainActor
+    static func menuBarTitle(viewModel: StatusViewModel) -> String {
+        menuBarTitle(isCritical: hasCriticalProvider(viewModel: viewModel))
+    }
+
+    @MainActor
+    static func menuBarSystemImage(viewModel: StatusViewModel) -> String {
+        menuBarSystemImage(isCritical: hasCriticalProvider(viewModel: viewModel))
+    }
+
+    @MainActor
+    static func hasCriticalProvider(viewModel: StatusViewModel) -> Bool {
+        isProviderCritical(
+            viewModel: viewModel,
+            tab: .claude,
+            isPaused: viewModel.settings.connectors.claudeCode.isPaused
+        )
+        || isProviderCritical(
+            viewModel: viewModel,
+            tab: .codex,
+            isPaused: viewModel.settings.connectors.codex.isPaused
+        )
+    }
+
+    @MainActor
+    private static func isProviderCritical(
+        viewModel: StatusViewModel,
+        tab: ProviderTab,
+        isPaused: Bool
+    ) -> Bool {
+        guard !isPaused else { return false }
+        let providerID = CachedProviderID.from(tab: tab)
+        let availability = ProviderAvailability.from(
+            snapshots: viewModel.snapshots.filter(providerID.snapshotPredicate),
+            tab: tab
+        )
+        switch availability {
+        case .critical, .criticalWithFallback, .fallbackOnly:
+            return true
+        case .available, .low, .stale:
+            return false
+        }
+    }
 }

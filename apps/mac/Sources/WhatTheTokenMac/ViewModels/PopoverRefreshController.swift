@@ -37,12 +37,6 @@ final class PopoverRefreshController {
         openRefreshTask = Task { [weak self] in
             await viewModel.loadPersistedStateIfNeeded()
             guard let self, self.isCurrentGeneration(expected) else { return }
-            if viewModel.settings.refresh.autoRefreshEnabled {
-                self.startTimer(
-                    expectedGeneration: expected,
-                    interval: viewModel.settings.refresh.intervalDuration
-                )
-            }
             await viewModel.refreshAll(reason: .popoverOpened)
             guard self.isCurrentGeneration(expected) else { return }
             self.clearOpenRefreshTask()

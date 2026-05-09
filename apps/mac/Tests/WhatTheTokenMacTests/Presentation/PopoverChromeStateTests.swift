@@ -64,6 +64,67 @@ import Testing
         #expect(chrome.indicators[.claude] == .critical)
     }
 
+    @MainActor
+    @Test func menuBarTitleReflectsCriticalProvider() {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        let vm = StatusViewModel(
+            snapshots: [UsageSnapshotFixture.claudeIncludedSample(remaining: 5, utilization: 0.95)],
+            settings: settings,
+            connectorState: .connected
+        )
+
+        #expect(PopoverChromeState.menuBarTitle(viewModel: vm) == "WhatTheToken - Critical")
+        #expect(PopoverChromeState.menuBarSystemImage(viewModel: vm) == "gauge.with.dots.needle.67percent")
+    }
+
+    @MainActor
+    @Test func menuBarTitleIgnoresPausedCriticalProvider() {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        settings.connectors.claudeCode.isPaused = true
+        let vm = StatusViewModel(
+            snapshots: [UsageSnapshotFixture.claudeIncludedSample(remaining: 5, utilization: 0.95)],
+            settings: settings,
+            connectorState: .connected
+        )
+
+        #expect(PopoverChromeState.menuBarTitle(viewModel: vm) == "WhatTheToken")
+        #expect(PopoverChromeState.menuBarSystemImage(viewModel: vm) == "gauge")
+    }
+
+    @MainActor
+    @Test func menuBarTitleTreatsCriticalWithFallbackAsCritical() {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        let vm = StatusViewModel(
+            snapshots: [
+                UsageSnapshotFixture.claudeIncludedSample(remaining: 5, utilization: 0.95),
+                UsageSnapshotFixture.claudeCreditsSample(remaining: 25)
+            ],
+            settings: settings,
+            connectorState: .connected
+        )
+
+        #expect(PopoverChromeState.menuBarTitle(viewModel: vm) == "WhatTheToken - Critical")
+    }
+
+    @MainActor
+    @Test func menuBarTitleTreatsFallbackOnlyAsCritical() {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        let vm = StatusViewModel(
+            snapshots: [
+                UsageSnapshotFixture.claudeIncludedSample(remaining: 0, utilization: 1.0),
+                UsageSnapshotFixture.claudeCreditsSample(remaining: 25)
+            ],
+            settings: settings,
+            connectorState: .connected
+        )
+
+        #expect(PopoverChromeState.menuBarTitle(viewModel: vm) == "WhatTheToken - Critical")
+    }
+
     @Test func tabAccessibilityLabelsIncludeIndicatorState() {
         #expect(ProviderTabIndicator.none.accessibilityLabel(for: .codex) == "Codex")
         #expect(ProviderTabIndicator.warning.accessibilityLabel(for: .claude) == "Claude Code, running low")

@@ -12,6 +12,9 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "WhatTheTokenMac",
+            exclude: [
+                "Assets.xcassets"
+            ],
             resources: [
                 .process("Resources")
             ]

@@ -57,23 +57,78 @@ if [[ "$DRY_RUN" -eq 0 && ! -f "$DMG_PATH" ]]; then
     exit 66
 fi
 
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    spctl --status | grep -F "assessments enabled" >/dev/null || {
+        printf 'Gatekeeper assessments must be enabled before release verification.\n' >&2
+        exit 65
+    }
+else
+    quote_command spctl --status "|" grep -F "assessments enabled"
+fi
+
 if [[ -n "$APP_PATH" ]]; then
     if [[ "$DRY_RUN" -eq 0 && ! -d "$APP_PATH" ]]; then
         printf 'App bundle not found: %s\n' "$APP_PATH" >&2
         exit 66
     fi
     run_command codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+        codesign -dv --verbose=4 "$APP_PATH" 2>&1 | rg "Timestamp="
+    else
+        quote_command codesign -dv --verbose=4 "$APP_PATH" "2>&1" "|" rg "Timestamp="
+    fi
     run_command spctl -a -vv -t exec "$APP_PATH"
 fi
 
+run_command hdiutil verify "$DMG_PATH"
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    codesign -dv --verbose=4 "$DMG_PATH" 2>&1 | rg "Timestamp="
+else
+    quote_command codesign -dv --verbose=4 "$DMG_PATH" "2>&1" "|" rg "Timestamp="
+fi
 run_command xcrun stapler validate "$DMG_PATH"
 run_command spctl -a -vv -t open --context context:primary-signature "$DMG_PATH"
+
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/whatthetoken-dmg.XXXXXX")"
+    COPY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/whatthetoken-copy.XXXXXX")"
+    detach_dmg() {
+        hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1 || true
+        rm -rf "$MOUNT_DIR" "$COPY_DIR"
+    }
+    trap detach_dmg EXIT
+
+    hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint "$MOUNT_DIR" >/dev/null
+
+    if [[ ! -d "$MOUNT_DIR/WhatTheToken.app" ]]; then
+        printf 'Mounted DMG does not contain WhatTheToken.app.\n' >&2
+        exit 66
+    fi
+    if [[ ! -L "$MOUNT_DIR/Applications" ]]; then
+        printf 'Mounted DMG does not contain an Applications symlink.\n' >&2
+        exit 66
+    fi
+
+    cp -R "$MOUNT_DIR/WhatTheToken.app" "$COPY_DIR/WhatTheToken.app"
+    codesign --verify --deep --strict --verbose=2 "$COPY_DIR/WhatTheToken.app"
+    codesign -dv --verbose=4 "$COPY_DIR/WhatTheToken.app" 2>&1 | rg "Timestamp="
+    spctl -a -vv -t exec "$COPY_DIR/WhatTheToken.app"
+    /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$COPY_DIR/WhatTheToken.app/Contents/Info.plist" | grep -Fx "AppIcon" >/dev/null
+    test -f "$COPY_DIR/WhatTheToken.app/Contents/Resources/Assets.car"
+    lipo -verify_arch arm64 x86_64 "$COPY_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac"
+else
+    quote_command hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint /tmp/whatthetoken-dmg
+    quote_command test -d /tmp/whatthetoken-dmg/WhatTheToken.app
+    quote_command test -L /tmp/whatthetoken-dmg/Applications
+    quote_command hdiutil detach /tmp/whatthetoken-dmg
+fi
 
 checksum_path="$DMG_PATH.sha256"
 if [[ "$DRY_RUN" -eq 1 ]]; then
     quote_command shasum -a 256 "$DMG_PATH" ">" "$checksum_path"
 else
     shasum -a 256 "$DMG_PATH" > "$checksum_path"
+    shasum -a 256 -c "$checksum_path"
     printf '%s\n' "$checksum_path"
 fi
 

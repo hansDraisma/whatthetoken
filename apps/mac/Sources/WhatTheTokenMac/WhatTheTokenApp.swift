@@ -44,7 +44,9 @@ struct WhatTheTokenApp: App {
                 PopoverRootView(
                     viewModel: app.viewModel,
                     controller: app.refreshController,
+                    canCheckForUpdates: app.updateController.canCheckForUpdates,
                     onOpenSettings: openSettingsAction,
+                    onCheckForUpdates: { app.updateController.checkForUpdates(nil) },
                     onOpenDeveloperWindow: developerWindowOpener
                 )
             } else {

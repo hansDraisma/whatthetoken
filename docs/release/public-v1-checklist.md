@@ -2,10 +2,21 @@
 
 This checklist is the maintainer path for the first direct-distribution Mac release.
 
+Related runbooks:
+
+- `docs/release/app-sandbox-compatibility-matrix.md`
+- `docs/release/github-hosting-and-updates.md`
+- `docs/release/release-notes-template.md`
+- `docs/release/sparkle-key-custody.md`
+- `docs/release/rollback-and-hotfix.md`
+
 ## Preconditions
 
 - Use a clean checkout of `main`.
 - Confirm the public version and monotonically increasing build number.
+- Use `apps/mac/Scripts/bump-version.sh` for any version/build change before archiving.
+- Confirm `apps/mac/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` is committed after resolving Xcode package dependencies.
+- If `xcodebuild` fails to load `IDESimulatorFoundation` or reports first-launch content is missing, run `sudo xcodebuild -runFirstLaunch` on the signing machine before archive rehearsal.
 - Confirm `DEVELOPER_ID_TEAM_ID` is set for the release signer.
 - Confirm `DEVELOPER_ID_SIGNING_IDENTITY` is the exact Developer ID Application identity, including team suffix.
 - Confirm the Developer ID Application certificate does not expire within the next 30 days.
@@ -77,6 +88,7 @@ Expected output:
 - `apps/mac/.build/export/WhatTheToken.app`
 - `apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg`
 - `apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg.sha256`
+- `apps/mac/.build/release-manifests/WhatTheToken-0.1.0-build-1.txt`
 
 Required checks:
 

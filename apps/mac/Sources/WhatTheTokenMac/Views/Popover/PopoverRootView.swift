@@ -3,7 +3,9 @@ import SwiftUI
 struct PopoverRootView: View {
     let viewModel: StatusViewModel
     let controller: PopoverRefreshController
+    let canCheckForUpdates: Bool
     let onOpenSettings: () -> Void
+    let onCheckForUpdates: () -> Void
     let onOpenDeveloperWindow: (() -> Void)?
 
     @State private var selectedTab: ProviderTab = .codex
@@ -28,7 +30,9 @@ struct PopoverRootView: View {
             PopoverFooterView(
                 state: footerState,
                 onRefresh: { controller.userTappedRefresh() },
+                canCheckForUpdates: canCheckForUpdates,
                 onOpenSettings: onOpenSettings,
+                onCheckForUpdates: onCheckForUpdates,
                 onOpenDeveloperWindow: onOpenDeveloperWindow
             )
         }

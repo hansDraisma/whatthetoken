@@ -89,13 +89,16 @@ Maintainer-gated on the signing machine:
 - Modify: `apps/mac/WhatTheToken.xcodeproj/project.pbxproj` - add the asset catalog file reference and resource build phase entry.
 - Modify: `apps/mac/Packaging/Info.plist` - bind the compiled asset catalog icon with `CFBundleIconName = AppIcon`.
 - Create: `apps/mac/Packaging/PrivacyInfo.xcprivacy` - privacy manifest for the release app.
+- Modify: `apps/mac/Packaging/ExportOptions.DeveloperID.plist` - keep Developer ID export options minimal; inject the actual `teamID` into a temporary export plist at release time.
 - Modify: `apps/mac/Packaging/WhatTheToken-Release.xcconfig` - explicitly build Universal 2 with `ARCHS = arm64 x86_64`.
 - Create: `apps/mac/Scripts/smoke-archive-unsigned.sh` - local Xcode archive proof that does not require signing credentials.
 - Create: `apps/mac/Scripts/bump-version.sh` - single command to update version/build metadata and prevent accidental build reuse.
 - Create: `apps/mac/Scripts/verify-release-provenance.sh` - clean source, exact tag, package-resolution, and release manifest guard.
 - Create: `apps/mac/Scripts/sign-dmg.sh` - Developer ID sign and verify the final DMG before notarization.
 - Create: `apps/mac/Scripts/rehearse-release.sh` - wrapper for dry-run, unsigned-smoke, and signed release rehearsal flows.
-- Modify: `apps/mac/Scripts/verify-release-artifacts.sh` - verify, mount, inspect, checksum, and detach the DMG.
+- Modify: `apps/mac/Scripts/create-dmg.sh` - default the Finder volume name to the app name plus release version.
+- Modify: `apps/mac/Scripts/archive-release.sh` - clean stale archive/export outputs and use a resolved export-options plist with the maintainer Team ID.
+- Modify: `apps/mac/Scripts/verify-release-artifacts.sh` - verify Gatekeeper status, mount, inspect, checksum, check checksum, and detach the DMG.
 - Modify: `apps/mac/Scripts/notarize-dmg.sh` - capture notary submission JSON and sanitized notary log under ignored build artifacts.
 - Modify: `apps/mac/Scripts/package-app.sh` - label it as development-only in output/help comments.
 - Create: `apps/mac/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` - pinned Xcode Swift package resolution for Sparkle.
@@ -297,6 +300,15 @@ import Testing
     #expect(plist["method"] as? String == "developer-id")
     #expect(plist["signingStyle"] as? String == "manual")
     #expect(plist["manageAppVersionAndBuildNumber"] as? Bool == false)
+    #expect(plist["teamID"] == nil)
+}
+
+@Test func releaseDeploymentTargetMatchesInfoPlistMinimumSystemVersion() throws {
+    let plist = try packagingInfoPlist()
+    let sharedConfig = try macFileContents("Packaging/WhatTheToken.xcconfig")
+    let expected = try #require(plist["LSMinimumSystemVersion"] as? String)
+
+    #expect(sharedConfig.contains("\nMACOSX_DEPLOYMENT_TARGET = \(expected)\n"))
 }
 
 @Test func releaseXcconfigEnablesHardenedRuntimeAndEntitlements() throws {
@@ -435,6 +447,11 @@ import Testing
                 "archive",
                 "-exportArchive",
                 "ExportOptions.DeveloperID.plist",
+                "EXPORT_OPTIONS_RESOLVED",
+                "PlistBuddy",
+                "teamID",
+                "rm -rf \"$ARCHIVE_PATH\"",
+                "rm -rf \"$EXPORT_DIR\"",
                 "DEVELOPER_ID_TEAM_ID",
                 "lipo -verify_arch"
             ]
@@ -444,7 +461,8 @@ import Testing
             [
                 "hdiutil",
                 "ln -s /Applications",
-                "WhatTheToken.app"
+                "WhatTheToken.app",
+                "WhatTheToken $VERSION"
             ]
         ),
         (
@@ -472,7 +490,10 @@ import Testing
             [
                 "codesign --verify",
                 "spctl",
+                "spctl --status",
+                "assessments enabled",
                 "shasum -a 256",
+                "shasum -a 256 -c",
                 "xcrun stapler validate",
                 "hdiutil verify",
                 "hdiutil attach",
@@ -517,8 +538,12 @@ import Testing
 
     for scriptInfo in scripts {
         let script = try macFileContents("Scripts/\(scriptInfo.name)")
+        let scriptURL = macPackageRootURL().appendingPathComponent("Scripts/\(scriptInfo.name)")
+        let attributes = try FileManager.default.attributesOfItem(atPath: scriptURL.path)
+        let mode = try #require(attributes[.posixPermissions] as? NSNumber).intValue
 
         #expect(script.hasPrefix("#!/usr/bin/env bash\nset -euo pipefail"))
+        #expect(mode & 0o111 != 0)
         for fragment in scriptInfo.requiredFragments {
             #expect(script.contains(fragment))
         }
@@ -1158,6 +1183,15 @@ if [[ "$DRY_RUN" -eq 0 && ! -f "$DMG_PATH" ]]; then
     exit 66
 fi
 
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    spctl --status | grep -F "assessments enabled" >/dev/null || {
+        printf 'Gatekeeper assessments must be enabled before release verification.\n' >&2
+        exit 65
+    }
+else
+    quote_command spctl --status "|" grep -F "assessments enabled"
+fi
+
 if [[ -n "$APP_PATH" ]]; then
     if [[ "$DRY_RUN" -eq 0 && ! -d "$APP_PATH" ]]; then
         printf 'App bundle not found: %s\n' "$APP_PATH" >&2
@@ -1220,6 +1254,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     quote_command shasum -a 256 "$DMG_PATH" ">" "$checksum_path"
 else
     shasum -a 256 "$DMG_PATH" > "$checksum_path"
+    shasum -a 256 -c "$checksum_path"
     printf '%s\n' "$checksum_path"
 fi
 
@@ -1693,6 +1728,21 @@ If an appcast points to a bad update:
 4. Do not reuse the bad build number.
 5. Publish a higher-build hotfix if users may already have seen the update.
 
+## Notarization Rejection Recovery
+
+If `notarytool` rejects a release candidate:
+
+1. Treat the candidate build as failed.
+2. Do not submit a modified binary with the same `CFBundleVersion`.
+3. Fetch and store the notary log under maintainer-only release notes:
+
+```bash
+xcrun notarytool log <submission-id> --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" > "$HOME/ReleaseArtifacts/WhatTheToken/notary-log-<submission-id>.json"
+```
+
+4. Sanitize the log before sharing snippets in issues or pull requests.
+5. Fix the root cause, increment `CURRENT_PROJECT_VERSION`, archive a new candidate, and rerun the full signed rehearsal.
+
 ## Security Withdrawal
 
 If an artifact exposes secrets, internal credentials, private keys, raw provider payloads, or sensitive diagnostics:
@@ -2160,15 +2210,58 @@ PACKAGE_RESOLVED_SHA="$(shasum -a 256 "$PACKAGE_RESOLVED" | awk '{print $1}')"
 printf '%s\n' "$MANIFEST"
 ```
 
-- [ ] **Step 5: Call provenance and verify Universal 2 in release scripts**
+- [ ] **Step 5: Call provenance, resolve Team ID, clean stale outputs, version the DMG volume, and verify Universal 2 in release scripts**
 
-In `apps/mac/Scripts/archive-release.sh`, after the real export command succeeds and before printing the app path, add:
+In `apps/mac/Scripts/create-dmg.sh`, change `VOLUME_NAME` to default empty and set the Finder volume name after version validation unless the caller explicitly supplied `--volume-name`:
+
+```bash
+VOLUME_NAME="${VOLUME_NAME:-}"
+
+if [[ -z "$VOLUME_NAME" ]]; then
+    VOLUME_NAME="WhatTheToken $VERSION"
+fi
+```
+
+Expected:
+
+- Two mounted release DMGs show distinct Finder volume names when versions differ.
+- `--volume-name` still allows an explicit override for smoke tests.
+
+In `apps/mac/Scripts/archive-release.sh`, before the archive command runs, remove stale release outputs and create a temporary export-options plist that injects the maintainer's actual Team ID:
+
+```bash
+EXPORT_OPTIONS_RESOLVED="$ROOT_DIR/.build/export-options/ExportOptions.DeveloperID.$VERSION.plist"
+
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    rm -rf "$ARCHIVE_PATH"
+    rm -rf "$EXPORT_DIR"
+    mkdir -p "$(dirname "$EXPORT_OPTIONS_RESOLVED")" "$(dirname "$ARCHIVE_PATH")" "$EXPORT_DIR"
+    cp "$EXPORT_OPTIONS" "$EXPORT_OPTIONS_RESOLVED"
+    /usr/libexec/PlistBuddy -c 'Delete :teamID' "$EXPORT_OPTIONS_RESOLVED" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_OPTIONS_RESOLVED"
+else
+    quote_command rm -rf "$ARCHIVE_PATH"
+    quote_command rm -rf "$EXPORT_DIR"
+    quote_command cp "$EXPORT_OPTIONS" "$EXPORT_OPTIONS_RESOLVED"
+    quote_command /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_OPTIONS_RESOLVED"
+fi
+```
+
+Then change the export command to use the resolved plist:
+
+```bash
+    -exportOptionsPlist "$EXPORT_OPTIONS_RESOLVED"
+```
+
+After the real export command succeeds and before printing the app path, add:
 
 ```bash
 if [[ "$DRY_RUN" -eq 0 ]]; then
     lipo -verify_arch arm64 x86_64 "$EXPORT_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac"
 fi
 ```
+
+Keep `apps/mac/Packaging/ExportOptions.DeveloperID.plist` free of a committed `teamID`; the Team ID is maintainer-specific release input and belongs in the temporary resolved plist.
 
 In `apps/mac/Scripts/rehearse-release.sh`, update the `signed)` block to include release provenance as an explicit first step and keep artifact checks between every release command:
 
@@ -2235,15 +2328,35 @@ mkdir -p "$NOTARY_LOG_DIR"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 submit_json="$NOTARY_LOG_DIR/notary-submit-$timestamp.json"
 
+set +e
 xcrun notarytool submit "$DMG_PATH" --keychain-profile "$KEYCHAIN_PROFILE" --wait --output-format json | tee "$submit_json"
-submission_id="$(plutil -extract id raw -o - "$submit_json")"
-log_json="$NOTARY_LOG_DIR/notary-log-$submission_id.json"
-xcrun notarytool log "$submission_id" --keychain-profile "$KEYCHAIN_PROFILE" > "$log_json"
+submit_status="${PIPESTATUS[0]}"
+set -e
+
+submission_id="$(plutil -extract id raw -o - "$submit_json" 2>/dev/null || true)"
+if [[ -n "$submission_id" ]]; then
+    log_json="$NOTARY_LOG_DIR/notary-log-$submission_id.json"
+    xcrun notarytool log "$submission_id" --keychain-profile "$KEYCHAIN_PROFILE" > "$log_json" || true
+else
+    log_json="$NOTARY_LOG_DIR/notary-log-unavailable-$timestamp.txt"
+    printf 'Submission ID unavailable. See submit JSON: %s\n' "$submit_json" > "$log_json"
+fi
+
+if [[ "$submit_status" -ne 0 ]]; then
+    printf 'Notarization failed. Review sanitized log: %s\n' "$log_json" >&2
+    exit "$submit_status"
+fi
 
 "${staple_command[@]}"
 "${validate_command[@]}"
 printf '%s\n' "$log_json"
 ```
+
+Expected:
+
+- Accepted submissions still staple and validate.
+- Rejected submissions still save the submit JSON and best-effort notary log before exiting non-zero.
+- The maintainer follows `docs/release/rollback-and-hotfix.md#notarization-rejection-recovery` and increments the build before another candidate.
 
 - [ ] **Step 7: Embed Sparkle feed URL and public EdDSA key**
 
@@ -2269,13 +2382,35 @@ Expected:
 
 - [ ] **Step 8: Guard and expose manual Check for Updates**
 
-Modify `apps/mac/Sources/WhatTheTokenMac/Updates/SparkleUpdateController.swift` so manual checks are a no-op until the release build has both `SUFeedURL` and `SUPublicEDKey`:
+Modify `apps/mac/Sources/WhatTheTokenMac/Updates/SparkleUpdateController.swift` so manual checks are a no-op until the release build has both `SUFeedURL` and `SUPublicEDKey`. Keep the guard testable without requiring Sparkle to start:
 
 ```swift
-private var hasUpdateMetadata: Bool {
+private let hasUpdateMetadataProvider: () -> Bool
+
+init(
+    updaterController: SPUStandardUpdaterController = SPUStandardUpdaterController(
+        startingUpdater: false,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    ),
+    hasUpdateMetadata: @escaping () -> Bool = SparkleUpdateController.bundleHasUpdateMetadata
+) {
+    self.updaterController = updaterController
+    self.hasUpdateMetadataProvider = hasUpdateMetadata
+}
+
+private static func bundleHasUpdateMetadata() -> Bool {
     let feedURL = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
     let publicKey = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String
     return feedURL?.isEmpty == false && publicKey?.isEmpty == false
+}
+```
+
+Then guard manual checks before Sparkle starts:
+
+```swift
+private var hasUpdateMetadata: Bool {
+    hasUpdateMetadataProvider()
 }
 
 func checkForUpdates(_ sender: Any? = nil) {
@@ -2290,10 +2425,17 @@ var canCheckForUpdates: Bool {
 }
 ```
 
+In the `#else` branch, keep a matching initializer signature so SwiftPM tests can exercise the no-Sparkle build path:
+
+```swift
+init(hasUpdateMetadata: @escaping () -> Bool = { false }) {}
+```
+
 Expected:
 
 - Development builds or partially configured release builds do not start Sparkle or show Sparkle errors when feed metadata is absent.
 - Public V1 still exposes a manual update check once `SUFeedURL` and `SUPublicEDKey` are embedded.
+- The guard is covered by a runtime test, not only by source-string tests.
 
 Modify `apps/mac/Sources/WhatTheTokenMac/AppModel.swift`:
 
@@ -2394,10 +2536,20 @@ In `apps/mac/Tests/WhatTheTokenMacTests/MacXcodeProjectTests.swift`, add:
     let source = try macFileContents("Sources/WhatTheTokenMac/Updates/SparkleUpdateController.swift")
 
     #expect(source.contains("hasUpdateMetadata"))
+    #expect(source.contains("hasUpdateMetadataProvider"))
     #expect(source.contains("SUFeedURL"))
     #expect(source.contains("SUPublicEDKey"))
     #expect(source.contains("guard hasUpdateMetadata else { return }"))
     #expect(source.contains("guard updaterController.updater.canCheckForUpdates else { return }"))
+}
+
+@MainActor
+@Test func sparkleManualCheckIsNoopWithoutReleaseMetadata() {
+    let controller = SparkleUpdateController(hasUpdateMetadata: { false })
+
+    controller.checkForUpdates(nil)
+
+    #expect(controller.canCheckForUpdates == false)
 }
 
 @Test func xcodeSwiftPackageResolutionPinsSparkle() throws {
@@ -2587,12 +2739,13 @@ Expected on this workspace if the known Xcode plugin/first-launch issue persists
 Run:
 
 ```bash
-rg -n "conductor|workspaces|\\.context|BEGIN .*PRIVATE KEY|--password|--apple-id|example[.]com|/tmp/|/Users/" README.md docs/release docs/superpowers/specs/2026-05-09-distribution-hardening-design.md docs/roadmap/development-roadmap.md
+rg -n "conductor|workspaces|\\.context|BEGIN .*PRIVATE KEY|--password|--apple-id|example[.]com|/tmp/|/Users/|/home/|~/|/Volumes/" README.md docs/release docs/superpowers/specs/2026-05-09-distribution-hardening-design.md docs/roadmap/development-roadmap.md
 ```
 
 Expected:
 
 - No Conductor workspace paths, private-key text, or secret material appear in public docs.
+- Literal personal-machine paths such as `/Users/...`, `/home/...`, `~/...`, or mounted local volumes do not appear in public docs. `$HOME` is allowed only as an environment-variable token in maintainer commands.
 - `/tmp/` may appear only in dry-run command examples.
 - Placeholder HTTPS domains do not appear in release appcast instructions.
 
@@ -2653,6 +2806,7 @@ security find-identity -v -p codesigning | rg "Developer ID Application"
 : "${NOTARY_KEYCHAIN_PROFILE:?Set NOTARY_KEYCHAIN_PROFILE to the existing notarytool Keychain profile name in this shell}"
 security find-certificate -c "$DEVELOPER_ID_SIGNING_IDENTITY" -p | openssl x509 -noout -enddate
 xcrun notarytool history --keychain-profile "$NOTARY_KEYCHAIN_PROFILE"
+spctl --status | grep -F "assessments enabled"
 ```
 
 Expected:
@@ -2661,6 +2815,7 @@ Expected:
 - `DEVELOPER_ID_SIGNING_IDENTITY` is the exact intended Developer ID Application identity for DMG signing.
 - The Developer ID Application certificate does not expire within the next 30 days.
 - `notarytool history` authenticates without printing credentials.
+- Gatekeeper assessments are enabled before any `spctl` release verification is trusted.
 
 - [ ] **Step 3: Generate Sparkle key if Public V1 will embed update metadata**
 
@@ -2762,6 +2917,22 @@ open "$DOWNLOADED_DMG"
 - `Check for Updates` reads `https://hansdraisma.github.io/whatthetoken/appcast.xml`.
 - A previous signed build can update to the new signed/notarized build after `docs/appcast.xml` publishes through GitHub Pages.
 - First launch makes no network request before explicit user action.
+
+Maintainer verifies first-launch network behavior with an explicit process-level audit:
+
+```bash
+APP_PID="$(pgrep -x WhatTheTokenMac)"
+test -n "$APP_PID"
+NETWORK_LOG="$HOME/ReleaseArtifacts/WhatTheToken/first-launch-network.log"
+mkdir -p "$(dirname "$NETWORK_LOG")"
+: > "$NETWORK_LOG"
+for _ in {1..12}; do
+  lsof -nP -i -p "$APP_PID" >> "$NETWORK_LOG" 2>/dev/null || true
+  sleep 5
+done
+test ! -s "$NETWORK_LOG"
+```
+
 - No background update network request occurs.
 - The only update network request happens after choosing `Check for Updates`.
 
@@ -2778,6 +2949,12 @@ git push origin v0.1.0
 Then create the GitHub Release for `v0.1.0`, upload `WhatTheToken-0.1.0.dmg`, upload `WhatTheToken-0.1.0.dmg.sha256`, publish release notes from `docs/release/release-notes-template.md`, generate `docs/appcast.xml` from the published GitHub Release asset, and commit the generated appcast:
 
 ```bash
+mkdir -p "$HOME/ReleaseArtifacts/WhatTheToken/published"
+cd "$HOME/ReleaseArtifacts/WhatTheToken/published"
+curl -fL -O https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/WhatTheToken-0.1.0.dmg
+curl -fL -O https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/WhatTheToken-0.1.0.dmg.sha256
+shasum -a 256 -c WhatTheToken-0.1.0.dmg.sha256
+cd -
 git add docs/appcast.xml
 git commit -m "release: publish appcast for v0.1.0"
 git push origin main
@@ -2828,8 +3005,11 @@ The release DMG is considered shareable only after the signed rehearsal verifies
 - Developer ID signed DMG.
 - Notarized and stapled DMG.
 - `spctl` acceptance for app, DMG, and copied app from the mounted DMG.
+- Gatekeeper assessments enabled before `spctl` checks are trusted.
 - Read-only DMG mount containing `WhatTheToken.app` and `Applications` symlink.
 - Copied app contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
+- Verified SHA-256 checksum for the final DMG and the published GitHub Release asset.
+- First-launch network audit showing no outbound connection before explicit user action.
 - Fresh-account launch from a quarantine-marked DMG copy.
 
 ## Self-Review
@@ -2838,13 +3018,17 @@ The release DMG is considered shareable only after the signed rehearsal verifies
 - Shareable/openable DMG verification is covered by Task 4, Task 10, and Task 11.
 - Sandbox compatibility matrix gap is covered by Task 5.
 - Sparkle manual update decision, EdDSA generation, key custody, public key, feed URL, appcast generation, and GitHub hosting are covered by Task 6, Task 9, and Task 11.
+- Sparkle inert manual-check behavior is covered by Task 9 with a runtime no-metadata guard test.
 - Public version/build origin, signed release tag, and release provenance are covered by Task 2, Task 8, Task 9, and Task 11.
+- ExportOptions Team ID nondeterminism is covered by Task 9 through a temporary resolved export-options plist.
 - Universal 2 architecture pinning and verification are covered by Task 2, Task 3, Task 4, Task 9, Task 10, and Task 11.
+- Deployment-target drift between `LSMinimumSystemVersion` and `MACOSX_DEPLOYMENT_TARGET` is covered by Task 2.
 - Privacy manifest coverage is covered by Task 2, Task 3, Task 9, and Task 10.
-- Release notes, CI dry-run release checks, and version bump tooling are covered by Task 9.
+- Release notes, CI dry-run release checks, executable-bit checks, and version bump tooling are covered by Task 9.
 - Real archive proof is covered by Task 4 unsigned smoke and Task 11 signed rehearsal.
-- Release script chain moves beyond dry-run with Task 4 unsigned smoke and Task 11 signed mode.
+- Release script chain moves beyond dry-run with Task 4 unsigned smoke and Task 11 signed mode; stale archive/export cleanup and versioned DMG volume names are covered in Task 9.
 - Rollback and hotfix rules are covered by Task 7.
+- Notarization rejection recovery is covered by Task 7 and Task 9 notary log capture.
 - `package-app.sh` is documented as development-only rather than treated as public release infrastructure.
 - The plan separates repo-executable work from maintainer-gated credentialed release work.
 - Public V1 uses GitHub Releases plus GitHub Pages as the simplest hosting option, with an owned-site/custom-domain follow-up deferred to Stage 5D.

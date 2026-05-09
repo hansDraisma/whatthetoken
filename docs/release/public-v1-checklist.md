@@ -10,6 +10,12 @@ This checklist is the maintainer path for the first direct-distribution Mac rele
 - Confirm `DEVELOPER_ID_SIGNING_IDENTITY` is the exact Developer ID Application identity, including team suffix.
 - Confirm the Developer ID Application certificate does not expire within the next 30 days.
 - Confirm `NOTARY_KEYCHAIN_PROFILE` exists in Keychain for `xcrun notarytool`.
+- Confirm Gatekeeper assessments are enabled:
+
+```bash
+spctl --status | grep -F "assessments enabled"
+```
+
 - Confirm GitHub Pages is enabled from the `main` branch `/docs` folder.
 - Confirm the public appcast URL is `https://hansdraisma.github.io/whatthetoken/appcast.xml`.
 - Confirm the DMG URL pattern is `https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/WhatTheToken-0.1.0.dmg`.
@@ -74,6 +80,8 @@ Expected output:
 
 Required checks:
 
+- `archive-release.sh` starts from a clean archive/export path, not stale `.build` outputs.
+- The resolved export-options plist contains the maintainer `DEVELOPER_ID_TEAM_ID`.
 - App is Developer ID signed.
 - DMG is Developer ID signed before notarization.
 - App and DMG code signatures contain secure timestamps.
@@ -83,6 +91,13 @@ Required checks:
 - Copied app contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
 - Copied app binary contains both `arm64` and `x86_64`.
 - Notary submission JSON and notary log JSON are saved under `apps/mac/.build/notary`.
+- The generated checksum verifies locally:
+
+```bash
+shasum -a 256 -c apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg.sha256
+```
+
+If notarization is rejected, do not resubmit a modified binary with the same build number. Save the notary log, sanitize any shared excerpt, fix the cause, increment `CURRENT_PROJECT_VERSION`, and archive a new candidate.
 
 ## Fresh Account Install Smoke
 
@@ -106,7 +121,21 @@ open "$DOWNLOADED_DMG"
 - Confirm Claude Code and Codex remain disconnected until explicit connection.
 - Confirm disconnect removes provider cache.
 - Confirm `Check for Updates` is visible.
-- Confirm first launch makes no network request before explicit user action.
+- Confirm first launch makes no network request before explicit user action:
+
+```bash
+APP_PID="$(pgrep -x WhatTheTokenMac)"
+test -n "$APP_PID"
+NETWORK_LOG="$HOME/ReleaseArtifacts/WhatTheToken/first-launch-network.log"
+mkdir -p "$(dirname "$NETWORK_LOG")"
+: > "$NETWORK_LOG"
+for _ in {1..12}; do
+  lsof -nP -i -p "$APP_PID" >> "$NETWORK_LOG" 2>/dev/null || true
+  sleep 5
+done
+test ! -s "$NETWORK_LOG"
+```
+
 - Confirm no background update network request occurs.
 - Confirm the only update network request happens after choosing `Check for Updates`.
 
@@ -123,6 +152,16 @@ git push origin v0.1.0
 - Create a GitHub Release for `v0.1.0`.
 - Attach `WhatTheToken-0.1.0.dmg`.
 - Attach `WhatTheToken-0.1.0.dmg.sha256`.
+- Download the published DMG and checksum from the GitHub Release and verify the checksum before announcement:
+
+```bash
+mkdir -p "$HOME/ReleaseArtifacts/WhatTheToken/published"
+cd "$HOME/ReleaseArtifacts/WhatTheToken/published"
+curl -fL -O https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/WhatTheToken-0.1.0.dmg
+curl -fL -O https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/WhatTheToken-0.1.0.dmg.sha256
+shasum -a 256 -c WhatTheToken-0.1.0.dmg.sha256
+```
+
 - Do not publish a separate `.app.zip` artifact for Public V1.
 - Publish release notes that do not include sensitive diagnostics, internal workspace paths, raw provider output, prompts, responses, cookies, auth headers, tokens, or private key material.
 - Include support guidance for sanitized crash reports and diagnostics; do not ask users to share raw provider files or credentials.

@@ -77,6 +77,34 @@ import Testing
     #expect(script.contains("cp -R \"$RESOURCE_BUNDLE\" \"$APP_DIR/\""))
 }
 
+@Test func xcodeProjectDefinesReleaseTargetAndSparklePackage() throws {
+    let packageRoot = packageRootURL()
+    let projectURL = packageRoot.appendingPathComponent("WhatTheToken.xcodeproj/project.pbxproj")
+    let project = try String(contentsOf: projectURL, encoding: .utf8)
+
+    #expect(project.contains("name = WhatTheToken;"))
+    #expect(project.contains("WhatTheTokenApp.swift"))
+    #expect(project.contains("XcodeBundleModule.swift"))
+    #expect(project.contains("https://github.com/sparkle-project/Sparkle"))
+    #expect(project.contains("productName = Sparkle;"))
+    #expect(project.contains("Packaging/WhatTheToken-Release.xcconfig"))
+    #expect(project.contains("Packaging/WhatTheToken-Debug.xcconfig"))
+}
+
+@Test func sparkleUpdateControllerIsManualCheckOnly() throws {
+    let packageRoot = packageRootURL()
+    let sourceURL = packageRoot
+        .appendingPathComponent("Sources/WhatTheTokenMac/Updates/SparkleUpdateController.swift")
+    let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+    #expect(source.contains("#if canImport(Sparkle)"))
+    #expect(source.contains("SPUStandardUpdaterController"))
+    #expect(source.contains("startingUpdater: false"))
+    #expect(source.contains("checkForUpdates"))
+    #expect(source.contains("startUpdater()"))
+    #expect(!source.contains("checkForUpdatesInBackground"))
+}
+
 private func packageRootURL() -> URL {
     URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()

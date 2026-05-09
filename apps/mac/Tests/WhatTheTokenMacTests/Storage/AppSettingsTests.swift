@@ -16,8 +16,8 @@ import Testing
         #expect(settings.notifications.isEnabled == false)
         #expect(settings.notifications.warningThreshold == 0.20)
         #expect(settings.notifications.criticalThreshold == 0.10)
-        #expect(settings.notifications.providerAlerts.claudeCode.isEnabled == false)
-        #expect(settings.notifications.providerAlerts.codex.isEnabled == false)
+        #expect(settings.notifications.providerAlerts.claudeCode.isEnabled == true)
+        #expect(settings.notifications.providerAlerts.codex.isEnabled == true)
         #expect(settings.menuBar.displayMode == .statusIcon)
     }
 
@@ -50,13 +50,13 @@ import Testing
         #expect(decoded.connectors.claudeCode.isEnabled == true)
         #expect(decoded.connectors.claudeCode.isPaused == false)
         #expect(decoded.connectors.codex.isEnabled == false)
-        #expect(decoded.refresh.autoRefreshEnabled == true)
+        #expect(decoded.refresh.autoRefreshEnabled == false)
         #expect(decoded.refresh.intervalSeconds == 600)
         #expect(decoded.notifications.isEnabled == true)
         #expect(decoded.notifications.warningThreshold == 0.20)
         #expect(decoded.notifications.criticalThreshold == 0.10)
         #expect(decoded.notifications.providerAlerts.claudeCode.isEnabled == true)
-        #expect(decoded.notifications.providerAlerts.codex.isEnabled == false)
+        #expect(decoded.notifications.providerAlerts.codex.isEnabled == true)
     }
 
     @Test func decodesV1SettingsAndPreservesCustomLowThresholdAsWarningThreshold() throws {

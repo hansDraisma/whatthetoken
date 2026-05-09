@@ -63,6 +63,11 @@
 		200000000000000000000032 = {isa = PBXBuildFile; fileRef = 100000000000000000000032; };
 		200000000000000000000033 = {isa = PBXBuildFile; fileRef = 100000000000000000000033; };
 		200000000000000000000034 = {isa = PBXBuildFile; fileRef = 100000000000000000000034; };
+		200000000000000000000035 = {isa = PBXBuildFile; fileRef = 100000000000000000000035; };
+		200000000000000000000036 = {isa = PBXBuildFile; fileRef = 100000000000000000000036; };
+		200000000000000000000037 = {isa = PBXBuildFile; fileRef = 100000000000000000000037; };
+		200000000000000000000038 = {isa = PBXBuildFile; fileRef = 100000000000000000000038; };
+		200000000000000000000039 = {isa = PBXBuildFile; fileRef = 100000000000000000000039; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -127,6 +132,11 @@
 		100000000000000000000032 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Settings/SettingsRootView.swift; sourceTree = "<group>"; };
 		100000000000000000000033 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/WhatTheTokenApp.swift; sourceTree = "<group>"; };
 		100000000000000000000034 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/XcodeSupport/XcodeBundleModule.swift; sourceTree = "<group>"; };
+		100000000000000000000035 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Notifications/NotificationDelivery.swift; sourceTree = "<group>"; };
+		100000000000000000000036 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Notifications/NotificationEvaluator.swift; sourceTree = "<group>"; };
+		100000000000000000000037 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Notifications/NotificationState.swift; sourceTree = "<group>"; };
+		100000000000000000000038 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/ViewModels/BackgroundRefreshController.swift; sourceTree = "<group>"; };
+		100000000000000000000039 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Popover/MenuBarStatusLabel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -185,12 +195,16 @@
 				100000000000000000000014,
 				100000000000000000000015,
 				100000000000000000000016,
+				100000000000000000000035,
+				100000000000000000000036,
+				100000000000000000000037,
 				100000000000000000000017,
 				100000000000000000000018,
 				100000000000000000000019,
 				10000000000000000000001A,
 				10000000000000000000001B,
 				10000000000000000000001C,
+				100000000000000000000038,
 				10000000000000000000001D,
 				10000000000000000000001E,
 				10000000000000000000001F,
@@ -203,6 +217,7 @@
 				100000000000000000000026,
 				100000000000000000000027,
 				100000000000000000000028,
+				100000000000000000000039,
 				100000000000000000000029,
 				10000000000000000000002A,
 				10000000000000000000002B,
@@ -346,12 +361,16 @@
 				200000000000000000000014,
 				200000000000000000000015,
 				200000000000000000000016,
+				200000000000000000000035,
+				200000000000000000000036,
+				200000000000000000000037,
 				200000000000000000000017,
 				200000000000000000000018,
 				200000000000000000000019,
 				20000000000000000000001A,
 				20000000000000000000001B,
 				20000000000000000000001C,
+				200000000000000000000038,
 				20000000000000000000001D,
 				20000000000000000000001E,
 				20000000000000000000001F,
@@ -364,6 +383,7 @@
 				200000000000000000000026,
 				200000000000000000000027,
 				200000000000000000000028,
+				200000000000000000000039,
 				200000000000000000000029,
 				20000000000000000000002A,
 				20000000000000000000002B,

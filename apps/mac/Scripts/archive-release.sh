@@ -77,7 +77,23 @@ if [[ "$DRY_RUN" -eq 0 && -z "$TEAM_ID" ]]; then
     exit 65
 fi
 
-mkdir -p "$(dirname "$ARCHIVE_PATH")" "$EXPORT_DIR"
+EXPORT_OPTIONS_RESOLVED="$ROOT_DIR/.build/export-options/ExportOptions.DeveloperID.$VERSION.plist"
+
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    rm -rf "$ARCHIVE_PATH"
+    rm -rf "$EXPORT_DIR"
+    mkdir -p "$(dirname "$EXPORT_OPTIONS_RESOLVED")" "$(dirname "$ARCHIVE_PATH")" "$EXPORT_DIR"
+    cp "$EXPORT_OPTIONS" "$EXPORT_OPTIONS_RESOLVED"
+    /usr/libexec/PlistBuddy -c 'Delete :teamID' "$EXPORT_OPTIONS_RESOLVED" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_OPTIONS_RESOLVED"
+else
+    DRY_RUN_TEAM_ID="${TEAM_ID:-<DEVELOPER_ID_TEAM_ID>}"
+    quote_command rm -rf "$ARCHIVE_PATH"
+    quote_command rm -rf "$EXPORT_DIR"
+    quote_command mkdir -p "$(dirname "$EXPORT_OPTIONS_RESOLVED")" "$(dirname "$ARCHIVE_PATH")" "$EXPORT_DIR"
+    quote_command cp "$EXPORT_OPTIONS" "$EXPORT_OPTIONS_RESOLVED"
+    quote_command /usr/libexec/PlistBuddy -c "Add :teamID string $DRY_RUN_TEAM_ID" "$EXPORT_OPTIONS_RESOLVED"
+fi
 
 archive_command=(
     xcodebuild
@@ -100,14 +116,16 @@ export_command=(
     -exportArchive
     -archivePath "$ARCHIVE_PATH"
     -exportPath "$EXPORT_DIR"
-    -exportOptionsPlist "$EXPORT_OPTIONS"
+    -exportOptionsPlist "$EXPORT_OPTIONS_RESOLVED"
 )
 
 run_command "${archive_command[@]}"
 run_command "${export_command[@]}"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
+    quote_command lipo -verify_arch arm64 x86_64 "$EXPORT_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac"
     printf 'Dry run only. No archive or export artifacts were created.\n'
 else
+    lipo -verify_arch arm64 x86_64 "$EXPORT_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac"
     printf '%s\n' "$EXPORT_DIR/WhatTheToken.app"
 fi

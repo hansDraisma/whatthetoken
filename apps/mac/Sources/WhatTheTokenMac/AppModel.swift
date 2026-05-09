@@ -7,12 +7,17 @@ final class AppModel {
     let viewModel: StatusViewModel
     let refreshController: PopoverRefreshController
     let backgroundRefreshController: BackgroundRefreshController
+    let updateController: SparkleUpdateController
 
-    init(viewModel: StatusViewModel) {
+    init(
+        viewModel: StatusViewModel,
+        updateController: SparkleUpdateController = SparkleUpdateController()
+    ) {
         self.viewModel = viewModel
         self.refreshController = PopoverRefreshController(viewModel: viewModel)
         let backgroundRefreshController = BackgroundRefreshController(viewModel: viewModel)
         self.backgroundRefreshController = backgroundRefreshController
+        self.updateController = updateController
         self.viewModel.onSettingsChanged = { [weak backgroundRefreshController] in
             backgroundRefreshController?.settingsDidChange()
         }

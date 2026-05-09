@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION=""
 APP_PATH="$ROOT_DIR/.build/export/WhatTheToken.app"
 OUTPUT=""
-VOLUME_NAME="WhatTheToken"
+VOLUME_NAME=""
 STAGING_DIR=""
 DRY_RUN=0
 
@@ -62,6 +62,10 @@ done
 if [[ -z "$VERSION" ]]; then
     usage >&2
     exit 64
+fi
+
+if [[ -z "$VOLUME_NAME" ]]; then
+    VOLUME_NAME="WhatTheToken $VERSION"
 fi
 
 OUTPUT="${OUTPUT:-"$ROOT_DIR/.build/dmg/WhatTheToken-$VERSION.dmg"}"

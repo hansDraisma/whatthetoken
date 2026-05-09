@@ -3,7 +3,9 @@ import SwiftUI
 struct PopoverFooterView: View {
     let state: PopoverFooterState
     let onRefresh: () -> Void
+    let canCheckForUpdates: Bool
     let onOpenSettings: () -> Void
+    let onCheckForUpdates: () -> Void
     let onOpenDeveloperWindow: (() -> Void)?
 
     var body: some View {
@@ -13,6 +15,8 @@ struct PopoverFooterView: View {
             refreshButton
             Menu {
                 Button("Settings...", action: onOpenSettings)
+                Button("Check for Updates...", action: onCheckForUpdates)
+                    .disabled(!canCheckForUpdates)
                 Button("About WhatTheToken") {
                     // Activate before showing the panel so it comes to front
                     // in `.accessory` mode (where the app is not frontmost

@@ -205,7 +205,7 @@ git commit -m "docs: update Stage 5 roadmap status"
 After the existing `Implementation Status, 2026-05-09` paragraph, add:
 
 ```markdown
-**Checklist Status:** Repo-foundation work is complete except for the Xcode Debug build verification step that is blocked in this workspace by local Xcode first-launch setup. Task 7 is partially complete: dependency install, TypeScript tests, Swift tests, project syntax checks, and release dry-runs passed; real `xcodebuild` archive/build, Developer ID signing, notarization, stapling, and Sparkle EdDSA signing remain blocked on local Xcode setup and maintainer credentials.
+**Checklist Status:** Repo-foundation work is complete. Dependency install, TypeScript tests, Swift tests, project syntax checks, release dry-runs, Xcode Debug build with signing disabled, and unsigned Xcode archive smoke passed after local Xcode first-launch setup. Developer ID signing, notarization, stapling, Gatekeeper assessment of the signed DMG, fresh-account smoke, and Sparkle EdDSA signing remain blocked on maintainer credentials.
 ```
 
 - [ ] **Step 2: Mark completed repo-foundation checkboxes complete**
@@ -222,13 +222,13 @@ to:
 - [x] **Step
 ```
 
-Keep the original Task 4 Xcode build verification unchecked because the build command did not pass in this workspace. Add this line directly under that original Xcode verification step:
+Keep the original Task 4 Xcode build verification checked once it passes in the workspace. If the command fails on another machine, add this line directly under that original Xcode verification step:
 
 ```markdown
 Status: blocked in the workspace by local Xcode first-launch package installation requiring privileged authorization before project loading.
 ```
 
-Leave Task 7 steps unchecked unless the step is explicitly repo-verifiable and already done.
+Leave Task 7 credentialed release steps unchecked unless the step is explicitly repo-verifiable and already done.
 
 - [ ] **Step 3: Make Task 7 status explicit**
 
@@ -249,13 +249,13 @@ In Task 7, mark these steps complete:
 - [x] **Step 5: Document credential-gated verification**
 ```
 
-Keep this step unchecked:
+Mark this step checked once it passes:
 
 ```markdown
-- [ ] **Step 3: Run Xcode debug build**
+- [x] **Step 3: Run Xcode debug build**
 ```
 
-Add this line directly under Step 3:
+If it fails on another machine, add this line directly under Step 3:
 
 ```markdown
 Status: blocked in the workspace by local Xcode first-launch package installation requiring privileged authorization before project loading.

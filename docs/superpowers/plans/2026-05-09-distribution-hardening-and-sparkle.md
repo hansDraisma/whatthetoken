@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6, SwiftUI, Swift Testing, Xcode 26, SwiftPM, Sparkle 2.x, `SMAppService`, bash release scripts, Apple Developer ID notarization tooling.
 
-**Implementation Status, 2026-05-09:** Tasks 1-6 are implemented in repo commits. Full SwiftPM and TypeScript tests pass, release script dry-runs pass, and the Xcode project/scheme parse cleanly. A real `xcodebuild` build is blocked in this workspace by the local Xcode installation requiring privileged first-launch package installation before project loading; real Developer ID signing, notarization, stapling, and Sparkle EdDSA signing remain maintainer-credential-gated release steps.
+**Implementation Status, 2026-05-09:** Tasks 1-6 are implemented in repo commits. Full SwiftPM and TypeScript tests pass, release script dry-runs pass, the Xcode project/scheme parse cleanly, and the Xcode Debug build with signing disabled succeeds after first-launch setup. The unsigned release smoke now archives through Xcode, creates `apps/mac/.build/dmg-smoke/WhatTheToken-0.1.0-unsigned-smoke.dmg`, verifies the DMG, mounts it, checks the app plus `/Applications` symlink, and writes a passing checksum file. Real Developer ID signing, notarization, stapling, Gatekeeper assessment of the signed DMG, fresh-account smoke, and Sparkle EdDSA signing remain maintainer-credential-gated release steps.
 
 ---
 
@@ -309,7 +309,7 @@ git commit -m "docs: add Public V1 release checklist"
 **Files:**
 - All changed files.
 
-- [ ] **Step 1: Install JS dependencies if missing**
+- [x] **Step 1: Install JS dependencies if missing**
 
 Run:
 
@@ -319,7 +319,7 @@ pnpm install --frozen-lockfile
 
 Expected: dependencies install without lockfile changes.
 
-- [ ] **Step 2: Run full tests**
+- [x] **Step 2: Run full tests**
 
 Run:
 
@@ -330,7 +330,7 @@ cd apps/mac && swift test
 
 Expected: both pass.
 
-- [ ] **Step 3: Run Xcode debug build**
+- [x] **Step 3: Run Xcode debug build**
 
 Run:
 
@@ -340,12 +340,12 @@ xcodebuild -project apps/mac/WhatTheToken.xcodeproj -scheme WhatTheToken -config
 
 Expected: build succeeds.
 
-- [ ] **Step 4: Run release-script dry-runs**
+- [x] **Step 4: Run release-script dry-runs**
 
 Run the dry-run commands from Task 5 Step 4.
 
 Expected: all pass.
 
-- [ ] **Step 5: Document credential-gated verification**
+- [x] **Step 5: Document credential-gated verification**
 
 Record that Developer ID signing, notarization submission, stapling of a real DMG, and Sparkle EdDSA signing require maintainer credentials and cannot be completed in an unauthenticated coding workspace.

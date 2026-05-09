@@ -80,7 +80,7 @@ case "$MODE" in
         test -d "$APP_PATH"
         test -f "$APP_PATH/Contents/Info.plist"
         test -f "$APP_PATH/Contents/MacOS/WhatTheTokenMac"
-        lipo -verify_arch arm64 x86_64 "$APP_PATH/Contents/MacOS/WhatTheTokenMac"
+        lipo "$APP_PATH/Contents/MacOS/WhatTheTokenMac" -verify_arch arm64 x86_64
 
         step "3/6 Create DMG"
         "$ROOT_DIR/Scripts/create-dmg.sh" --version "$VERSION"

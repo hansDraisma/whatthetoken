@@ -57,7 +57,7 @@ xcodebuild \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGN_IDENTITY="" \
     DEVELOPMENT_TEAM="" \
-    archive
+    archive >&2
 
 APP_PATH="$ARCHIVE_PATH/Products/Applications/WhatTheToken.app"
 INFO_PLIST="$APP_PATH/Contents/Info.plist"
@@ -78,7 +78,7 @@ fi
 /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST" | grep -Fx "$BUILD" >/dev/null
 /usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$INFO_PLIST" | grep -Fx "true" >/dev/null
 /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$INFO_PLIST" | grep -Fx "AppIcon" >/dev/null
-lipo -verify_arch arm64 x86_64 "$BINARY_PATH"
+lipo "$BINARY_PATH" -verify_arch arm64 x86_64
 
 if [[ ! -f "$ASSETS_CAR" ]]; then
     printf 'Compiled asset catalog not found: %s\n' "$ASSETS_CAR" >&2

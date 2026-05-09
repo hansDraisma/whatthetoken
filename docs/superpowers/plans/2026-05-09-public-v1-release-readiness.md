@@ -1871,7 +1871,7 @@ In `docs/roadmap/development-roadmap.md`, update the Stage 5 distribution sectio
 ```markdown
 Stage 5A repo foundation is complete when release metadata, Xcode target, Sparkle-ready wiring, launch-at-login, scripts, release checklist, app icon, sandbox matrix, rollback rules, and tests are committed.
 
-Stage 5B credentialed rehearsal remains gated on maintainer Xcode setup, Developer ID certificate access, notarization profile, real archive/export, notarized DMG, Gatekeeper verification, and fresh-account smoke.
+Stage 5B credentialed rehearsal remains gated on Developer ID certificate access, notarization profile, signed archive/export, notarized DMG, Gatekeeper verification, Sparkle signed-update smoke, and fresh-account smoke. Unsigned Xcode archive smoke is repo-verified on an initialized local Xcode installation.
 
 Stage 5C public launch remains gated on GitHub Release publication, checksum publication, public docs, repository visibility scan, and Sparkle appcast publication only after signed update smoke passes.
 
@@ -2729,10 +2729,10 @@ Expected on initialized Xcode:
 - Unsigned smoke DMG verifies, mounts, and contains the app plus Applications symlink.
 - The archived app contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
 
-Expected on this workspace if the known Xcode plugin/first-launch issue persists:
+Historical fallback if the known Xcode plugin/first-launch issue appears on another machine:
 
 - Command fails before archive with the plugin/first-launch error.
-- Final status must report that the repo-side work is complete but local unsigned archive proof remains maintainer-gated by `sudo xcodebuild -runFirstLaunch`.
+- Final status must report that the local unsigned archive proof is gated by `sudo xcodebuild -runFirstLaunch` on that machine.
 
 - [ ] **Step 7: Check for accidental secrets or internal paths in release docs**
 

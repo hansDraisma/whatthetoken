@@ -123,9 +123,9 @@ run_command "${archive_command[@]}"
 run_command "${export_command[@]}"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
-    quote_command lipo -verify_arch arm64 x86_64 "$EXPORT_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac"
+    quote_command lipo "$EXPORT_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac" -verify_arch arm64 x86_64
     printf 'Dry run only. No archive or export artifacts were created.\n'
 else
-    lipo -verify_arch arm64 x86_64 "$EXPORT_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac"
+    lipo "$EXPORT_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac" -verify_arch arm64 x86_64
     printf '%s\n' "$EXPORT_DIR/WhatTheToken.app"
 fi

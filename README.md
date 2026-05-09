@@ -31,11 +31,15 @@ Every usage number must be labeled as `verified`, `observed`, `estimated`, or `s
 
 ## Local Persistence And Refresh
 
-The Mac app persists connector consent, refresh preferences, and a sanitized snapshot cache in Application Support. It does not persist provider credentials, raw provider payloads, prompts, responses, cookies, auth headers, or provider session tokens.
+The Mac app persists connector consent, refresh preferences, notification preferences, a sanitized snapshot cache, and sanitized notification dedupe state in Application Support (`settings.json`, `snapshot-cache.json`, `notification-state.json`). It does not persist provider credentials, raw provider payloads, prompts, responses, cookies, auth headers, or provider session tokens.
 
-Connectors start disconnected by default. `Connect Claude Code` and `Connect Codex` are explicit opt-in actions. `Disconnect ...` stops future reads for that provider and removes that provider's cached usage snapshots from WhatTheToken storage. The app must not present a provider as disconnected unless both disabled consent and cache removal are persisted.
+Connectors start disconnected by default. `Connect Claude Code` and `Connect Codex` are explicit opt-in actions. `Pause` stops refresh for a connector while keeping sanitized cached values visible. `Disconnect ...` stops future reads for that provider and removes that provider's cached usage snapshots and notification dedupe state from WhatTheToken storage. The app must not present a provider as disconnected unless disabled consent, cache removal, and notification-state removal are all persisted; if any write fails the provider stays connected.
 
-Manual refresh remains available for connected providers. Opening the popover may refresh enabled connectors subject to provider backoff. Timer-based auto-refresh runs only while the popover is open and only when the user enables it. During refresh, existing values remain visible with a small updating indicator; the last-updated timestamp appears in the footer only.
+Manual refresh remains available for connected, unpaused providers. Opening the popover may refresh enabled connectors subject to provider backoff, and skips a per-provider refresh that ran in the last 60 seconds via background auto-refresh. Timer-based auto-refresh is optional, off by default, and runs while the app process is running only after explicit user opt-in. During refresh, existing values remain visible with a small updating indicator; the last-updated timestamp appears in the footer only.
+
+## Notifications
+
+Local notifications warn before quota runs out. The master toggle is off by default; enabling it requests macOS notification permission. Per-provider toggles default to enabled. Default thresholds are 20% (warning) and 10% (critical). Notifications respect connector pause state, never fire on stale snapshots, and dedupe per provider/pool/window with recovery and rolling-window cooldown so flapping pools do not spam. The menu bar surfaces a critical state when any enabled, unpaused provider has an exhausted-or-critical included quota pool.
 
 ## License
 

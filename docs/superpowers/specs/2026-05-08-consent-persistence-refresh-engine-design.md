@@ -246,11 +246,15 @@ The existing connector setup states keep their `.checking` cases. `ProviderTabMo
 
 Provider connector services still own provider-specific fetching and mapping. They should return sanitized results and discard raw provider responses after parsing.
 
+### Stage 3 Supersession Note
+
+Stage 3 moves repeating automatic refresh ownership from `PopoverRefreshController` to a process-level `BackgroundRefreshController`. This Stage 2 section documents the original popover-scoped refresh preference model; current implementation treats `refresh.autoRefreshEnabled` as explicit app-running background refresh consent and keeps popover-open refresh as a one-shot foreground trigger. v1 settings that enabled popover-only auto-refresh migrate to background refresh disabled.
+
 ### `PopoverRefreshController`
 
-`PopoverRefreshController` no longer owns a hard-coded 30-second timer. It reads the persisted auto-refresh preference from `StatusViewModel` and uses the configured interval only while the popover is open. It does not start an automatic timer when `autoRefreshEnabled` is false.
+`PopoverRefreshController` no longer owns a hard-coded 30-second timer. In Stage 2 it read the persisted auto-refresh preference and used the configured interval only while the popover was open. In the current Stage 3 implementation, repeating refresh is owned by `BackgroundRefreshController`; `PopoverRefreshController` only runs the one-shot foreground popover-open refresh, subject to automatic backoff.
 
-The behavior is fixed for Stage 2: no timer-based automatic refresh unless the user explicitly enables it, and the default interval is 300 seconds when enabled. Popover-open refresh is a one-shot foreground refresh, not an auto-refresh timer, and it is subject to automatic backoff.
+The current behavior is: no timer-based background refresh unless the user explicitly enables it, and the default interval is 300 seconds when enabled. Popover-open refresh remains a one-shot foreground refresh, not a repeating timer.
 
 ### Settings Views
 

@@ -2032,7 +2032,7 @@ Add a `Section("Refresh")`:
 
 ```swift
 Section("Refresh") {
-    Toggle("Auto-refresh while popover is open", isOn: Binding(
+    Toggle("Auto-refresh while app is running", isOn: Binding(
         get: { viewModel.settings.refresh.autoRefreshEnabled },
         set: { enabled in
             var settings = viewModel.settings

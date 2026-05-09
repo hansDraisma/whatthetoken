@@ -42,7 +42,7 @@ Current state:
 - `StatusViewModel` only stores fixture snapshots.
 - `ContentView` only shows `No usage signal` or status cards.
 - `ClaudeConnectorSmokeCommand.swift` currently declares `ClaudeConnectorRefreshing`.
-- `WhatTheTokenApp` starts `ContentView(viewModel: .fixture())`.
+- `WhatTheTokenApp` starts with fixture-backed app state.
 - `ClaudeConnectorService.refresh()` already returns `ClaudeConnectorResult` with sanitized `ConnectorStatus`.
 
 ## Task 1: Add failing opt-in view-model tests
@@ -343,7 +343,7 @@ Expected: tests pass.
 - [ ] Replace fixture startup with a live `StatusViewModel` that injects `ClaudeConnectorService` and does not call `connectClaudeCode()`:
 
 ```swift
-ContentView(viewModel: .live())
+AppModel.live()
 ```
 
 - [ ] Add `StatusViewModel.live()` in `StatusViewModel.swift`:

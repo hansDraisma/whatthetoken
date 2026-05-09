@@ -6,18 +6,35 @@ import Observation
 final class AppModel {
     let viewModel: StatusViewModel
     let refreshController: PopoverRefreshController
+    let backgroundRefreshController: BackgroundRefreshController
 
     init(viewModel: StatusViewModel) {
         self.viewModel = viewModel
         self.refreshController = PopoverRefreshController(viewModel: viewModel)
-        Task { await viewModel.loadPersistedState() }
+        let backgroundRefreshController = BackgroundRefreshController(viewModel: viewModel)
+        self.backgroundRefreshController = backgroundRefreshController
+        self.viewModel.onSettingsChanged = { [weak backgroundRefreshController] in
+            backgroundRefreshController?.settingsDidChange()
+        }
+        Task {
+            await viewModel.loadPersistedState()
+            backgroundRefreshController.start()
+        }
     }
 
     static func live() -> AppModel {
         let directory = applicationSupportDirectory()
         let settingsStore = JSONFileAppSettingsStore(url: directory.appendingPathComponent("settings.json"))
         let cacheStore = JSONFileSnapshotCacheStore(url: directory.appendingPathComponent("snapshot-cache.json"))
-        return AppModel(viewModel: .live(settingsStore: settingsStore, cacheStore: cacheStore))
+        let notificationStateStore = JSONFileNotificationStateStore(url: directory.appendingPathComponent("notification-state.json"))
+        return AppModel(
+            viewModel: .live(
+                settingsStore: settingsStore,
+                cacheStore: cacheStore,
+                notificationStateStore: notificationStateStore,
+                notificationDelivery: UserNotificationDelivery()
+            )
+        )
     }
 
     private static func applicationSupportDirectory() -> URL {

@@ -40,28 +40,19 @@ Already in the repo:
 - SwiftUI Mac app under `apps/mac`.
 - Claude Code connector path with explicit opt-in, local Keychain read boundary, mapper, service, smoke command, and tests.
 - Codex connector path with explicit opt-in, local app-server read boundary, mapper, service, smoke command, and tests.
-- Basic SwiftUI window UI showing connector state and usage rows.
+- Menu bar SwiftUI shell with Claude Code and Codex sections, Settings, About, Quit, and DEBUG developer window.
+- Root README, Apache-2.0 license, privacy/security/contributing docs, issue templates, and synthetic-test CI.
+- Persisted settings for connector consent, pause state, refresh interval, notification preferences, and menu bar display preferences.
+- Sanitized last-known-good snapshot cache with stale evaluation and provider backoff metadata.
+- Manual refresh, popover-open foreground refresh, and opt-in app-running background refresh.
+- Local notification settings, sanitized notification dedupe state, warning/critical evaluator, local notification delivery boundary, and modest menu bar critical state.
 - Privacy boundaries, data contract, ADRs, provider research notes, and implementation plans.
 
 Not yet in the repo:
 
-- Root `README.md`.
-- `LICENSE`.
-- `PRIVACY.md` with a real threat model.
-- `SECURITY.md`.
-- `CONTRIBUTING.md`.
-- GitHub issue templates.
-- CI workflow.
 - Proper `.app` bundle path.
-- Menu bar app shell.
 - App icon and asset catalog.
 - Entitlements and release signing configuration.
-- Persisted user settings.
-- Sanitized last-known-good snapshot cache.
-- Manual refresh button separate from connect.
-- Consented 5-minute auto-refresh.
-- Notifications.
-- Stale snapshot evaluation in the app cache path.
 - Signed/notarized DMG.
 - Sparkle update infrastructure.
 
@@ -215,7 +206,7 @@ Tasks:
 - Add first-run consent for each connector.
 - Add per-connector consent copy explaining what local state is accessed, what is never read, what is stored, and how to disconnect.
 - Add manual refresh that refreshes enabled connectors without changing consent state.
-- Add 5-minute auto-refresh only after explicit user opt-in.
+- Add app-running background auto-refresh only after explicit user opt-in. Do not migrate older popover-only auto-refresh consent into enabled background refresh.
 - Pause or defer refresh around sleep/wake and offline conditions.
 - Add error backoff: 5 minutes, then 15 minutes, then 60 minutes until a successful refresh or manual refresh.
 - Re-evaluate cached snapshots as `stale` when freshness expires.
@@ -225,7 +216,7 @@ Exit criteria:
 
 - Relaunch preserves enabled connectors and last sanitized values.
 - User can review, enable, disable, and disconnect each connector from settings.
-- Auto-refresh is explicit and configurable.
+- Auto-refresh is explicit, configurable, app-running, and disabled by default.
 - No WhatTheToken storage contains copied provider credentials.
 - Stale data is visibly stale.
 
@@ -246,13 +237,13 @@ This stage requires a focused design doc before implementation.
 
 Design requirements:
 
-- Per-pool thresholds, not only global thresholds.
-- Default low and critical thresholds.
+- Provider-level settings with pool/window-level evaluator internals.
+- Default warning and critical thresholds.
 - Notify once per threshold crossing.
-- Reset notification state after quota recovery, provider reset when a provider has a discrete reset, or user-configured cooldown.
+- Reset notification state after quota recovery, provider reset when a provider has a discrete reset, or cooldown.
 - Handle rolling-window providers such as Claude Code without pretending they have a single reset event; use hysteresis, cooldown, and recovery thresholds.
 - Handle flapping pools without repeated alerts.
-- Define quiet hours and macOS Focus behavior.
+- Rely on macOS notification and Focus settings for interruption behavior.
 - Define cross-provider grouping: separate notifications by provider by default, optional summary later.
 - Define notification copy for `verified`, `observed`, `estimated`, and `stale` values.
 - Define behavior when data is stale or confidence is low.
@@ -265,6 +256,8 @@ Tasks:
 - Add tests for threshold crossing, reset, cooldown, and stale suppression.
 - Add settings controls for notifications.
 - Add menu bar critical indicator.
+- Clear provider notification dedupe state on disconnect.
+- Keep developer smoke launch from constructing the live app model so background refresh cannot start in smoke mode.
 
 Exit criteria:
 

@@ -47,8 +47,9 @@ WhatTheToken may store sanitized status data:
 
 The Mac app stores this data locally in its Application Support directory:
 
-- `settings.json` for connector consent, refresh preferences, notification preferences, and menu bar display preferences
+- `settings.json` for connector consent and pause state, refresh preferences, notification preferences (master toggle, thresholds, per-provider toggles), and menu bar display preferences
 - `snapshot-cache.json` for sanitized usage snapshots, last successful refresh timestamps, and sanitized provider error/backoff state
+- `notification-state.json` for sanitized provider/pool/window notification dedupe metadata
 
 These files must not contain provider credentials, copied tokens, raw provider payloads, prompts, responses, cookies, auth headers, provider session tokens, raw local database rows, or sensitive local paths.
 
@@ -56,9 +57,9 @@ These files must not contain provider credentials, copied tokens, raw provider p
 
 Connectors are disabled by default. A connector may read local provider state only after the user chooses `Connect Claude Code` or `Connect Codex`.
 
-Disconnecting a provider disables future reads and removes that provider's cached usage snapshots from WhatTheToken storage. The app must not show the provider as disconnected unless disabled consent and cache removal are both persisted. If either write fails, the UI remains connected so it does not claim cached data was removed.
+Pausing a provider disables manual and automatic refresh for that connector while keeping sanitized cached values visible. Disconnecting a provider disables future reads and removes that provider's cached usage snapshots and notification dedupe state from WhatTheToken storage. The app must not show the provider as disconnected unless the cache write, the settings write, and the notification-state write all succeed. If any of those writes fails, the UI remains connected so it does not claim cached data was removed.
 
-Opening the popover may refresh enabled connectors, but provider backoff still applies. Timer-based auto-refresh is optional, off by default, and runs only while the popover is open.
+Opening the popover may refresh enabled, unpaused connectors, but provider backoff still applies. Timer-based auto-refresh is optional, off by default, and runs while the app process is running only after explicit user opt-in.
 
 ## Confidence Labels
 

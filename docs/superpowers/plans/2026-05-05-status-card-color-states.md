@@ -1386,7 +1386,7 @@ Expected: build succeeds.
 
 - [ ] **Step 6.3: Manual smoke check**
 
-`WhatTheTokenApp` starts with `.live()` today, so the deterministic fixture state requires a temporary local-only launcher edit. Change `ContentView(viewModel: .live())` to `ContentView(viewModel: .fixture())`, run the app, then discard that one-line launcher edit before committing Task 6.
+`WhatTheTokenApp` starts with a live `AppModel` today, so the deterministic fixture state requires a temporary local-only launcher edit. Inject a fixture-backed `StatusViewModel` through `AppModel`, run the app, then discard that launcher edit before committing Task 6.
 
 ```bash
 cd apps/mac && swift run WhatTheTokenMac
@@ -1397,7 +1397,7 @@ With the fixture loaded (38 % remaining, healthy state) the app should now show:
 - One row labeled `Current session` with `38% remaining`, a `62% used` echo, a green-tinted bar, and `● Plenty left`.
 - "Compare in Claude →" link in the header.
 
-Close the app once verified and restore `ContentView(viewModel: .live())`.
+Close the app once verified and restore the live `AppModel` path.
 
 - [ ] **Step 6.4: Commit**
 

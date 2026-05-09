@@ -174,7 +174,21 @@ rg -n "Stage 5A repo foundation|credentialed release rehearsal|future-only|Gener
 
 Expected: the first two phrases match; the old unconditional Sparkle-key and future-only wording do not match.
 
-- [ ] **Step 6: Commit roadmap update**
+- [ ] **Step 6: Update roadmap execution rule**
+
+Replace the current execution rule sentence:
+
+```markdown
+Follow stages in order. Stage 0 through Stage 4 produce Internal V0. Stage 5 produces Public V1. Stages 6 and later should not start until the local product is useful, trusted, installable, and public.
+```
+
+with:
+
+```markdown
+Follow stages in order. Stage 0 through Stage 4 produce Internal V0. Stage 5 has three gates: Stage 5A repo foundation, Stage 5B credentialed release rehearsal, and Stage 5C public launch. Stages 6 and later should not start until Stage 5C exits and the local product is useful, trusted, installable, and public.
+```
+
+- [ ] **Step 7: Commit roadmap update**
 
 ```bash
 git add docs/roadmap/development-roadmap.md
@@ -191,12 +205,12 @@ git commit -m "docs: update Stage 5 roadmap status"
 After the existing `Implementation Status, 2026-05-09` paragraph, add:
 
 ```markdown
-**Checklist Status:** Tasks 1-6 are repo-foundation work and are complete. Task 7 is partially complete: dependency install, TypeScript tests, Swift tests, project syntax checks, and release dry-runs passed; real `xcodebuild` archive/build, Developer ID signing, notarization, stapling, and Sparkle EdDSA signing remain blocked on local Xcode setup and maintainer credentials.
+**Checklist Status:** Repo-foundation work is complete except for the Xcode Debug build verification step that is blocked in this workspace by local Xcode first-launch setup. Task 7 is partially complete: dependency install, TypeScript tests, Swift tests, project syntax checks, and release dry-runs passed; real `xcodebuild` archive/build, Developer ID signing, notarization, stapling, and Sparkle EdDSA signing remain blocked on local Xcode setup and maintainer credentials.
 ```
 
-- [ ] **Step 2: Mark Tasks 1-6 checkboxes complete**
+- [ ] **Step 2: Mark completed repo-foundation checkboxes complete**
 
-Replace every unchecked checkbox under `Task 1` through `Task 6` from:
+Replace completed unchecked checkboxes under `Task 1` through `Task 6` from:
 
 ```markdown
 - [ ] **Step
@@ -206,6 +220,12 @@ to:
 
 ```markdown
 - [x] **Step
+```
+
+Keep the original Task 4 Xcode build verification unchecked because the build command did not pass in this workspace. Add this line directly under that original Xcode verification step:
+
+```markdown
+Status: blocked in the workspace by local Xcode first-launch package installation requiring privileged authorization before project loading.
 ```
 
 Leave Task 7 steps unchecked unless the step is explicitly repo-verifiable and already done.
@@ -249,7 +269,7 @@ Run:
 rg -n "\\- \\[ \\] \\*\\*Step|Checklist Status|Status: blocked in the workspace" docs/superpowers/plans/2026-05-09-distribution-hardening-and-sparkle.md
 ```
 
-Expected: unchecked matches remain only for Task 7 Step 3, plus any intentional explanatory heading text. `Checklist Status` and Xcode blocked status both match.
+Expected: unchecked matches remain only for the original Task 4 Xcode build verification and Task 7 Step 3, plus any intentional explanatory heading text. `Checklist Status` and both Xcode blocked statuses match.
 
 - [ ] **Step 6: Commit plan status update**
 

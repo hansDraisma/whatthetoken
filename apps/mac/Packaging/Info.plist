@@ -26,9 +26,13 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>SUFeedURL</key>
+	<string>https://hansdraisma.github.io/whatthetoken/appcast.xml</string>
 	<key>SUAutomaticallyUpdate</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>
 	<false/>
+	<key>SUPublicEDKey</key>
+	<string>rwQnge6z/GQvR9NwGuQFBpN44ZcaUBzixfISv77Z2hg=</string>
 </dict>
 </plist>

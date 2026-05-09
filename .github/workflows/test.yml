@@ -36,6 +36,9 @@ jobs:
         working-directory: apps/mac
         run: swift test
 
+      - name: Build Mac Xcode app target
+        run: xcodebuild -project apps/mac/WhatTheToken.xcodeproj -scheme WhatTheToken -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
+
       - name: Verify Mac release metadata
         run: |
           plutil -lint apps/mac/Packaging/Info.plist

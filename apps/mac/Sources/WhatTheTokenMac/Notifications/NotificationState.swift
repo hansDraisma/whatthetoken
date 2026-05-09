@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+let notificationsLogger = Logger(subsystem: "app.whatthetoken.mac", category: "notifications")
 
 enum NotificationLevel: String, Codable, Equatable, Sendable {
     case healthy
@@ -74,6 +77,9 @@ final class JSONFileNotificationStateStore: NotificationStateStore, @unchecked S
             lock.withLock { fallback = false }
             return state
         } catch {
+            if (error as? CocoaError)?.code != .fileReadNoSuchFile {
+                notificationsLogger.warning("notification-state load failed: \(String(describing: error), privacy: .private)")
+            }
             lock.withLock { fallback = true }
             return .empty
         }
@@ -95,6 +101,7 @@ final class JSONFileNotificationStateStore: NotificationStateStore, @unchecked S
             }
             return true
         } catch {
+            notificationsLogger.error("notification-state save failed: \(String(describing: error), privacy: .private)")
             try? FileManager.default.removeItem(at: temporaryURL)
             return false
         }

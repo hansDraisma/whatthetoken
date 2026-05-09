@@ -19,7 +19,8 @@ enum NotificationEvaluator {
         settings: AppSettings,
         state: NotificationState,
         now: Date,
-        suppressDelivery: Bool
+        suppressDelivery: Bool,
+        scopedTo scopedProvider: CachedProviderID? = nil
     ) -> NotificationEvaluationResult {
         guard settings.notifications.isEnabled else {
             return NotificationEvaluationResult(intents: [], state: state)
@@ -30,6 +31,7 @@ enum NotificationEvaluator {
 
         for snapshot in snapshots {
             guard let provider = provider(for: snapshot) else { continue }
+            if let scopedProvider, provider != scopedProvider { continue }
             guard isProviderEnabled(provider, settings: settings) else { continue }
             guard !isProviderPaused(provider, settings: settings) else { continue }
             guard settings.notifications.providerAlerts.isEnabled(for: provider) else { continue }

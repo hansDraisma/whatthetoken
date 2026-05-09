@@ -115,7 +115,7 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
     spctl -a -vv -t exec "$COPY_DIR/WhatTheToken.app"
     /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$COPY_DIR/WhatTheToken.app/Contents/Info.plist" | grep -Fx "AppIcon" >/dev/null
     test -f "$COPY_DIR/WhatTheToken.app/Contents/Resources/Assets.car"
-    lipo -verify_arch arm64 x86_64 "$COPY_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac"
+    lipo "$COPY_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac" -verify_arch arm64 x86_64
 else
     quote_command hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint /tmp/whatthetoken-dmg
     quote_command test -d /tmp/whatthetoken-dmg/WhatTheToken.app

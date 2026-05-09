@@ -24,6 +24,29 @@ private struct AppIconContents: Decodable {
     #expect(project.contains("Packaging/WhatTheToken-Debug.xcconfig"))
 }
 
+@Test func xcodeProjectIncludesEveryMacSourceFile() throws {
+    let project = try macFileContents("WhatTheToken.xcodeproj/project.pbxproj")
+    let sourceRoot = macPackageRootURL().appendingPathComponent("Sources/WhatTheTokenMac")
+    let enumerator = FileManager.default.enumerator(
+        at: sourceRoot,
+        includingPropertiesForKeys: nil
+    )
+    let sourcePaths = try #require(enumerator?.compactMap { item -> String? in
+        guard let url = item as? URL, url.pathExtension == "swift" else {
+            return nil
+        }
+        let relativePath = url.path.replacingOccurrences(
+            of: macPackageRootURL().path + "/",
+            with: ""
+        )
+        return relativePath
+    })
+
+    for sourcePath in sourcePaths.sorted() {
+        #expect(project.contains(sourcePath))
+    }
+}
+
 @Test func xcodePackageResolutionPinsSparkleForReleaseReproducibility() throws {
     let resolved = try macFileContents("WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
 

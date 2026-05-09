@@ -23,7 +23,7 @@ import Testing
                 "rm -rf \"$ARCHIVE_PATH\"",
                 "rm -rf \"$EXPORT_DIR\"",
                 "DEVELOPER_ID_TEAM_ID",
-                "lipo -verify_arch"
+                "-verify_arch"
             ]
         ),
         (
@@ -68,7 +68,7 @@ import Testing
                 "hdiutil verify",
                 "hdiutil attach",
                 "hdiutil detach",
-                "lipo -verify_arch",
+                "-verify_arch",
                 "CFBundleIconName",
                 "Assets.car",
                 "Timestamp="
@@ -102,7 +102,7 @@ import Testing
                 "step \"1/6 Verify release provenance\"",
                 "test -d",
                 "test -f",
-                "lipo -verify_arch",
+                "-verify_arch",
                 "codesign --verify",
                 "xcrun stapler validate"
             ]
@@ -143,4 +143,50 @@ import Testing
         #expect(!script.contains("echo \"$SPARKLE"))
         #expect(!script.contains("echo \"${SPARKLE"))
     }
+}
+
+@Test func releaseScriptsPassBinaryBeforeLipoVerifyArch() throws {
+    let expectedCommands: [(name: String, commands: [String])] = [
+        (
+            "archive-release.sh",
+            [
+                "quote_command lipo \"$EXPORT_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac\" -verify_arch arm64 x86_64",
+                "lipo \"$EXPORT_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac\" -verify_arch arm64 x86_64"
+            ]
+        ),
+        (
+            "rehearse-release.sh",
+            [
+                "lipo \"$APP_PATH/Contents/MacOS/WhatTheTokenMac\" -verify_arch arm64 x86_64"
+            ]
+        ),
+        (
+            "smoke-archive-unsigned.sh",
+            [
+                "lipo \"$BINARY_PATH\" -verify_arch arm64 x86_64"
+            ]
+        ),
+        (
+            "verify-release-artifacts.sh",
+            [
+                "lipo \"$COPY_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac\" -verify_arch arm64 x86_64"
+            ]
+        )
+    ]
+
+    for scriptInfo in expectedCommands {
+        let script = try macFileContents("Scripts/\(scriptInfo.name)")
+
+        for command in scriptInfo.commands {
+            #expect(script.contains(command))
+        }
+    }
+}
+
+@Test func unsignedSmokeArchiveStdoutIsOnlyTheAppPath() throws {
+    let script = try macFileContents("Scripts/smoke-archive-unsigned.sh")
+
+    #expect(script.contains("APP_PATH=\"$ARCHIVE_PATH/Products/Applications/WhatTheToken.app\""))
+    #expect(script.contains("printf '%s\\n' \"$APP_PATH\""))
+    #expect(script.contains("    archive >&2"))
 }

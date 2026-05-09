@@ -327,7 +327,7 @@ Tasks:
 
 Stage 5A repo foundation is complete when release metadata, Xcode target, Sparkle-ready wiring, launch-at-login, scripts, release checklist, app icon, sandbox matrix, rollback rules, and tests are committed.
 
-Stage 5B credentialed rehearsal remains gated on maintainer Xcode setup, Developer ID certificate access, notarization profile, real archive/export, notarized DMG, Gatekeeper verification, and fresh-account smoke.
+Stage 5B credentialed rehearsal remains gated on Developer ID certificate access, notarization profile, signed archive/export, notarized DMG, Gatekeeper verification, Sparkle signed-update smoke, and fresh-account smoke. Unsigned Xcode archive smoke is repo-verified on an initialized local Xcode installation.
 
 Stage 5C public launch remains gated on GitHub Release publication, checksum publication, public docs, repository visibility scan, and Sparkle appcast publication only after signed update smoke passes.
 

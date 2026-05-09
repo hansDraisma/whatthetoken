@@ -106,7 +106,9 @@ Default state:
 - notifications disabled
 - warning threshold 20%
 - critical threshold 10%
-- provider alerts enabled for each enabled connector by default once notifications are enabled
+- provider alerts default to enabled (`providerAlerts.{claudeCode,codex}.isEnabled = true`)
+
+Provider alerts default to true on fresh installs and during v1→v2 migration. Toggling the master notifications switch must not mutate provider-alert toggles, so an alert the user explicitly disabled stays disabled across enable/disable cycles.
 
 When the user turns notifications on:
 
@@ -154,7 +156,7 @@ Paused providers:
 - keep cached snapshots visible with a paused/disconnected affordance
 - do not emit notifications
 
-Disconnect while paused still requires confirmation and still removes cached values. Re-enabling after disconnect starts from an empty provider cache and refreshes only after the user resumes/connects the provider.
+Disconnect while paused still requires confirmation and still removes cached values. It also clears that provider's notification dedupe state so a later reconnect can alert again if the provider is still below threshold. Re-enabling after disconnect starts from an empty provider cache and refreshes only after the user resumes/connects the provider.
 
 ## Background Freshness
 
@@ -170,6 +172,7 @@ Responsibilities:
 - respect per-provider backoff
 - stop or restart when settings change
 - avoid overlapping all-provider refreshes
+- never start in developer smoke-command mode
 
 The scheduler must run only while the app process is running. It should not create launch agents, login items, or hidden daemons in Stage 3.
 
@@ -220,13 +223,11 @@ The stale reason should remain user-safe and avoid provider internals. Example: 
 
 Evaluate notifications after every successful refresh and after cached snapshots are loaded.
 
-Cache-load evaluation is state restoration, not a new quota observation. It must not emit a notification unless all of these are true:
+Cache-load evaluation is state restoration, not a new quota observation. The current implementation never delivers notifications on cache load: `evaluateNotifications(suppressDelivery: true)` runs once during `loadPersistedState` so the evaluator can rebuild dedupe records from the cached snapshots without firing user-visible notifications, regardless of whether the prior notification-state file existed, decoded successfully, or was absent.
 
-- the snapshot is still fresh under the current stale policy
-- notification state says this provider/pool/window level was not already notified
-- the notification state was absent because this is the first app version with notifications enabled, not because state decode failed
+This blanket suppression is deliberate. It avoids startup notification storms when a user reopens the app to a critical state, and it keeps a corrupted notification-state file from manifesting as duplicate alerts. The trade-off is that legitimate first-time critical states observed only via the cache (no fresh refresh yet) wait for the next successful provider refresh before notifying.
 
-If notification state decode fails, suppress cache-load notifications for that launch and rebuild state from the next successful refresh. This avoids notification storms after launch or corrupted local state.
+If notification state decode fails, the in-memory state falls back to empty and `suppressCacheLoadNotifications` is also set so the next refresh's evaluation continues to suppress delivery for one cycle. Subsequent refreshes deliver normally.
 
 Inputs:
 
@@ -247,12 +248,14 @@ Do not evaluate notifications for:
 
 ### Pool Selection
 
-The evaluator should classify snapshots into the same lanes used by `ProviderAvailability`:
+The evaluator should classify snapshots into the same lanes as `ProviderAvailability`:
 
 - included quota pools
 - fallback credit pools
 
-Notifications should fire on included quota pressure first. Fallback-only states may produce different copy later, but Stage 3 should not alert on zero fallback credits while included quota is healthy.
+The current implementation approximates this by treating any snapshot with `unit == "utilization"` as included quota. Today's connectors satisfy this (Claude included has `unit: utilization` and `poolKey: anthropic_claude_subscription`; Codex included has `unit: utilization` and a non-credits poolKey; both fallback pools use `unit: credits`). When a future connector emits a `utilization`-unit snapshot that is not part of the included pool, this helper must be tightened to use `ProviderAvailability`'s lane definitions directly.
+
+Notifications fire on included quota pressure only. Fallback credit pools are intentionally not notified in Stage 3, even when fallback credits hit zero — the menu bar critical state and in-app banners surface that case instead.
 
 ### Thresholds
 
@@ -288,8 +291,9 @@ Recovery rules:
 
 - warning alert can fire again only after the pool recovers to at least `warning + 5 percentage points`
 - critical alert can fire again only after the pool recovers to at least `critical + 5 percentage points`
-- if a provider has a discrete `resetAt`, recovery after reset also clears notification state for that pool/window
 - for rolling-window providers, use recovery threshold plus a minimum 60-minute cooldown to avoid repeated alerts during churn
+
+Reset-driven clearing (re-fire notification state when a provider crosses its discrete `resetAt`) is documented as a follow-up: today's evaluator only relies on threshold-based recovery and the rolling-window cooldown. Rolling windows are detected by a normalized window key starting with `rolling_` (e.g., `rolling_5h`, `rolling_7d`).
 
 Critical escalation:
 
@@ -324,7 +328,8 @@ Live implementation:
 - requests permission only after user action
 - schedules local notifications
 - relies on macOS Focus and notification settings for interruption behavior
-- when permission is denied, offers System Settings guidance using `x-apple.systempreferences:com.apple.preference.notifications` if that URL works on the supported macOS version; otherwise show textual instructions
+- bails out without contacting `UNUserNotificationCenter` when the binary is not running from a real `.app` bundle (`Bundle.main.bundleURL.pathExtension != "app"` or no `bundleIdentifier`); this keeps SPM-built CLI runs from trapping
+- when permission is denied, the master toggle persists `notifications.isEnabled = false` and the per-provider/threshold controls are disabled in Settings. A System Settings deeplink (`x-apple.systempreferences:com.apple.preference.notifications`) is documented as a follow-up; today's UI does not surface a button or copy directing users to System Settings.
 
 Test implementation:
 
@@ -336,7 +341,16 @@ Stage 3 should not implement custom quiet hours unless product testing shows mac
 
 ## Menu Bar Indicator
 
-When any enabled, unpaused provider has a critical included quota pool, the menu bar item should expose a critical state.
+When any enabled, unpaused provider has an exhausted-or-critical included quota pool, the menu bar item should expose a critical state.
+
+Critical here is defined via `ProviderAvailability`:
+
+- `.critical` (included pool below critical threshold, no fallback) → critical
+- `.criticalWithFallback` (included pool below critical threshold, fallback positive) → critical
+- `.fallbackOnly` (included pool fully exhausted, fallback positive) → critical
+- `.available`, `.low`, `.stale` → not critical
+
+Paused providers are excluded from the indicator regardless of pool state, since refresh is intentionally suspended for them.
 
 The visual design should stay modest:
 
@@ -345,7 +359,7 @@ The visual design should stay modest:
 - include a visible critical affordance in the menu bar item if it can be implemented without private API or layout instability
 - avoid a complex dynamic badge until the visual polish stage
 
-The indicator must use `ProviderAvailability`, not raw worst-row state, so fallback credits do not make a provider look critical while included quota is healthy.
+The indicator must use `ProviderAvailability`, not raw worst-row state, so a healthy included pool with low fallback credits does not flip the menu bar to critical.
 
 ## Data And Privacy
 
@@ -397,14 +411,14 @@ Migration rules for v1 settings:
 
 - preserve `connectors.*.isEnabled`
 - set new `connectors.*.isPaused = false`
-- preserve `refresh.autoRefreshEnabled`
+- migrate `refresh.autoRefreshEnabled` to `false`; v1 auto-refresh only covered popover-open foreground refresh, so background refresh requires a fresh opt-in
 - preserve `refresh.intervalSeconds`
 - preserve `notifications.isEnabled`
 - rename or map `notifications.lowThreshold` to `notifications.warningThreshold`
 - if the v1 `lowThreshold` is the old default `0.30`, migrate it to the new warning default `0.20`
 - if the user had changed `lowThreshold` to a non-default value, preserve that value as `warningThreshold`
 - preserve `notifications.criticalThreshold`
-- add provider alert settings enabled for providers whose connector is enabled, disabled for providers whose connector is disabled
+- set both provider alert toggles to enabled regardless of v1 connector enabled state, matching the new fresh-install default
 - preserve `menuBar.displayMode`
 
 `decodeValidated` should decode v2 directly, migrate v1 into v2, and reject unknown future schema versions by falling back to safe defaults through the store. Safe defaults remain: connectors disabled, paused false, background refresh disabled, notifications disabled.
@@ -428,17 +442,23 @@ New responsibilities:
 
 ### `BackgroundRefreshController`
 
-New process-level controller owned by `AppModel`.
+Process-level controller owned by `AppModel`. Lifecycle:
 
-It should observe settings through explicit method calls from `StatusViewModel` or a lightweight callback. Avoid making SwiftUI views responsible for background scheduling.
+- `AppModel.init` constructs the controller, wires `StatusViewModel.onSettingsChanged` to call `controller.settingsDidChange()`, then `Task { await viewModel.loadPersistedState(); controller.start() }`
+- `start()` increments a generation, stops any prior timer, and only schedules a new timer when `settings.refresh.autoRefreshEnabled` is true. It also registers an `NSApplication.willBecomeActiveNotification` observer (when AppKit is available) and immediately runs one `appBecameActive()` so enabling auto-refresh does not wait a full interval for the first refresh.
+- `settingsDidChange()` re-runs `start()`, which is how interval/auto-refresh-toggle changes propagate.
+- `stop()` cancels the timer task and removes the activation observer.
+
+The controller never owns settings state directly; SwiftUI views never observe it. View models trigger `settingsDidChange` via the `onSettingsChanged` callback.
 
 ### `NotificationEvaluator`
 
 Pure Swift domain service:
 
-- accepts sanitized snapshots and settings
-- returns notification intents
-- updates notification state
+- accepts sanitized snapshots, settings, prior notification state, and an optional `scopedTo` provider
+- returns notification intents and the updated notification state
+- when `scopedTo` is set, processes only snapshots matching that provider; cache-load and cross-provider scans pass `nil`
+- callers must scope evaluator runs to the provider that just refreshed so a single-provider refresh cannot fire notifications for a different provider's cached snapshot
 
 No macOS APIs, no I/O, no SwiftUI.
 
@@ -455,7 +475,9 @@ The evaluator decides whether a notification should exist. The delivery service 
 - If background refresh fails, keep Stage 2 cached values and backoff behavior.
 - If notification state decode fails, fall back to empty notification state; do not delete snapshot cache.
 - If notification state decode fails during app startup, suppress cache-load notification delivery until the next successful provider refresh.
+- If a notification state save fails, retain the in-memory state, mark it unsaved, and retry on the next evaluation. Skip retry-only saves for at least 60 seconds after the last failure to avoid log spam from persistent disk errors.
 - If settings migration fails, fall back to safe defaults: connectors disabled, background refresh disabled, notifications disabled.
+- If a developer smoke flag is present, skip live app model construction so persisted background refresh cannot run before smoke-command environment gates.
 
 ## Testing Strategy
 
@@ -471,9 +493,10 @@ Add focused tests for:
 - pause keeps cached snapshots
 - disconnect while paused still removes cached snapshots after confirmation
 - disconnect removes cached snapshots
+- disconnect removes provider notification dedupe state
 - stale policy is `max(2 * interval, 15 minutes)` for automatic users
 - stale policy is 60 minutes for manual-only users
-- settings migration preserves v1 connector consent and migrates the old 30% notification default to 20%
+- settings migration preserves v1 connector consent, migrates the old 30% notification default to 20%, and forces background refresh disabled for fresh opt-in
 - notification settings defaults are 20% warning and 10% critical
 - notification permission is requested only after user action
 - evaluator fires warning once below 20%
@@ -488,6 +511,9 @@ Add focused tests for:
 - rolling-window dedupe keys stay stable across refreshes
 - notification copy includes confidence-specific provenance
 - notification state stores only sanitized provider/pool/window metadata
+- a single-provider refresh does not deliver notifications for another provider's cached snapshot (scopedTo enforcement)
+- notification state save retries after a transient store failure
+- menu bar critical state covers `critical`, `criticalWithFallback`, and `fallbackOnly`, and ignores paused providers
 
 Manual verification:
 
@@ -497,17 +523,19 @@ Manual verification:
 - use fixture states below 20% and 10% to confirm notifications
 - confirm macOS Focus controls notification interruption behavior
 - pause connector and confirm cached values remain visible but no refresh/notification occurs
-- disconnect connector and confirm cached values are removed
+- disconnect connector and confirm cached values and provider notification dedupe state are removed
 
 ## Acceptance Criteria
 
 - Background refresh works while the app is running and the popover is closed.
 - Background refresh is disabled by default and requires explicit opt-in.
+- v1 popover-only auto-refresh consent does not migrate into enabled background refresh.
+- Smoke-command launch does not construct the live app model or start background refresh.
 - Auto-refresh still respects connector consent, pause state, and provider backoff.
 - Foreground and background refresh do not double-refresh providers immediately after a recent background refresh.
 - Wake or app activation performs at most one catch-up refresh when background refresh is overdue.
 - Pause keeps sanitized cached values and stops refresh/notifications.
-- Disconnect removes sanitized cached values for that provider.
+- Disconnect removes sanitized cached values and notification dedupe state for that provider.
 - Stale timing adapts to refresh mode.
 - Stage 2 v1 settings migrate to Stage 3 v2 settings without losing enabled connector consent.
 - Notifications are disabled by default and request macOS permission only after user action.

@@ -35,6 +35,7 @@
   - Wire notification state/delivery stores into `StatusViewModel`.
 - Modify: `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift`
   - Expose a modest critical menu-bar state.
+  - Skip live `AppModel` construction for developer smoke commands.
 - Create: `apps/mac/Sources/WhatTheTokenMac/Views/Popover/MenuBarStatusLabel.swift`
   - Render an observing menu-bar label so critical state updates after snapshot changes.
 - Modify: `apps/mac/Sources/WhatTheTokenMac/Views/Settings/ConnectorActionTitle.swift`
@@ -50,6 +51,7 @@
 - Test: `apps/mac/Tests/WhatTheTokenMacTests/Notifications/NotificationDeliveryTests.swift`
 - Test: `apps/mac/Tests/WhatTheTokenMacTests/BackgroundRefreshControllerTests.swift`
 - Test: `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift`
+- Test: `apps/mac/Tests/WhatTheTokenMacTests/AppModelTests.swift`
 - Test: `apps/mac/Tests/WhatTheTokenMacTests/Presentation/ConnectorActionTitleTests.swift`
 
 ## Conventions
@@ -141,7 +143,7 @@ Append these tests to `apps/mac/Tests/WhatTheTokenMacTests/Storage/AppSettingsTe
     #expect(decoded.connectors.claudeCode.isEnabled == true)
     #expect(decoded.connectors.claudeCode.isPaused == false)
     #expect(decoded.connectors.codex.isEnabled == false)
-    #expect(decoded.refresh.autoRefreshEnabled == true)
+    #expect(decoded.refresh.autoRefreshEnabled == false)
     #expect(decoded.refresh.intervalSeconds == 600)
     #expect(decoded.notifications.isEnabled == true)
     #expect(decoded.notifications.warningThreshold == 0.20)
@@ -261,7 +263,7 @@ struct AppSettings: Codable, Equatable, Sendable {
                 claudeCode: ConnectorConsentSettings(isEnabled: v1.connectors.claudeCode.isEnabled, isPaused: false),
                 codex: ConnectorConsentSettings(isEnabled: v1.connectors.codex.isEnabled, isPaused: false)
             ),
-            refresh: v1.refresh,
+            refresh: RefreshSettings(autoRefreshEnabled: false, intervalSeconds: v1.refresh.intervalSeconds),
             notifications: NotificationSettings(
                 isEnabled: v1.notifications.isEnabled,
                 warningThreshold: warningThreshold,
@@ -357,6 +359,8 @@ enum AppSettingsDecodeError: Error, Equatable {
     case unsupportedSchemaVersion(Int)
 }
 ```
+
+The v1 `autoRefreshEnabled` field represented the old popover-only timer. Do not preserve it as enabled background refresh consent during v2 migration; keep the interval but require a fresh background-refresh opt-in.
 
 - [ ] **Step 4: Update existing test expectations**
 
@@ -465,6 +469,40 @@ Append to `apps/mac/Tests/WhatTheTokenMacTests/StatusViewModelTests.swift`:
     #expect(vm.settings.connectors.codex.isEnabled == false)
     #expect(vm.settings.connectors.codex.isPaused == false)
     #expect(vm.snapshots.contains(where: CachedProviderID.codex.snapshotPredicate) == false)
+}
+
+@MainActor
+@Test func disconnectClearsProviderNotificationState() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
+    let codexKey = NotificationDedupeKey(provider: .codex, poolKey: "openai_codex_included", windowKey: "rolling_5h")
+    let claudeKey = NotificationDedupeKey(provider: .claude, poolKey: "anthropic_claude_subscription", windowKey: "rolling_5h")
+    var state = NotificationState.empty
+    state.records[codexKey.storageKey] = NotificationRecord(
+        key: codexKey,
+        lastNotifiedLevel: .critical,
+        lastNotifiedAt: Date(timeIntervalSince1970: 1),
+        lastObservedLevel: .critical,
+        recoveredAt: nil
+    )
+    state.records[claudeKey.storageKey] = NotificationRecord(
+        key: claudeKey,
+        lastNotifiedLevel: .warning,
+        lastNotifiedAt: Date(timeIntervalSince1970: 1),
+        lastObservedLevel: .warning,
+        recoveredAt: nil
+    )
+    let stateStore = InMemoryNotificationStateStore(data: try! JSONEncoder.notificationStateEncoder.encode(state))
+    let settingsStore = InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
+    let vm = StatusViewModel(settingsStore: settingsStore, notificationStateStore: stateStore)
+
+    await vm.loadPersistedState()
+    await vm.disconnect(.codex)
+
+    let persisted = await stateStore.load()
+    #expect(persisted.records[codexKey.storageKey] == nil)
+    #expect(persisted.records[claudeKey.storageKey] != nil)
 }
 
 @MainActor
@@ -2133,7 +2171,7 @@ func primaryConnectorAction(for provider: CachedProviderID) {
 }
 ```
 
-Pass `disconnectActionTitle` and `disconnectAction` whenever the connector is enabled, including paused connectors. Disconnect remains the destructive action that removes cached values; pause only stops refresh and keeps cached values visible.
+Pass `disconnectActionTitle` and `disconnectAction` whenever the connector is enabled, including paused connectors. Disconnect remains the destructive action that removes cached values and provider notification dedupe state; pause only stops refresh and keeps cached values visible.
 
 Add an `Alerts` section:
 
@@ -2322,6 +2360,7 @@ git commit -m "feat(mac): debounce popover refresh after background refresh"
 - Create: `apps/mac/Sources/WhatTheTokenMac/Views/Popover/MenuBarStatusLabel.swift`
 - Modify: `apps/mac/Sources/WhatTheTokenMac/WhatTheTokenApp.swift`
 - Modify: `apps/mac/Tests/WhatTheTokenMacTests/Presentation/PopoverChromeStateTests.swift`
+- Modify: `apps/mac/Tests/WhatTheTokenMacTests/AppModelTests.swift`
 
 - [ ] **Step 1: Add failing critical indicator test**
 
@@ -2419,10 +2458,13 @@ MenuBarExtra {
 }
 ```
 
+Keep smoke launch outside the live app path. `WhatTheTokenApp.init()` should call a small testable helper that checks `--claude-connector-smoke` and `--codex-connector-smoke` before constructing `AppModel.live()`. Add an `AppModelTests` regression that passes a smoke argument, asserts the helper returns `nil`, asserts the smoke closure ran, and asserts the live app factory did not run. This prevents persisted background refresh from starting before the smoke command's explicit environment gate.
+
 - [ ] **Step 6: Run focused tests**
 
 ```bash
 cd apps/mac && swift test --filter PopoverChromeStateTests
+cd apps/mac && swift test --filter AppModelTests
 ```
 
 Expected: tests pass. If `gauge.with.dots.needle.67percent` is unavailable on macOS 14, use `exclamationmark.triangle` for critical and update the test.
@@ -2487,7 +2529,7 @@ Manual checks:
 - Refresh section shows background refresh copy, not popover-only copy.
 - Enabling notifications prompts only after toggling notifications on.
 - Pausing a connector keeps cached rows visible and stops refresh.
-- Disconnecting a paused connector asks for confirmation and removes cached rows.
+- Disconnecting a paused connector asks for confirmation and removes cached rows plus provider notification dedupe state.
 - With background refresh enabled, refresh occurs after the configured interval even if the popover is closed.
 - Reopening the popover within 60 seconds of a background refresh does not immediately refresh again.
 - Fixture/test states below 20% and 10% produce warning/critical notification intents in tests.

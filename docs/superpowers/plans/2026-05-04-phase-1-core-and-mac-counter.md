@@ -1272,7 +1272,7 @@ import SwiftUI
 struct WhatTheTokenApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView(viewModel: .fixture())
+            AppModel(viewModel: .fixture())
         }
     }
 }

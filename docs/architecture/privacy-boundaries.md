@@ -72,7 +72,7 @@ For Claude Code, the Mac connector may read the local Claude Code Keychain item 
 
 The product UI starts disconnected and must not read Claude credentials on launch. The `Connect Claude Code` action is the first product path that may refresh the Claude connector. App startup may construct connector dependencies, but it must not call the refresher, run `claude --version`, invoke the Keychain command, or call Anthropic until the user chooses to connect. While a refresh is already checking, duplicate connect attempts are ignored so repeated user actions cannot start overlapping provider requests.
 
-The developer-only Claude smoke command must follow the same boundary. It requires `CLAUDE_CODE_VERSION` before it reads credentials or calls Anthropic, runs only when explicitly invoked with `--claude-connector-smoke`, and prints only sanitized connector state plus snapshot summaries. The smoke command must not print tokens, authorization headers, raw provider JSON, local file contents, prompts, responses, session data, or sensitive local paths.
+The developer-only Claude smoke command must follow the same boundary. It requires `CLAUDE_CODE_VERSION` before it reads credentials or calls Anthropic, runs only when explicitly invoked with `--claude-connector-smoke`, and prints only sanitized connector state plus snapshot summaries. Smoke launch must skip live `AppModel` construction so persisted background refresh cannot start before the smoke command's explicit environment gate. The smoke command must not print tokens, authorization headers, raw provider JSON, local file contents, prompts, responses, session data, or sensitive local paths.
 
 Diagnostics must redact provider credentials, tokens, sensitive local paths, and raw provider payloads.
 
@@ -86,28 +86,30 @@ For Codex, the Mac connector does not read a Codex credential file or own a Code
 
 Codex executable discovery is not credential discovery. The resolver checks the launched app's `PATH` plus common local install paths such as `~/.local/bin/codex`, `/opt/homebrew/bin/codex`, and `/usr/local/bin/codex` so a Finder-launched app can find the local Codex binary. It must not inspect Codex config files, auth files, shell history, sessions, prompts, responses, or app-server logs while locating the executable.
 
-The developer-only Codex smoke command must follow the same boundary. It requires `CODEX_CONNECTOR_SMOKE=1` before starting Codex app-server, runs only when explicitly invoked with `--codex-connector-smoke`, and prints only sanitized connector state plus snapshot summaries. It must not print account email, tokens, authorization values, raw JSON-RPC envelopes, raw app-server logs, prompts, responses, command output, local paths, task titles, task summaries, or token-shaped strings.
+The developer-only Codex smoke command must follow the same boundary. It requires `CODEX_CONNECTOR_SMOKE=1` before starting Codex app-server, runs only when explicitly invoked with `--codex-connector-smoke`, and prints only sanitized connector state plus snapshot summaries. Smoke launch must skip live `AppModel` construction so persisted background refresh cannot start before the smoke command's explicit environment gate. It must not print account email, tokens, authorization values, raw JSON-RPC envelopes, raw app-server logs, prompts, responses, command output, local paths, task titles, task summaries, or token-shaped strings.
 
 ## Local Persistence, Refresh, And Disconnect
 
 The Mac app may persist only local app state and sanitized usage status:
 
-- `settings.json`: connector consent, refresh preferences, notification preferences, and menu bar display preferences
+- `settings.json`: connector consent and pause state, refresh preferences, notification preferences (master toggle, warning/critical thresholds, per-provider toggles), and menu bar display preferences
 - `snapshot-cache.json`: sanitized usage snapshots, last successful refresh timestamps, and sanitized provider error/backoff state
+- `notification-state.json`: sanitized provider/pool/window notification dedupe state and last notification timestamps
 
-Both files live in the app's Application Support directory. They must not contain provider credentials, copied OAuth tokens, raw provider payloads, prompts, responses, cookies, auth headers, provider session tokens, raw local database rows, or sensitive local paths.
+These files live in the app's Application Support directory. They must not contain provider credentials, copied OAuth tokens, raw provider payloads, prompts, responses, cookies, auth headers, provider session tokens, raw local database rows, or sensitive local paths.
 
-Connector consent is separate from refresh. Enabling a connector allows future reads for that provider. Manual refresh may run only for enabled connectors. Popover-open refresh is an automatic refresh trigger and must respect provider backoff. Timer-based auto-refresh is optional, off by default, and must run only while the popover is open.
+Connector consent is separate from refresh. Enabling a connector allows future reads for that provider. Pausing a connector stops manual and automatic refresh while keeping sanitized cached values visible. Manual refresh may run only for enabled, unpaused connectors. Popover-open refresh is an automatic refresh trigger and must respect provider backoff. Timer-based background refresh is optional, off by default, and must run only while the app process is running after explicit user opt-in. v1 popover-only auto-refresh settings must migrate to background refresh disabled so old foreground consent does not become background consent.
 
 Refresh must preserve previously visible sanitized values when available. The UI may show a small updating indicator, but it must not blank the provider view during a refresh with cached or last-known values. Last-updated copy belongs in the footer; provider section trust lines should not duplicate the timestamp.
 
-Disconnect is the privacy boundary for local retention. Disconnecting a provider must disable future reads and remove that provider's cached usage snapshots from WhatTheToken storage. The app must not present disconnect as complete unless both disabled consent and cache removal are durably written. If a settings or cache write fails, the provider should remain shown as connected so the UI does not claim cached data was removed.
+Disconnect is the privacy boundary for local retention. Disconnecting a provider must disable future reads and remove that provider's cached usage snapshots and notification dedupe state from WhatTheToken storage. The app must not present disconnect as complete unless the cache write, the settings write, and the notification-state write all succeed. If any of those writes fails, the in-memory and on-disk state are rolled back to "still connected" so the UI does not claim cached data was removed.
 
 ## Local Ingestor Rules
 
 - Prefer parsing local quota/status files or direct local client signals over inspecting authenticated browser traffic.
 - If a source can contain forbidden data, parse only the minimal fields needed and discard the raw source immediately.
 - Do not log raw provider responses or local file contents.
+- The notifications subsystem may use `os_log` (subsystem `app.whatthetoken.mac`, category `notifications`) for save/load/delivery failures. Error descriptions must be interpolated as `privacy: .private` so local file paths surfaced by Cocoa errors are not exposed in `log show` or `sysdiagnose`. Sanitized identifiers such as notification intent IDs may be `privacy: .public`.
 - Treat parser failures as health states with confidence/freshness impact, not as a reason to collect broader data.
 - Label numbers with confidence, freshness, and undercount risk close to where users see the number.
 
@@ -131,13 +133,14 @@ Surfaces should translate these states into product language without exposing ra
 Ship these controls from the start:
 
 - explicit opt-in before reading local provider state
+- explicit opt-in before background refresh while the app process is running
 - no backend storage of provider credentials
 - no Chrome extension access to local Keychain values
 - no local or remote logging of tokens, prompts, responses, or session contents
 - bounded local credential lookup so connector refresh cannot hang indefinitely
-- product UI starts disconnected and refreshes Claude only after `Connect Claude Code`
+- product UI starts disconnected and refreshes providers only after connect, manual refresh, foreground popover refresh, or explicit background-refresh opt-in
 - duplicate connect attempts do not start overlapping Claude refreshes
-- developer-only smoke testing stays local/manual and prints sanitized status only
+- developer-only smoke testing stays local/manual, skips live app construction, and prints sanitized status only
 - fixture-based tests only, with synthetic usage data
 - confidence, freshness, and source labels on every status value
 

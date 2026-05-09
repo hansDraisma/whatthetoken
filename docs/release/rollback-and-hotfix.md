@@ -1,0 +1,50 @@
+# Rollback And Hotfix
+
+Release artifacts are immutable from the user's point of view. If a candidate reaches GitHub Releases, appcast publication, or user installation, do not replace it with a different binary under the same version/build.
+
+## Build Number Rules
+
+- `CFBundleVersion` must increase for every public candidate.
+- Never reuse a build number after notarization rejection, Gatekeeper failure, appcast publication, or public download.
+- Use `apps/mac/Scripts/bump-version.sh --version <version> --build <new-build>` before archiving a replacement candidate.
+
+## Notarization Rejection Recovery
+
+1. Keep the rejected notary submit JSON and log under `apps/mac/.build/notary`.
+2. Sanitize any excerpt before sharing.
+3. Fix the cause.
+4. Increment `CURRENT_PROJECT_VERSION`.
+5. Re-archive from a clean source tree.
+6. Re-run signed rehearsal.
+
+Do not resubmit a modified binary with the same build number.
+
+## Bad GitHub Release Before Appcast
+
+If a DMG is attached to GitHub Releases but `docs/appcast.xml` has not been published:
+
+1. Mark the GitHub Release as draft or delete the bad asset if no users have been told.
+2. Increment the build number if the asset may have been downloaded.
+3. Publish a corrected release.
+4. Keep the appcast pointed only at the corrected artifact.
+
+## Bad Appcast
+
+If `docs/appcast.xml` points at a bad artifact:
+
+1. Revert or patch `docs/appcast.xml` immediately.
+2. Confirm GitHub Pages serves the corrected appcast.
+3. If users may have updated, publish a higher build hotfix.
+4. Do not point the appcast at a lower build.
+
+## Hotfix Flow
+
+```bash
+apps/mac/Scripts/bump-version.sh --version <version> --build <higher-build>
+pnpm install --frozen-lockfile
+pnpm --filter @whatthetoken/core test
+cd apps/mac && swift test && cd ../..
+apps/mac/Scripts/rehearse-release.sh --version <version> --build <higher-build> --mode signed
+```
+
+Then publish the new DMG and checksum to GitHub Releases, generate a new appcast entry, and verify manual Sparkle update from the previous public build.

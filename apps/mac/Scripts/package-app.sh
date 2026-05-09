@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Development-only app bundle helper for local SwiftPM smoke tests.
+# Public releases must use WhatTheToken.xcodeproj through archive-release.sh.
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="WhatTheToken"
 PRODUCT_NAME="WhatTheTokenMac"
@@ -25,4 +28,5 @@ if [[ -d "$RESOURCE_BUNDLE" ]]; then
     cp -R "$RESOURCE_BUNDLE" "$APP_DIR/"
 fi
 
+echo "Development-only app bundle. Do not notarize or publish this artifact." >&2
 echo "$APP_DIR"

@@ -44,13 +44,11 @@ Implemented repo-side foundation:
 
 Remaining before Public V1:
 
-- app icon and asset catalog for public packaging
 - initialized local Xcode installation capable of `xcodebuild archive`
 - real Developer ID archive/export with maintainer certificate access
 - notarization submission, stapling, and Gatekeeper acceptance on the real DMG
-- sandbox compatibility matrix, if sandboxing is reconsidered
-- Sparkle EdDSA public key and stable appcast URL decision
-- signed old-build to new-build Sparkle update smoke before exposing `Check for Updates`
+- Sparkle EdDSA public key embedding after maintainer key generation
+- signed old-build to new-build Sparkle update smoke before treating `Check for Updates` as live
 - fresh-machine install and launch smoke from the notarized DMG
 - repository public-visibility scan for internal workspace names and release secrets
 
@@ -192,9 +190,8 @@ The release pipeline should produce these artifacts from a clean checkout:
 1. `WhatTheToken.app`
 2. `WhatTheToken-<version>.dmg`
 3. `WhatTheToken-<version>.dmg.sha256`
-4. `WhatTheToken-<version>.app.sha256` or an equivalent app archive checksum if an app zip is also published
-5. release notes
-6. optional Sparkle `appcast.xml` entry after Sparkle update verification passes
+4. release notes
+5. optional Sparkle `appcast.xml` entry after Sparkle update verification passes
 
 The public release channel is GitHub Releases. The appcast can be hosted from a stable HTTPS URL controlled by the project. If GitHub Pages is used for the first appcast, the appcast path must not expose internal workspace names and must be documented as public release infrastructure.
 

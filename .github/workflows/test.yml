@@ -35,3 +35,15 @@ jobs:
       - name: Run Mac tests
         working-directory: apps/mac
         run: swift test
+
+      - name: Verify Mac release metadata
+        run: |
+          plutil -lint apps/mac/Packaging/Info.plist
+          plutil -lint apps/mac/Packaging/ExportOptions.DeveloperID.plist
+          plutil -lint apps/mac/Packaging/PrivacyInfo.xcprivacy
+          plutil -lint apps/mac/Packaging/WhatTheToken.entitlements
+          plutil -lint apps/mac/WhatTheToken.xcodeproj/project.pbxproj
+          xmllint --noout apps/mac/WhatTheToken.xcodeproj/xcshareddata/xcschemes/WhatTheToken.xcscheme
+          ruby -rjson -e 'JSON.parse(File.read(ARGV.fetch(0)))' apps/mac/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          test -f apps/mac/Sources/WhatTheTokenMac/Assets.xcassets/AppIcon.appiconset/Contents.json
+          apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode dry-run

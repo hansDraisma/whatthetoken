@@ -118,7 +118,7 @@ The Claude CLI version resolver checks the launched app's `PATH` and common loca
 
 The connector setup titles and trust message live in a tested copy helper so product-facing opt-in language stays consistent across disconnected, checking, connected, unavailable, and error states.
 
-Automated tests use stub refreshers and version-command runners. They must not call the live Claude CLI, read Keychain credentials, or call Anthropic. A bounded local GUI launch smoke can be run manually with `swift run WhatTheTokenMac` to verify the app starts and renders without triggering connector refresh.
+Automated tests use stub refreshers and version-command runners. They must not call the live Claude CLI, read Keychain credentials, or call Anthropic. A bounded local GUI launch smoke can be run manually with `swift run WhatTheTokenMac` to verify the app starts and renders. With default settings it must not trigger connector refresh; with persisted background refresh enabled, it may refresh enabled, unpaused connectors after launch.
 
 ## Current Codex Connector Boundary
 
@@ -154,11 +154,11 @@ cd apps/mac
 swift run WhatTheTokenMac
 ```
 
-The SwiftPM target is a Mach-O executable, not an `.app` bundle. The app explicitly sets a regular foreground activation policy on interactive launch so the window appears when run from a terminal. The `--claude-connector-smoke` and `--codex-connector-smoke` paths intentionally skip foreground activation and remain command-line-only.
+The SwiftPM target is a Mach-O executable, not an `.app` bundle. Interactive launch sets `NSApplication` activation policy to `.accessory` so the app behaves as a menu-bar-only utility with no Dock icon; the menu bar item appears immediately. The `--developer-window` flag opts into `.regular` activation for the DEBUG developer window. The `--claude-connector-smoke` and `--codex-connector-smoke` paths skip both activation and live `AppModel` construction, returning before any persisted background refresh can start.
 
-For deterministic fixture UI checks, temporarily change `ContentView(viewModel: .live())` in `WhatTheTokenApp.swift` to `ContentView(viewModel: .fixture())`, run the command above, then restore `.live()` before committing.
+For deterministic fixture UI checks, inject a fixture-backed `StatusViewModel` through `AppModel` in a temporary local patch, run the command above, then restore the live app model before committing.
 
-The usage area renders one row-based section per provider/product pair, so Claude Code and Codex snapshots do not share a mixed card. Each section hoists uniform trust metadata, uses local time for updated/reset copy, refreshes reset hints every minute in the UI, and does not perform a background provider refresh.
+The usage area renders one row-based section per provider/product pair, so Claude Code and Codex snapshots do not share a mixed card. Each section hoists uniform trust metadata, uses local time for updated/reset copy, refreshes reset hints every minute in the UI, and keeps existing values visible while foreground or opted-in background refresh is running.
 
 ## Claude Connector Smoke Testing
 
@@ -191,6 +191,22 @@ CODEX_CONNECTOR_SMOKE=1 swift run WhatTheTokenMac --codex-connector-smoke
 Expected output is limited to sanitized status and snapshot summary lines. It must not print account email, tokens, authorization values, raw JSON-RPC envelopes, raw app-server logs, prompts, responses, command output, local paths, task titles, task summaries, or token-shaped strings.
 
 Successful local smoke currently proves only the signed-in account's Codex app-server shape. Keep Codex snapshots at `confidence: observed` and `undercountRisk: possible` until product validation confirms these buckets are authoritative across Codex surfaces. ChatGPT remains out of scope for the Codex connector unless the app-server returns unambiguous ChatGPT-specific buckets.
+
+## Persistence, Refresh, And Notifications Architecture
+
+Stage 2 and Stage 3 added a small set of view-model-owned services that sit between SwiftUI and the connectors. None of them call provider APIs directly.
+
+- `AppSettings` (Codable, schema v2) — persists connector consent and pause state, refresh preferences, notification preferences (master toggle, warning/critical thresholds, per-provider toggles), and menu bar display preferences. `decodeValidated` migrates v1 → v2 (forces `autoRefreshEnabled = false`, renames `lowThreshold` to `warningThreshold`, defaults provider alerts to true). Unknown future versions throw and the store falls back to safe defaults.
+- `SnapshotCache` — sanitized last-known-good snapshots, `lastSuccessfulRefreshAtByProvider`, and per-provider failure/backoff metadata. `SnapshotStalePolicy.from(settings:)` returns `max(2 * interval, 15 min)` when auto-refresh is on and 60 minutes otherwise.
+- `NotificationState` — sanitized dedupe records keyed by provider/normalized-pool/normalized-window. `NotificationDedupeKey.storageKey` is stable across refreshes; rolling-window keys collapse `300m` → `rolling_5h`, `10080m`/`seven_day` → `rolling_7d`. `JSONFileNotificationStateStore` writes atomically and emits `os_log` warnings on failure with `privacy: .private` interpolation.
+- `BackgroundRefreshController` — owned by `AppModel`, runs only when `settings.refresh.autoRefreshEnabled` is true. `start()` schedules the timer, registers an `NSApplication.willBecomeActiveNotification` observer, and runs an immediate `appBecameActive()` so opting in does not wait a full interval. `appBecameActive()` skips refresh if a previous automatic attempt was within the configured interval and another refresh is already in flight.
+- `PopoverRefreshController` — popover-open and manual refresh. `recentlyBackgroundRefreshed(_:)` debounces `.popoverOpened` refreshes for providers refreshed by the background timer in the last 60 seconds; `.manual` and `.retry` bypass the debounce and provider backoff but still skip paused providers.
+- `NotificationEvaluator` — pure Swift. Accepts snapshots, settings, prior state, and an optional `scopedTo` provider. Single-provider refreshes pass `scopedTo: .claude` or `.codex` so a Claude refresh cannot fire a Codex notification for a stale-but-not-yet-stale cached snapshot. Cache-load and bulk evaluations pass `nil`. Recovery rules require `threshold + 5pp` plus a 60-minute cooldown for rolling windows.
+- `NotificationDelivery` — protocol around `UserNotifications`. The live `UserNotificationDelivery` short-circuits to `.denied` when not running from a real `.app` bundle so SPM-built CLI runs do not trap. `RecordingNotificationDelivery` is the test double.
+- `StatusViewModel` — coordinator. `evaluateNotifications(suppressDelivery: true)` runs once on cache load (blanket suppression). After each successful provider refresh, `evaluateNotifications(suppressDelivery: false, scopedTo: .claude/.codex)` runs. Notification-state save failures set `unsavedNotificationState`; the next evaluation retries once at least 60 seconds have passed since the last failure.
+- `PopoverChromeState.hasCriticalProvider(viewModel:)` — drives the menu bar critical state. Treats `.critical`, `.criticalWithFallback`, and `.fallbackOnly` from `ProviderAvailability` as critical; paused providers are excluded.
+
+Disconnect is the privacy boundary: it sequentially writes the snapshot cache, the settings file, and the notification-state file. If any write fails, the prior on-disk state is restored and the UI stays connected.
 
 ## Connector Verification Commands
 

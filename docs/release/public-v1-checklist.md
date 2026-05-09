@@ -7,9 +7,16 @@ This checklist is the maintainer path for the first direct-distribution Mac rele
 - Use a clean checkout of `main`.
 - Confirm the public version and monotonically increasing build number.
 - Confirm `DEVELOPER_ID_TEAM_ID` is set for the release signer.
+- Confirm `DEVELOPER_ID_SIGNING_IDENTITY` is the exact Developer ID Application identity, including team suffix.
+- Confirm the Developer ID Application certificate does not expire within the next 30 days.
 - Confirm `NOTARY_KEYCHAIN_PROFILE` exists in Keychain for `xcrun notarytool`.
-- Confirm Sparkle EdDSA private material is stored outside the repo and release hosting.
+- Confirm GitHub Pages is enabled from the `main` branch `/docs` folder.
+- Confirm the public appcast URL is `https://hansdraisma.github.io/whatthetoken/appcast.xml`.
+- Confirm the DMG URL pattern is `https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/WhatTheToken-0.1.0.dmg`.
+- Use `hansDraisma` for GitHub repository URLs and `hansdraisma.github.io` for GitHub Pages URLs.
+- Confirm Sparkle EdDSA private material is stored outside the repo, CI, and release hosting.
 - Confirm no App Sandbox entitlement is enabled unless the connector compatibility matrix has passed.
+- Confirm the archived app contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
 
 ## Build And Test
 
@@ -21,75 +28,135 @@ swift test
 cd ../..
 ```
 
-## Archive And Export
+## Release Rehearsal
+
+Review the release command chain without credentials:
 
 ```bash
-apps/mac/Scripts/archive-release.sh --version 0.1.0 --build 1
+apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode dry-run
+```
+
+On an initialized Xcode installation, create an unsigned archive and smoke DMG:
+
+```bash
+apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode unsigned-smoke
+```
+
+The unsigned smoke proves the Xcode target archives and the DMG script packages the app. It is not a public release artifact.
+
+## Signed Tag
+
+```bash
+git status --porcelain
+test -z "$(git status --porcelain)"
+git tag -s v0.1.0 -m "WhatTheToken 0.1.0"
+git verify-tag v0.1.0
+test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 refs/tags/v0.1.0)"
+```
+
+Do not push the tag until the signed rehearsal and local fresh-account smoke pass.
+
+## Archive, Sign, Notarize, And Verify
+
+```bash
+: "${DEVELOPER_ID_TEAM_ID:?Set DEVELOPER_ID_TEAM_ID}"
+: "${DEVELOPER_ID_SIGNING_IDENTITY:?Set DEVELOPER_ID_SIGNING_IDENTITY}"
+: "${NOTARY_KEYCHAIN_PROFILE:?Set NOTARY_KEYCHAIN_PROFILE}"
+apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode signed
 ```
 
 Expected output:
 
 - `apps/mac/.build/archive/WhatTheToken.xcarchive`
 - `apps/mac/.build/export/WhatTheToken.app`
-
-## DMG
-
-```bash
-apps/mac/Scripts/create-dmg.sh --version 0.1.0
-```
-
-Expected output:
-
 - `apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg`
-
-## Notarize And Staple
-
-```bash
-apps/mac/Scripts/notarize-dmg.sh --dmg apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg
-```
-
-The script submits the DMG with `notarytool`, waits for acceptance, staples the ticket, and validates the staple.
-
-## Verify Artifacts
-
-```bash
-apps/mac/Scripts/verify-release-artifacts.sh \
-  --dmg apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg \
-  --app apps/mac/.build/export/WhatTheToken.app
-```
+- `apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg.sha256`
 
 Required checks:
 
-- `codesign --verify --deep --strict --verbose=2` passes for the app.
-- Gatekeeper accepts the app.
-- Stapler validates the DMG.
-- Gatekeeper accepts the DMG.
-- A `.sha256` checksum file is generated for the DMG.
+- App is Developer ID signed.
+- DMG is Developer ID signed before notarization.
+- App and DMG code signatures contain secure timestamps.
+- DMG is notarized and stapled.
+- Gatekeeper accepts the exported app, DMG, and copied app from the mounted DMG.
+- DMG mounts read-only and contains `WhatTheToken.app` plus an `Applications` symlink.
+- Copied app contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
+- Copied app binary contains both `arm64` and `x86_64`.
+- Notary submission JSON and notary log JSON are saved under `apps/mac/.build/notary`.
+
+## Fresh Account Install Smoke
+
+- Copy the final DMG to `~/Downloads/WhatTheToken-0.1.0.dmg`.
+- Add a download-style quarantine attribute as a local approximation:
+
+```bash
+DOWNLOADED_DMG="$HOME/Downloads/WhatTheToken-0.1.0.dmg"
+cp apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg "$DOWNLOADED_DMG"
+QUARANTINE_TIME="$(printf %x "$(date +%s)")"
+xattr -w com.apple.quarantine "0081;$QUARANTINE_TIME;Safari;https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/WhatTheToken-0.1.0.dmg" "$DOWNLOADED_DMG"
+open "$DOWNLOADED_DMG"
+```
+
+- Install from the notarized DMG into `/Applications`.
+- Launch from Finder.
+- Confirm the menu bar item appears and the Dock icon stays hidden.
+- Confirm settings open, quit works, and relaunch preserves settings.
+- Confirm primary controls are reachable by keyboard and understandable with VoiceOver.
+- Confirm launch at login defaults off and toggles only by explicit user action.
+- Confirm Claude Code and Codex remain disconnected until explicit connection.
+- Confirm disconnect removes provider cache.
+- Confirm `Check for Updates` is visible.
+- Confirm first launch makes no network request before explicit user action.
+- Confirm no background update network request occurs.
+- Confirm the only update network request happens after choosing `Check for Updates`.
+
+After the GitHub Release is published, repeat one install smoke with the actual DMG downloaded through a browser. The `xattr` simulation is not a substitute for one real browser download.
 
 ## GitHub Release
 
-- Create a draft GitHub Release for the tag.
-- Attach the notarized DMG and checksum.
+- Push the signed tag only after the signed rehearsal and local fresh-account smoke pass:
+
+```bash
+git push origin v0.1.0
+```
+
+- Create a GitHub Release for `v0.1.0`.
+- Attach `WhatTheToken-0.1.0.dmg`.
+- Attach `WhatTheToken-0.1.0.dmg.sha256`.
+- Do not publish a separate `.app.zip` artifact for Public V1.
 - Publish release notes that do not include sensitive diagnostics, internal workspace paths, raw provider output, prompts, responses, cookies, auth headers, tokens, or private key material.
-- Install the attached DMG on a fresh macOS account and smoke test launch, menu bar display, settings persistence, connector opt-in, disconnect, quit, and relaunch.
+- Include support guidance for sanitized crash reports and diagnostics; do not ask users to share raw provider files or credentials.
 
 ## Sparkle Appcast
 
-Public V1 keeps automatic Sparkle checks disabled. Generate an appcast entry only after a signed old-build to signed new-build update smoke test passes.
+Public V1 uses manual Sparkle checks. Automatic background checks and silent installs remain disabled.
 
-```bash
-apps/mac/Scripts/generate-appcast.sh \
-  --updates-dir /path/to/public-updates \
-  --download-url-prefix https://example.com/whatthetoken/releases/
-```
+Generate the appcast only after the GitHub Release DMG asset exists:
 
-Before publishing appcast changes:
+Before committing appcast changes:
 
 - Confirm `SUPublicEDKey` and `SUFeedURL` are intentionally set for the release channel.
-- Confirm the private EdDSA key stayed outside the repo and hosting machine.
-- Confirm the appcast URL is stable HTTPS infrastructure controlled by the project.
-- Confirm the update archive is signed and the appcast points only to published artifacts.
+- Confirm `SUFeedURL` is `https://hansdraisma.github.io/whatthetoken/appcast.xml`.
+- Confirm the private EdDSA key stayed outside the repo, CI, and hosting machine.
+- Confirm the appcast points only to published GitHub Release artifacts.
+
+```bash
+mkdir -p "$HOME/ReleaseArtifacts/WhatTheToken/updates"
+cp apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg "$HOME/ReleaseArtifacts/WhatTheToken/updates/WhatTheToken-0.1.0.dmg"
+apps/mac/Scripts/generate-appcast.sh \
+  --updates-dir "$HOME/ReleaseArtifacts/WhatTheToken/updates" \
+  --output docs/appcast.xml \
+  --download-url-prefix https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/ \
+  --release-notes-url https://github.com/hansDraisma/whatthetoken/releases/tag/v0.1.0
+xmllint --noout docs/appcast.xml
+rg -n "sparkle:edSignature|WhatTheToken-0.1.0.dmg|github.com/hansDraisma/whatthetoken/releases/download/v0.1.0" docs/appcast.xml
+git add docs/appcast.xml
+git commit -m "release: publish appcast for v0.1.0"
+git push origin main
+```
+
+- Confirm a previous signed build updates to the new signed/notarized build after GitHub Pages publishes `docs/appcast.xml`.
 
 ## Credential-Gated Verification
 
-The repository can verify metadata, script shape, dry-runs, and unsigned Swift builds. A real public release still requires maintainer-controlled Developer ID signing, notarization credentials, stapling against an accepted ticket, and Sparkle EdDSA signing.
+The repository can verify metadata, script shape, dry-runs, and unsigned Swift builds. A real public release still requires maintainer-controlled Developer ID signing, notarization credentials, stapling against an accepted ticket, GitHub Release publication, GitHub Pages appcast publication, and Sparkle EdDSA signing.

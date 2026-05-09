@@ -105,6 +105,70 @@ import Testing
     #expect(!source.contains("checkForUpdatesInBackground"))
 }
 
+@Test func releaseScriptsUseExpectedToolsAndAvoidSecretEchoes() throws {
+    let packageRoot = packageRootURL()
+    let scripts: [(name: String, requiredFragments: [String])] = [
+        (
+            "archive-release.sh",
+            [
+                "xcodebuild",
+                "archive",
+                "-exportArchive",
+                "ExportOptions.DeveloperID.plist",
+                "DEVELOPER_ID_TEAM_ID"
+            ]
+        ),
+        (
+            "create-dmg.sh",
+            [
+                "hdiutil",
+                "ln -s /Applications",
+                "WhatTheToken.app"
+            ]
+        ),
+        (
+            "notarize-dmg.sh",
+            [
+                "xcrun notarytool submit",
+                "xcrun stapler staple",
+                "NOTARY_KEYCHAIN_PROFILE"
+            ]
+        ),
+        (
+            "verify-release-artifacts.sh",
+            [
+                "codesign --verify",
+                "spctl",
+                "shasum -a 256",
+                "xcrun stapler validate"
+            ]
+        ),
+        (
+            "generate-appcast.sh",
+            [
+                "generate_appcast",
+                "SPARKLE_BIN_DIR",
+                "appcast.xml"
+            ]
+        )
+    ]
+
+    for scriptInfo in scripts {
+        let scriptURL = packageRoot.appendingPathComponent("Scripts/\(scriptInfo.name)")
+        let script = try String(contentsOf: scriptURL, encoding: .utf8)
+
+        #expect(script.hasPrefix("#!/usr/bin/env bash\nset -euo pipefail"))
+        #expect(script.contains("--dry-run"))
+        for fragment in scriptInfo.requiredFragments {
+            #expect(script.contains(fragment))
+        }
+        #expect(!script.contains("echo \"$NOTARY"))
+        #expect(!script.contains("echo \"${NOTARY"))
+        #expect(!script.contains("echo \"$SPARKLE"))
+        #expect(!script.contains("echo \"${SPARKLE"))
+    }
+}
+
 private func packageRootURL() -> URL {
     URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()

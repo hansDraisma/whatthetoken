@@ -62,7 +62,7 @@ import Testing
     }
 
     @MainActor
-    @Test func popoverDidOpen_startsConfiguredTimerWhenAutoRefreshEnabled() async {
+    @Test func popoverOpenDoesNotStartPopoverTimerWhenBackgroundAutoRefreshIsEnabled() async {
         var settings = AppSettings.defaults
         settings.connectors.claudeCode.isEnabled = true
         settings.refresh.autoRefreshEnabled = true
@@ -82,9 +82,31 @@ import Testing
             await Task.yield()
         }
 
-        #expect(fake.pendingTicks == 1)
-        #expect(fake.lastDuration == .seconds(300))
+        #expect(fake.pendingTicks == 0)
         controller.popoverDidClose()
+    }
+
+    @MainActor
+    @Test func popoverOpenSkipsRefreshAfterRecentBackgroundRefresh() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        var current = Date(timeIntervalSince1970: 1_000)
+        let counter = Counter()
+        let vm = StatusViewModel(
+            settings: settings,
+            claudeRefresher: SlowClaudeRefresher(counter: counter),
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+            settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+            now: { current }
+        )
+        await vm.refreshAll(reason: .timerTick)
+        current = Date(timeIntervalSince1970: 1_030)
+        let controller = PopoverRefreshController(viewModel: vm, sleeper: { _ in })
+
+        controller.popoverDidOpen()
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(counter.value == 1)
     }
 
     @MainActor

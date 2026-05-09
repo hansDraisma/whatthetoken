@@ -83,12 +83,22 @@ import Testing
     }
 
     @Test func connectorConnectionActionTitleNamesConnectForDisabledProviders() {
-        #expect(connectorConnectionActionTitle(for: .claude, isEnabled: false) == "Connect Claude Code")
-        #expect(connectorConnectionActionTitle(for: .codex, isEnabled: false) == "Connect Codex")
+        #expect(connectorConnectionActionTitle(for: .claude, isEnabled: false, isPaused: false) == "Connect Claude Code")
+        #expect(connectorConnectionActionTitle(for: .codex, isEnabled: false, isPaused: false) == "Connect Codex")
     }
 
-    @Test func connectorConnectionActionTitleNamesDisconnectForEnabledProviders() {
-        #expect(connectorConnectionActionTitle(for: .claude, isEnabled: true) == "Disconnect Claude Code...")
-        #expect(connectorConnectionActionTitle(for: .codex, isEnabled: true) == "Disconnect Codex...")
+    @Test func connectorConnectionActionTitleNamesPauseForEnabledActiveProviders() {
+        #expect(connectorConnectionActionTitle(for: .claude, isEnabled: true, isPaused: false) == "Pause Claude Code")
+        #expect(connectorConnectionActionTitle(for: .codex, isEnabled: true, isPaused: false) == "Pause Codex")
+    }
+
+    @Test func connectorConnectionActionTitleNamesResumeForEnabledPausedProviders() {
+        #expect(connectorConnectionActionTitle(for: .claude, isEnabled: true, isPaused: true) == "Resume Claude Code")
+        #expect(connectorConnectionActionTitle(for: .codex, isEnabled: true, isPaused: true) == "Resume Codex")
+    }
+
+    @Test func connectorDisconnectActionTitleNamesDisconnectForProviders() {
+        #expect(connectorDisconnectActionTitle(for: .claude) == "Disconnect Claude Code...")
+        #expect(connectorDisconnectActionTitle(for: .codex) == "Disconnect Codex...")
     }
 }

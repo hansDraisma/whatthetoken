@@ -2,40 +2,78 @@ import SwiftUI
 
 @main
 struct WhatTheTokenApp: App {
-    private let app: AppModel = .live()
+    private let app: AppModel?
     @Environment(\.openWindow)   private var openWindow
     @Environment(\.openSettings) private var openSettingsScene
 
     init() {
-        if ClaudeConnectorSmokeCommand.shouldRun(arguments: CommandLine.arguments) {
-            ClaudeConnectorSmokeCommand.startCommandLineSmoke()
-            return
-        }
-        if CodexConnectorSmokeCommand.shouldRun(arguments: CommandLine.arguments) {
-            CodexConnectorSmokeCommand.startCommandLineSmoke()
-            return
-        }
-        MacAppLauncher.configureLaunch()
+        app = Self.makeAppForLaunch(
+            arguments: CommandLine.arguments,
+            makeLiveApp: { AppModel.live() },
+            startClaudeSmoke: { _ = ClaudeConnectorSmokeCommand.startCommandLineSmoke() },
+            startCodexSmoke: { _ = CodexConnectorSmokeCommand.startCommandLineSmoke() },
+            configureInteractiveLaunch: { MacAppLauncher.configureLaunch() }
+        )
     }
 
+    @MainActor
+    static func makeAppForLaunch(
+        arguments: [String],
+        makeLiveApp: () -> AppModel,
+        startClaudeSmoke: () -> Void,
+        startCodexSmoke: () -> Void,
+        configureInteractiveLaunch: () -> Void
+    ) -> AppModel? {
+        if ClaudeConnectorSmokeCommand.shouldRun(arguments: arguments) {
+            startClaudeSmoke()
+            return nil
+        }
+        if CodexConnectorSmokeCommand.shouldRun(arguments: arguments) {
+            startCodexSmoke()
+            return nil
+        }
+
+        configureInteractiveLaunch()
+        return makeLiveApp()
+    }
+
+    @SceneBuilder
     var body: some Scene {
-        MenuBarExtra("WhatTheToken", systemImage: "gauge") {
-            PopoverRootView(
-                viewModel: app.viewModel,
-                controller: app.refreshController,
-                onOpenSettings: openSettingsAction,
-                onOpenDeveloperWindow: developerWindowOpener
-            )
+        MenuBarExtra {
+            if let app {
+                PopoverRootView(
+                    viewModel: app.viewModel,
+                    controller: app.refreshController,
+                    onOpenSettings: openSettingsAction,
+                    onOpenDeveloperWindow: developerWindowOpener
+                )
+            } else {
+                EmptyView()
+            }
+        } label: {
+            if let app {
+                MenuBarStatusLabel(viewModel: app.viewModel)
+            } else {
+                EmptyView()
+            }
         }
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsRootView(viewModel: app.viewModel)
+            if let app {
+                SettingsRootView(viewModel: app.viewModel)
+            } else {
+                EmptyView()
+            }
         }
 
         #if DEBUG
         Window("WhatTheToken - Developer", id: "developer") {
-            DeveloperWindowView(viewModel: app.viewModel)
+            if let app {
+                DeveloperWindowView(viewModel: app.viewModel)
+            } else {
+                EmptyView()
+            }
         }
         #endif
     }

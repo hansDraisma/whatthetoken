@@ -18,6 +18,10 @@
 - Current packaging metadata: `apps/mac/Packaging/Info.plist`, `apps/mac/Packaging/WhatTheToken.xcconfig`, `apps/mac/Packaging/WhatTheToken-Release.xcconfig`, `apps/mac/Packaging/WhatTheToken.entitlements`
 - Current release scripts: `apps/mac/Scripts/archive-release.sh`, `apps/mac/Scripts/create-dmg.sh`, `apps/mac/Scripts/notarize-dmg.sh`, `apps/mac/Scripts/verify-release-artifacts.sh`, `apps/mac/Scripts/generate-appcast.sh`, `apps/mac/Scripts/package-app.sh`
 - Current monolithic release guard tests: `apps/mac/Tests/WhatTheTokenMacTests/MacBundleInfoTests.swift`
+- Apple Developer ID reference: `https://developer.apple.com/developer-id/`
+- Apple notarization reference: `https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution`
+- Apple packaging reference: `https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution`
+- Apple disk image signing reference: `https://developer.apple.com/library/archive/technotes/tn2206/_index.html`
 - Sparkle official setup reference: `https://sparkle-project.org/documentation/`
 - Sparkle official customization reference: `https://sparkle-project.org/documentation/customization/`
 
@@ -44,7 +48,7 @@ Agent-executable in this workspace:
 
 - Add and wire the public app icon asset catalog.
 - Split release guard tests into focused files.
-- Add an unsigned Xcode archive smoke script and a release rehearsal wrapper.
+- Add an unsigned Xcode archive smoke script, signed-DMG step, mount/layout verification, and a release rehearsal wrapper.
 - Add sandbox compatibility, Sparkle key custody, rollback, and release docs.
 - Update tests so accidental Sparkle/network/appcast behavior cannot slip in.
 - Run Swift, TypeScript, plist, scheme, script dry-run, and documentation checks.
@@ -70,8 +74,11 @@ Maintainer-gated on the signing machine:
 - Create: `apps/mac/Brand/AppIconSource.png` - 1024x1024 source icon approved for Public V1.
 - Create: generated icon PNGs under `apps/mac/Sources/WhatTheTokenMac/Assets.xcassets/AppIcon.appiconset/`.
 - Modify: `apps/mac/WhatTheToken.xcodeproj/project.pbxproj` - add the asset catalog file reference and resource build phase entry.
+- Modify: `apps/mac/Packaging/Info.plist` - bind the compiled asset catalog icon with `CFBundleIconName = AppIcon`.
 - Create: `apps/mac/Scripts/smoke-archive-unsigned.sh` - local Xcode archive proof that does not require signing credentials.
+- Create: `apps/mac/Scripts/sign-dmg.sh` - Developer ID sign and verify the final DMG before notarization.
 - Create: `apps/mac/Scripts/rehearse-release.sh` - wrapper for dry-run, unsigned-smoke, and signed release rehearsal flows.
+- Modify: `apps/mac/Scripts/verify-release-artifacts.sh` - verify, mount, inspect, checksum, and detach the DMG.
 - Modify: `apps/mac/Scripts/package-app.sh` - label it as development-only in output/help comments.
 - Create: `docs/release/app-sandbox-compatibility-matrix.md` - explicit sandbox test matrix and Public V1 unsandboxed decision rule.
 - Create: `docs/release/sparkle-key-custody.md` - Sparkle EdDSA generation, public-key embedding gate, appcast gate, and private-key custody record.
@@ -324,6 +331,12 @@ private struct AppIconContents: Decodable {
     #expect(project.contains("ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon"))
 }
 
+@Test func releaseInfoPlistBindsAppIconAssetCatalog() throws {
+    let plist = try packagingInfoPlist()
+
+    #expect(plist["CFBundleIconName"] as? String == "AppIcon")
+}
+
 @Test func appIconAssetCatalogContainsRequiredMacIconSlots() throws {
     let contents = try decodedJSONFile(
         "Sources/WhatTheTokenMac/Assets.xcassets/AppIcon.appiconset/Contents.json",
@@ -400,12 +413,26 @@ import Testing
             ]
         ),
         (
+            "sign-dmg.sh",
+            [
+                "codesign --force --sign",
+                "DEVELOPER_ID_SIGNING_IDENTITY",
+                "hdiutil verify",
+                "codesign --verify"
+            ]
+        ),
+        (
             "verify-release-artifacts.sh",
             [
                 "codesign --verify",
                 "spctl",
                 "shasum -a 256",
-                "xcrun stapler validate"
+                "xcrun stapler validate",
+                "hdiutil verify",
+                "hdiutil attach",
+                "hdiutil detach",
+                "CFBundleIconName",
+                "Assets.car"
             ]
         ),
         (
@@ -429,6 +456,7 @@ import Testing
             [
                 "smoke-archive-unsigned.sh",
                 "archive-release.sh",
+                "sign-dmg.sh",
                 "notarize-dmg.sh",
                 "verify-release-artifacts.sh"
             ]
@@ -473,7 +501,7 @@ cd ../..
 Expected before Tasks 3 and 4:
 
 - Metadata tests pass.
-- Xcode project tests fail because `Assets.xcassets` does not exist yet.
+- Xcode project tests fail because `Assets.xcassets` and the `CFBundleIconName` binding do not exist yet.
 - Release script tests fail because `smoke-archive-unsigned.sh`, `rehearse-release.sh`, and the development-only label do not exist yet.
 
 - [ ] **Step 7: Commit checkpoint**
@@ -495,6 +523,7 @@ git commit -m "test(mac): split release packaging guard tests"
 - Create: `apps/mac/Sources/WhatTheTokenMac/Assets.xcassets/AppIcon.appiconset/Contents.json`
 - Create: generated PNG icon slots under `apps/mac/Sources/WhatTheTokenMac/Assets.xcassets/AppIcon.appiconset/`
 - Modify: `apps/mac/WhatTheToken.xcodeproj/project.pbxproj`
+- Modify: `apps/mac/Packaging/Info.plist`
 
 - [ ] **Step 1: Add reproducible icon prompt**
 
@@ -668,7 +697,18 @@ Add `00000000000000000000001D` to the `PBXResourcesBuildPhase` files:
 			);
 ```
 
-- [ ] **Step 6: Verify icon tests**
+- [ ] **Step 6: Bind the app icon in Info.plist**
+
+In `apps/mac/Packaging/Info.plist`, add this key immediately after `CFBundleExecutable`:
+
+```xml
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+```
+
+This makes the archived app use the compiled asset catalog icon. The archive smoke in Task 4 verifies both `CFBundleIconName` and `Contents/Resources/Assets.car` in the built `.app`.
+
+- [ ] **Step 7: Verify icon tests**
 
 Run:
 
@@ -682,7 +722,7 @@ Expected:
 
 - `MacXcodeProjectTests` passes.
 
-- [ ] **Step 7: Verify project syntax**
+- [ ] **Step 8: Verify project syntax**
 
 Run:
 
@@ -696,12 +736,12 @@ Expected:
 apps/mac/WhatTheToken.xcodeproj/project.pbxproj: OK
 ```
 
-- [ ] **Step 8: Commit checkpoint**
+- [ ] **Step 9: Commit checkpoint**
 
 Run:
 
 ```bash
-git add apps/mac/Brand apps/mac/Sources/WhatTheTokenMac/Assets.xcassets apps/mac/WhatTheToken.xcodeproj/project.pbxproj apps/mac/Tests/WhatTheTokenMacTests
+git add apps/mac/Brand apps/mac/Sources/WhatTheTokenMac/Assets.xcassets apps/mac/Packaging/Info.plist apps/mac/WhatTheToken.xcodeproj/project.pbxproj apps/mac/Tests/WhatTheTokenMacTests
 git commit -m "build(mac): add public app icon asset catalog"
 ```
 
@@ -711,8 +751,10 @@ git commit -m "build(mac): add public app icon asset catalog"
 
 **Files:**
 - Create: `apps/mac/Scripts/smoke-archive-unsigned.sh`
+- Create: `apps/mac/Scripts/sign-dmg.sh`
 - Create: `apps/mac/Scripts/rehearse-release.sh`
 - Modify: `apps/mac/Scripts/package-app.sh`
+- Modify: `apps/mac/Scripts/verify-release-artifacts.sh`
 - Modify: `apps/mac/Tests/WhatTheTokenMacTests/MacReleaseScriptTests.swift`
 
 - [ ] **Step 1: Label the SwiftPM app packager as development-only**
@@ -798,6 +840,7 @@ xcodebuild \
 
 APP_PATH="$ARCHIVE_PATH/Products/Applications/WhatTheToken.app"
 INFO_PLIST="$APP_PATH/Contents/Info.plist"
+ASSETS_CAR="$APP_PATH/Contents/Resources/Assets.car"
 
 if [[ ! -d "$APP_PATH" ]]; then
     printf 'Archived app not found: %s\n' "$APP_PATH" >&2
@@ -812,11 +855,216 @@ fi
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST" | grep -Fx "$VERSION" >/dev/null
 /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST" | grep -Fx "$BUILD" >/dev/null
 /usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$INFO_PLIST" | grep -Fx "true" >/dev/null
+/usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$INFO_PLIST" | grep -Fx "AppIcon" >/dev/null
+
+if [[ ! -f "$ASSETS_CAR" ]]; then
+    printf 'Compiled asset catalog not found: %s\n' "$ASSETS_CAR" >&2
+    exit 66
+fi
 
 printf '%s\n' "$APP_PATH"
 ```
 
-- [ ] **Step 3: Add release rehearsal wrapper**
+- [ ] **Step 3: Add Developer ID DMG signing script**
+
+Create `apps/mac/Scripts/sign-dmg.sh`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+DMG_PATH=""
+SIGNING_IDENTITY="${DEVELOPER_ID_SIGNING_IDENTITY:-Developer ID Application}"
+DRY_RUN=0
+
+usage() {
+    printf 'Usage: %s --dmg <path> [--signing-identity <identity>] [--dry-run]\n' "$0"
+}
+
+quote_command() {
+    printf '%q ' "$@"
+    printf '\n'
+}
+
+run_command() {
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        quote_command "$@"
+    else
+        "$@"
+    fi
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dmg)
+            DMG_PATH="${2:-}"
+            shift 2
+            ;;
+        --signing-identity)
+            SIGNING_IDENTITY="${2:-}"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            exit 64
+            ;;
+    esac
+done
+
+if [[ -z "$DMG_PATH" ]]; then
+    usage >&2
+    exit 64
+fi
+
+if [[ "$DRY_RUN" -eq 0 && ! -f "$DMG_PATH" ]]; then
+    printf 'DMG not found: %s\n' "$DMG_PATH" >&2
+    exit 66
+fi
+
+run_command hdiutil verify "$DMG_PATH"
+run_command codesign --force --sign "$SIGNING_IDENTITY" "$DMG_PATH"
+run_command codesign --verify --verbose=2 "$DMG_PATH"
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    printf 'Dry run only. No DMG was signed.\n'
+fi
+```
+
+This follows Apple's direct-distribution guidance: sign the app, sign the disk image, then notarize the disk image.
+
+- [ ] **Step 4: Add release artifact round-trip verification**
+
+Replace `apps/mac/Scripts/verify-release-artifacts.sh` with:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+DMG_PATH=""
+APP_PATH=""
+DRY_RUN=0
+
+usage() {
+    printf 'Usage: %s --dmg <path> [--app <WhatTheToken.app>] [--dry-run]\n' "$0"
+}
+
+quote_command() {
+    printf '%q ' "$@"
+    printf '\n'
+}
+
+run_command() {
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+        quote_command "$@"
+    else
+        "$@"
+    fi
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dmg)
+            DMG_PATH="${2:-}"
+            shift 2
+            ;;
+        --app)
+            APP_PATH="${2:-}"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            exit 64
+            ;;
+    esac
+done
+
+if [[ -z "$DMG_PATH" ]]; then
+    usage >&2
+    exit 64
+fi
+
+if [[ "$DRY_RUN" -eq 0 && ! -f "$DMG_PATH" ]]; then
+    printf 'DMG not found: %s\n' "$DMG_PATH" >&2
+    exit 66
+fi
+
+if [[ -n "$APP_PATH" ]]; then
+    if [[ "$DRY_RUN" -eq 0 && ! -d "$APP_PATH" ]]; then
+        printf 'App bundle not found: %s\n' "$APP_PATH" >&2
+        exit 66
+    fi
+    run_command codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+    run_command spctl -a -vv -t exec "$APP_PATH"
+fi
+
+run_command hdiutil verify "$DMG_PATH"
+run_command xcrun stapler validate "$DMG_PATH"
+run_command spctl -a -vv -t open --context context:primary-signature "$DMG_PATH"
+
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/whatthetoken-dmg.XXXXXX")"
+    COPY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/whatthetoken-copy.XXXXXX")"
+    detach_dmg() {
+        hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1 || true
+        rm -rf "$MOUNT_DIR" "$COPY_DIR"
+    }
+    trap detach_dmg EXIT
+
+    hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint "$MOUNT_DIR" >/dev/null
+
+    if [[ ! -d "$MOUNT_DIR/WhatTheToken.app" ]]; then
+        printf 'Mounted DMG does not contain WhatTheToken.app.\n' >&2
+        exit 66
+    fi
+    if [[ ! -L "$MOUNT_DIR/Applications" ]]; then
+        printf 'Mounted DMG does not contain an Applications symlink.\n' >&2
+        exit 66
+    fi
+
+    cp -R "$MOUNT_DIR/WhatTheToken.app" "$COPY_DIR/WhatTheToken.app"
+    codesign --verify --deep --strict --verbose=2 "$COPY_DIR/WhatTheToken.app"
+    spctl -a -vv -t exec "$COPY_DIR/WhatTheToken.app"
+    /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$COPY_DIR/WhatTheToken.app/Contents/Info.plist" | grep -Fx "AppIcon" >/dev/null
+    test -f "$COPY_DIR/WhatTheToken.app/Contents/Resources/Assets.car"
+else
+    quote_command hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint /tmp/whatthetoken-dmg
+    quote_command test -d /tmp/whatthetoken-dmg/WhatTheToken.app
+    quote_command test -L /tmp/whatthetoken-dmg/Applications
+    quote_command hdiutil detach /tmp/whatthetoken-dmg
+fi
+
+checksum_path="$DMG_PATH.sha256"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    quote_command shasum -a 256 "$DMG_PATH" ">" "$checksum_path"
+else
+    shasum -a 256 "$DMG_PATH" > "$checksum_path"
+    printf '%s\n' "$checksum_path"
+fi
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    printf 'Dry run only. No release artifacts were verified or checksummed.\n'
+fi
+```
+
+This is the shareability check: the final DMG must verify, mount read-only, expose `WhatTheToken.app`, expose the `/Applications` symlink, copy the app out, preserve signing, and preserve the compiled icon assets.
+
+- [ ] **Step 5: Add release rehearsal wrapper**
 
 Create `apps/mac/Scripts/rehearse-release.sh`:
 
@@ -867,6 +1115,7 @@ case "$MODE" in
     dry-run)
         "$ROOT_DIR/Scripts/archive-release.sh" --version "$VERSION" --build "$BUILD" --dry-run
         "$ROOT_DIR/Scripts/create-dmg.sh" --version "$VERSION" --dry-run
+        "$ROOT_DIR/Scripts/sign-dmg.sh" --dmg "$ROOT_DIR/.build/dmg/WhatTheToken-$VERSION.dmg" --dry-run
         "$ROOT_DIR/Scripts/notarize-dmg.sh" --dmg "$ROOT_DIR/.build/dmg/WhatTheToken-$VERSION.dmg" --dry-run
         "$ROOT_DIR/Scripts/verify-release-artifacts.sh" --dmg "$ROOT_DIR/.build/dmg/WhatTheToken-$VERSION.dmg" --app "$ROOT_DIR/.build/export/WhatTheToken.app" --dry-run
         ;;
@@ -874,13 +1123,22 @@ case "$MODE" in
         APP_PATH="$("$ROOT_DIR/Scripts/smoke-archive-unsigned.sh" --version "$VERSION" --build "$BUILD")"
         DMG_PATH="$ROOT_DIR/.build/dmg-smoke/WhatTheToken-$VERSION-unsigned-smoke.dmg"
         "$ROOT_DIR/Scripts/create-dmg.sh" --version "$VERSION" --app "$APP_PATH" --output "$DMG_PATH"
-        hdiutil imageinfo "$DMG_PATH" >/dev/null
+        hdiutil verify "$DMG_PATH" >/dev/null
+        MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/whatthetoken-smoke-dmg.XXXXXX")"
+        trap 'hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1 || true; rm -rf "$MOUNT_DIR"' EXIT
+        hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint "$MOUNT_DIR" >/dev/null
+        test -d "$MOUNT_DIR/WhatTheToken.app"
+        test -L "$MOUNT_DIR/Applications"
+        hdiutil detach "$MOUNT_DIR" >/dev/null
+        trap - EXIT
+        rm -rf "$MOUNT_DIR"
         shasum -a 256 "$DMG_PATH" > "$DMG_PATH.sha256"
         printf '%s\n' "$DMG_PATH"
         ;;
     signed)
         "$ROOT_DIR/Scripts/archive-release.sh" --version "$VERSION" --build "$BUILD"
         "$ROOT_DIR/Scripts/create-dmg.sh" --version "$VERSION"
+        "$ROOT_DIR/Scripts/sign-dmg.sh" --dmg "$ROOT_DIR/.build/dmg/WhatTheToken-$VERSION.dmg"
         "$ROOT_DIR/Scripts/notarize-dmg.sh" --dmg "$ROOT_DIR/.build/dmg/WhatTheToken-$VERSION.dmg"
         "$ROOT_DIR/Scripts/verify-release-artifacts.sh" \
             --dmg "$ROOT_DIR/.build/dmg/WhatTheToken-$VERSION.dmg" \
@@ -893,19 +1151,19 @@ case "$MODE" in
 esac
 ```
 
-- [ ] **Step 4: Make scripts executable**
+- [ ] **Step 6: Make scripts executable**
 
 Run:
 
 ```bash
-chmod +x apps/mac/Scripts/smoke-archive-unsigned.sh apps/mac/Scripts/rehearse-release.sh
+chmod +x apps/mac/Scripts/smoke-archive-unsigned.sh apps/mac/Scripts/sign-dmg.sh apps/mac/Scripts/rehearse-release.sh
 ```
 
 Expected:
 
-- Both scripts have executable bits.
+- All three scripts have executable bits.
 
-- [ ] **Step 5: Run release script tests**
+- [ ] **Step 7: Run release script tests**
 
 Run:
 
@@ -919,7 +1177,7 @@ Expected:
 
 - `MacReleaseScriptTests` passes.
 
-- [ ] **Step 6: Run dry-run rehearsal**
+- [ ] **Step 8: Run dry-run rehearsal**
 
 Run:
 
@@ -931,10 +1189,11 @@ Expected output includes:
 
 - `archive-release.sh` dry-run `xcodebuild archive`
 - `create-dmg.sh` dry-run `hdiutil create`
+- `sign-dmg.sh` dry-run `codesign --force --sign`
 - `notarize-dmg.sh` dry-run `xcrun notarytool submit`
-- `verify-release-artifacts.sh` dry-run `spctl`, `stapler`, and `shasum`
+- `verify-release-artifacts.sh` dry-run `hdiutil verify`, `hdiutil attach`, `spctl`, `stapler`, and `shasum`
 
-- [ ] **Step 7: Run unsigned Xcode archive smoke when Xcode is initialized**
+- [ ] **Step 9: Run unsigned Xcode archive smoke when Xcode is initialized**
 
 Run:
 
@@ -946,12 +1205,13 @@ Expected on initialized Xcode:
 
 - The command prints `apps/mac/.build/dmg-smoke/WhatTheToken-0.1.0-unsigned-smoke.dmg`.
 - A `.sha256` file exists next to the DMG.
+- The unsigned smoke DMG verifies with `hdiutil`, mounts read-only, contains `WhatTheToken.app`, and contains an `Applications` symlink.
 
 Expected on an uninitialized local Xcode:
 
 - The command fails before archive with the known Xcode first-launch/plugin issue. Record the maintainer gate from Task 1; do not weaken the script.
 
-- [ ] **Step 8: Commit checkpoint**
+- [ ] **Step 10: Commit checkpoint**
 
 Run:
 
@@ -1313,6 +1573,7 @@ In `docs/release/public-v1-checklist.md`, add under `## Preconditions`:
 ```markdown
 - Confirm `apps/mac/Sources/WhatTheTokenMac/Assets.xcassets/AppIcon.appiconset/Contents.json` exists and the icon appears in the archived app.
 - Confirm `apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode unsigned-smoke` passes on an initialized Xcode installation, or record the Xcode first-launch gate before proceeding.
+- Confirm the signed release flow signs the DMG before notarization and `verify-release-artifacts.sh` mounts the final DMG, copies out `WhatTheToken.app`, and verifies the copied app still has `CFBundleIconName = AppIcon` plus `Contents/Resources/Assets.car`.
 ```
 
 - [ ] **Step 2: Add release rehearsal command**
@@ -1351,6 +1612,15 @@ Expected output remains:
 - `apps/mac/.build/export/WhatTheToken.app`
 - `apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg`
 - `apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg.sha256`
+
+Expected verification includes:
+
+- The app is Developer ID signed.
+- The DMG is Developer ID signed before notarization.
+- The DMG is notarized and stapled.
+- The DMG mounts read-only.
+- The mounted DMG contains `WhatTheToken.app` and an `Applications` symlink.
+- A copied app from the mounted DMG passes `codesign`, `spctl`, and icon asset checks.
 
 - [ ] **Step 4: Update roadmap Stage 5 status**
 
@@ -1453,6 +1723,7 @@ Run:
 
 ```bash
 apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode dry-run
+apps/mac/Scripts/sign-dmg.sh --dry-run --dmg apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg
 apps/mac/Scripts/generate-appcast.sh --dry-run --updates-dir /tmp/whatthetoken-updates --download-url-prefix https://hansdraisma.github.io/whatthetoken/
 ```
 
@@ -1472,6 +1743,8 @@ apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode unsigned-s
 Expected on initialized Xcode:
 
 - Unsigned archive smoke DMG and `.sha256` file are created.
+- Unsigned smoke DMG verifies, mounts, and contains the app plus Applications symlink.
+- The archived app contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
 
 Expected on this workspace if the known Xcode plugin/first-launch issue persists:
 
@@ -1545,12 +1818,15 @@ Maintainer runs:
 
 ```bash
 security find-identity -v -p codesigning | rg "Developer ID Application"
+export DEVELOPER_ID_SIGNING_IDENTITY="${DEVELOPER_ID_SIGNING_IDENTITY:-Developer ID Application}"
+: "${NOTARY_KEYCHAIN_PROFILE:?Set NOTARY_KEYCHAIN_PROFILE to the existing notarytool Keychain profile name in this shell}"
 xcrun notarytool history --keychain-profile "$NOTARY_KEYCHAIN_PROFILE"
 ```
 
 Expected:
 
 - At least one Developer ID Application identity appears.
+- `DEVELOPER_ID_SIGNING_IDENTITY` resolves to the intended Developer ID Application identity for DMG signing.
 - `notarytool history` authenticates without printing credentials.
 
 - [ ] **Step 3: Generate Sparkle key if Public V1 will embed update metadata**
@@ -1581,6 +1857,7 @@ Maintainer runs:
 ```bash
 : "${DEVELOPER_ID_TEAM_ID:?Set DEVELOPER_ID_TEAM_ID to the Apple Developer Team ID in this shell}"
 : "${NOTARY_KEYCHAIN_PROFILE:?Set NOTARY_KEYCHAIN_PROFILE to the existing notarytool Keychain profile name in this shell}"
+export DEVELOPER_ID_SIGNING_IDENTITY="${DEVELOPER_ID_SIGNING_IDENTITY:-Developer ID Application}"
 apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode signed
 ```
 
@@ -1591,14 +1868,28 @@ Expected:
 - Archive succeeds.
 - Export succeeds.
 - DMG is created.
+- DMG is Developer ID signed.
 - Notarization is accepted.
 - Stapling succeeds.
-- `spctl` accepts the app and DMG.
+- `spctl` accepts the exported app, signed DMG, and copied app from the mounted DMG.
+- DMG mounts read-only and contains `WhatTheToken.app` plus an `Applications` symlink.
+- Copied app from the mounted DMG contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
 - DMG checksum is created.
 
 - [ ] **Step 5: Fresh macOS account smoke**
 
 Maintainer verifies:
+
+- Copy the final DMG to `~/Downloads/WhatTheToken-0.1.0.dmg`.
+- Add a download-style quarantine attribute:
+
+```bash
+DOWNLOADED_DMG="$HOME/Downloads/WhatTheToken-0.1.0.dmg"
+cp apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg "$DOWNLOADED_DMG"
+QUARANTINE_TIME="$(printf %x "$(date +%s)")"
+xattr -w com.apple.quarantine "0081;$QUARANTINE_TIME;Safari;https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/WhatTheToken-0.1.0.dmg" "$DOWNLOADED_DMG"
+open "$DOWNLOADED_DMG"
+```
 
 - Install from the notarized DMG into `/Applications`.
 - Launch from Finder.
@@ -1635,6 +1926,7 @@ plutil -lint apps/mac/Packaging/WhatTheToken.entitlements
 plutil -lint apps/mac/WhatTheToken.xcodeproj/project.pbxproj
 xmllint --noout apps/mac/WhatTheToken.xcodeproj/xcshareddata/xcschemes/WhatTheToken.xcscheme
 apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode dry-run
+apps/mac/Scripts/sign-dmg.sh --dry-run --dmg apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg
 git diff --check
 ```
 
@@ -1646,9 +1938,20 @@ apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode signed
 
 Plus the fresh macOS account smoke in `docs/release/public-v1-checklist.md`.
 
+The release DMG is considered shareable only after the signed rehearsal verifies all of these:
+
+- Developer ID signed exported app.
+- Developer ID signed DMG.
+- Notarized and stapled DMG.
+- `spctl` acceptance for app, DMG, and copied app from the mounted DMG.
+- Read-only DMG mount containing `WhatTheToken.app` and `Applications` symlink.
+- Copied app contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
+- Fresh-account launch from a quarantine-marked DMG copy.
+
 ## Self-Review
 
 - App icon gap is covered by Task 3.
+- Shareable/openable DMG verification is covered by Task 4, Task 9, and Task 10.
 - Sandbox compatibility matrix gap is covered by Task 5.
 - Sparkle inert-vs-enabled decision, EdDSA generation, key custody, public key, feed URL, and appcast gates are covered by Task 6 and Task 10.
 - Public version/build origin is covered by Task 2 metadata tests and Task 8 checklist updates.

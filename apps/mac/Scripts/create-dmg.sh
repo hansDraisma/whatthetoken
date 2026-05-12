@@ -9,6 +9,8 @@ VOLUME_NAME=""
 STAGING_DIR=""
 DRY_RUN=0
 
+. "$ROOT_DIR/Scripts/release-inputs.sh"
+
 usage() {
     printf 'Usage: %s --version <version> [--app <WhatTheToken.app>] [--output <dmg>] [--dry-run]\n' "$0"
 }
@@ -63,6 +65,8 @@ if [[ -z "$VERSION" ]]; then
     usage >&2
     exit 64
 fi
+
+validate_release_version "$VERSION"
 
 if [[ -z "$VOLUME_NAME" ]]; then
     VOLUME_NAME="WhatTheToken $VERSION"

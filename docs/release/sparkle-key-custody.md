@@ -1,6 +1,6 @@
 # Sparkle Key Custody
 
-Sparkle update signing uses an EdDSA keypair separate from Apple Developer ID signing. The public key is embedded in `Info.plist` as `SUPublicEDKey`. The private key signs appcast update entries and must never be committed, logged, uploaded to GitHub Releases, stored in CI, or copied into `.context`.
+Sparkle update signing uses an EdDSA keypair separate from Apple Developer ID signing. The public key is embedded in `Info.plist` as `SUPublicEDKey`. The private key signs appcast update entries and must never be committed, logged, uploaded to GitHub Releases, stored in CI, or copied into any agent scratch directory or AI session cache.
 
 ## Custody Rules
 
@@ -28,7 +28,7 @@ Suggested guarded command:
 ```bash
 PUBLIC_ED_KEY="$(pbpaste | tr -d '\n')"
 test -n "$PUBLIC_ED_KEY"
-printf '%s' "$PUBLIC_ED_KEY" | rg '^[A-Za-z0-9+/=]+$' >/dev/null
+printf '%s' "$PUBLIC_ED_KEY" | grep -E '^[A-Za-z0-9+/=]+$' >/dev/null
 /usr/libexec/PlistBuddy -c 'Delete :SUFeedURL' apps/mac/Packaging/Info.plist 2>/dev/null || true
 /usr/libexec/PlistBuddy -c 'Delete :SUPublicEDKey' apps/mac/Packaging/Info.plist 2>/dev/null || true
 /usr/libexec/PlistBuddy -c 'Add :SUFeedURL string https://hansdraisma.github.io/whatthetoken/appcast.xml' apps/mac/Packaging/Info.plist

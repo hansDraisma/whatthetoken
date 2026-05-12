@@ -3,8 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$ROOT_DIR/../.." && pwd)"
+CONFIG="$ROOT_DIR/Packaging/WhatTheToken.xcconfig"
 VERSION=""
 BUILD=""
+
+. "$ROOT_DIR/Scripts/release-inputs.sh"
 
 usage() {
     printf 'Usage: %s --version <version> --build <build>\n' "$0"
@@ -36,6 +39,10 @@ if [[ -z "$VERSION" || -z "$BUILD" ]]; then
     exit 64
 fi
 
+validate_release_version "$VERSION"
+validate_release_build "$BUILD"
+assert_release_matches_xcconfig "$VERSION" "$BUILD" "$CONFIG"
+
 cd "$REPO_ROOT"
 
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -44,8 +51,24 @@ if [[ -n "$(git status --porcelain)" ]]; then
     exit 65
 fi
 
-TAG="v$VERSION"
+git fetch --tags origin main:refs/remotes/origin/main
+
+CURRENT_BRANCH="$(git branch --show-current)"
+if [[ "$CURRENT_BRANCH" != "main" ]]; then
+    printf 'Public releases must be created from main, not %s.\n' "${CURRENT_BRANCH:-detached HEAD}" >&2
+    exit 65
+fi
+
+ORIGIN_MAIN_SHA="$(git rev-parse origin/main)"
 HEAD_SHA="$(git rev-parse HEAD)"
+if [[ "$HEAD_SHA" != "$ORIGIN_MAIN_SHA" ]]; then
+    printf 'Public release HEAD must match origin/main.\n' >&2
+    printf 'HEAD:        %s\n' "$HEAD_SHA" >&2
+    printf 'origin/main: %s\n' "$ORIGIN_MAIN_SHA" >&2
+    exit 65
+fi
+
+TAG="v$VERSION"
 TAG_SHA="$(git rev-list -n 1 "refs/tags/$TAG")"
 
 if [[ "$HEAD_SHA" != "$TAG_SHA" ]]; then
@@ -64,7 +87,8 @@ if [[ ! -f "$PACKAGE_RESOLVED" ]]; then
     exit 66
 fi
 
-rg -n '"identity" : "sparkle"|"location" : "https://github.com/sparkle-project/Sparkle"' "$PACKAGE_RESOLVED" >/dev/null
+grep -F '"identity" : "sparkle"' "$PACKAGE_RESOLVED" >/dev/null
+grep -F '"location" : "https://github.com/sparkle-project/Sparkle"' "$PACKAGE_RESOLVED" >/dev/null
 
 MANIFEST_DIR="$ROOT_DIR/.build/release-manifests"
 mkdir -p "$MANIFEST_DIR"

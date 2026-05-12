@@ -321,7 +321,8 @@ Tasks:
 - Host the Public V1 Sparkle appcast on GitHub Pages from the repository `/docs` folder.
 - Add a manual Sparkle `Check for Updates` action for Public V1; keep automatic background checks and silent installs disabled.
 - Add Sparkle auto-update only after at least one stable signed release flow and manual signed update path are proven.
-- Add a long-term Stage 5D distribution item for an owned site/custom domain such as `whatthetoken.app`; do not move `SUFeedURL` away from GitHub Pages until a redirect and migration design exists for already-installed apps.
+- Add a long-term Stage 5D distribution item for an owned domain you control; do not move `SUFeedURL` away from GitHub Pages until a redirect and migration design exists for already-installed apps.
+- Add a long-term Stage 5D GitHub Actions release automation item for a scalable release path after Public V1 is stable: evaluate secure Developer ID certificate storage, notary credentials, Sparkle EdDSA signing, GitHub Release asset upload, appcast generation, and manual approval gates before any CI job can publish public artifacts.
 - Extend the existing About panel in V1.x with build commit, Sparkle version, and license attribution.
 - Add launch-at-login with `SMAppService`.
 
@@ -331,7 +332,7 @@ Stage 5B credentialed rehearsal remains gated on Developer ID certificate access
 
 Stage 5C public launch remains gated on GitHub Release publication, checksum publication, public docs, repository visibility scan, and Sparkle appcast publication only after signed update smoke passes.
 
-Stage 5D owned distribution remains a later refinement: evaluate a product site, custom domain, analytics-free download page, redirect policy, and appcast migration after Public V1 is stable on GitHub-hosted infrastructure.
+Stage 5D owned distribution remains a later refinement: evaluate a product site, custom domain, analytics-free download page, redirect policy, appcast migration, and full GitHub Actions release automation after Public V1 is stable on GitHub-hosted infrastructure.
 
 Exit criteria:
 

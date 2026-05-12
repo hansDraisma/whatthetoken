@@ -6,6 +6,8 @@ VERSION=""
 BUILD=""
 MODE="dry-run"
 
+. "$ROOT_DIR/Scripts/release-inputs.sh"
+
 usage() {
     printf 'Usage: %s --version <version> --build <build> [--mode dry-run|unsigned-smoke|signed]\n' "$0"
 }
@@ -39,6 +41,9 @@ if [[ -z "$VERSION" || -z "$BUILD" ]]; then
     usage >&2
     exit 64
 fi
+
+validate_release_version "$VERSION"
+validate_release_build "$BUILD"
 
 step() {
     printf '[%s]\n' "$1"

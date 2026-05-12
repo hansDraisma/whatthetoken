@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>WhatTheToken Updates</title>
+    <link>https://github.com/hansDraisma/whatthetoken/releases</link>
+    <description>No public updates have been published yet. Signed release entries are generated after GitHub Release assets are available.</description>
+  </channel>
+</rss>

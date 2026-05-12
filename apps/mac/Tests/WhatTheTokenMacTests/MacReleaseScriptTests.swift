@@ -20,6 +20,11 @@ import Testing
                 "EXPORT_OPTIONS_RESOLVED",
                 "PlistBuddy",
                 "teamID",
+                "Print :teamID",
+                "plutil -lint",
+                "release-inputs.sh",
+                "validate_release_build",
+                "assert_release_matches_xcconfig",
                 "rm -rf \"$ARCHIVE_PATH\"",
                 "rm -rf \"$EXPORT_DIR\"",
                 "DEVELOPER_ID_TEAM_ID",
@@ -32,7 +37,9 @@ import Testing
                 "hdiutil",
                 "ln -s /Applications",
                 "WhatTheToken.app",
-                "WhatTheToken $VERSION"
+                "WhatTheToken $VERSION",
+                "release-inputs.sh",
+                "validate_release_version"
             ]
         ),
         (
@@ -48,7 +55,7 @@ import Testing
         (
             "sign-dmg.sh",
             [
-                "codesign --force --sign",
+                "codesign --force --timestamp --sign",
                 "DEVELOPER_ID_SIGNING_IDENTITY",
                 "DEVELOPER_ID_SIGNING_IDENTITY is required",
                 "hdiutil verify",
@@ -71,6 +78,7 @@ import Testing
                 "-verify_arch",
                 "CFBundleIconName",
                 "Assets.car",
+                "PrivacyInfo.xcprivacy",
                 "Timestamp="
             ]
         ),
@@ -79,6 +87,8 @@ import Testing
             [
                 "generate_appcast",
                 "SPARKLE_BIN_DIR",
+                "command -v generate_appcast",
+                "SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast",
                 "appcast.xml"
             ]
         ),
@@ -87,7 +97,10 @@ import Testing
             [
                 "xcodebuild",
                 "CODE_SIGNING_ALLOWED=NO",
-                "Products/Applications/WhatTheToken.app"
+                "PrivacyInfo.xcprivacy",
+                "Products/Applications/WhatTheToken.app",
+                "release-inputs.sh",
+                "validate_release_build"
             ]
         ),
         (
@@ -104,7 +117,9 @@ import Testing
                 "test -f",
                 "-verify_arch",
                 "codesign --verify",
-                "xcrun stapler validate"
+                "xcrun stapler validate",
+                "release-inputs.sh",
+                "validate_release_build"
             ]
         ),
         (
@@ -112,17 +127,30 @@ import Testing
             [
                 "MARKETING_VERSION",
                 "CURRENT_PROJECT_VERSION",
-                "Build must increase"
+                "Version rewrite did not round-trip",
+                "Build rewrite did not round-trip",
+                "release-inputs.sh",
+                "validate_release_build",
+                "assert_release_build_increases",
+                "grep -E"
             ]
         ),
         (
             "verify-release-provenance.sh",
             [
                 "git status --porcelain",
+                "git fetch --tags origin main",
+                "git branch --show-current",
+                "git rev-parse origin/main",
+                "Public releases must be created from main",
+                "Public release HEAD must match origin/main",
                 "git rev-parse HEAD",
                 "git rev-list -n 1 \"refs/tags/$TAG\"",
                 "git verify-tag",
-                "Package.resolved"
+                "Package.resolved",
+                "release-inputs.sh",
+                "validate_release_build",
+                "assert_release_matches_xcconfig"
             ]
         )
     ]
@@ -142,7 +170,22 @@ import Testing
         #expect(!script.contains("echo \"${NOTARY"))
         #expect(!script.contains("echo \"$SPARKLE"))
         #expect(!script.contains("echo \"${SPARKLE"))
+        #expect(!script.contains(" rg "))
+        #expect(!script.contains("| rg"))
     }
+}
+
+@Test func releaseInputValidatorOwnsSharedReleaseMetadataRules() throws {
+    let script = try macFileContents("Scripts/release-inputs.sh")
+
+    #expect(script.contains("validate_release_version"))
+    #expect(script.contains("validate_release_build"))
+    #expect(script.contains("assert_release_build_increases"))
+    #expect(script.contains("assert_release_matches_xcconfig"))
+    #expect(script.contains("Version must use numeric x.y.z format."))
+    #expect(script.contains("Build must be a monotonically increasing integer."))
+    #expect(script.contains("Build must increase"))
+    #expect(script.contains("Release version/build must match committed Packaging/WhatTheToken.xcconfig."))
 }
 
 @Test func releaseScriptsPassBinaryBeforeLipoVerifyArch() throws {
@@ -189,4 +232,36 @@ import Testing
     #expect(script.contains("APP_PATH=\"$ARCHIVE_PATH/Products/Applications/WhatTheToken.app\""))
     #expect(script.contains("printf '%s\\n' \"$APP_PATH\""))
     #expect(script.contains("    archive >&2"))
+}
+
+@Test func releaseRehearsalRejectsNonIntegerBuildNumbersBeforeRunningDryRun() throws {
+    let result = try runMacReleaseScript(
+        "rehearse-release.sh",
+        arguments: ["--version", "0.1.0", "--build", "abc", "--mode", "dry-run"]
+    )
+
+    #expect(result.exitCode != 0)
+    #expect(result.output.contains("Build must be a monotonically increasing integer."))
+    #expect(!result.output.contains("xcodebuild"))
+}
+
+private struct ScriptResult {
+    let exitCode: Int32
+    let output: String
+}
+
+private func runMacReleaseScript(_ name: String, arguments: [String]) throws -> ScriptResult {
+    let process = Process()
+    process.executableURL = macPackageRootURL().appendingPathComponent("Scripts/\(name)")
+    process.arguments = arguments
+
+    let outputPipe = Pipe()
+    process.standardOutput = outputPipe
+    process.standardError = outputPipe
+
+    try process.run()
+    process.waitUntilExit()
+
+    let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    return ScriptResult(exitCode: process.terminationStatus, output: output)
 }

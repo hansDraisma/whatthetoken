@@ -6,6 +6,8 @@ Public V1 ships outside the Mac App Store through Developer ID distribution. App
 
 Keep `com.apple.security.app-sandbox` disabled for Public V1 unless every row in this matrix passes on a signed, notarized release candidate.
 
+All `Not run` rows must be exercised against a signed, notarized candidate before sandboxing is reconsidered.
+
 Rationale:
 
 - WhatTheToken is a local developer utility.

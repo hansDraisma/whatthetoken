@@ -10,8 +10,12 @@ protocol LaunchAtLoginServicing: AnyObject {
     func setEnabled(_ enabled: Bool) throws
 }
 
-enum LaunchAtLoginServiceError: Error, Equatable {
+enum LaunchAtLoginServiceError: LocalizedError, Equatable {
     case operationFailed
+
+    var errorDescription: String? {
+        "operation failed"
+    }
 }
 
 @MainActor

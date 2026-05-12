@@ -68,7 +68,7 @@ if [[ "$DRY_RUN" -eq 1 && -z "$SIGNING_IDENTITY_FOR_COMMAND" ]]; then
 fi
 
 run_command hdiutil verify "$DMG_PATH"
-run_command codesign --force --sign "$SIGNING_IDENTITY_FOR_COMMAND" "$DMG_PATH"
+run_command codesign --force --timestamp --sign "$SIGNING_IDENTITY_FOR_COMMAND" "$DMG_PATH"
 run_command codesign --verify --verbose=2 "$DMG_PATH"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then

@@ -20,7 +20,7 @@ import Testing
     }
 
     @Test func failedServiceUpdateDoesNotPersistSetting() async {
-        let service = RecordingLaunchAtLoginService(errorOnSet: true)
+        let service = RecordingLaunchAtLoginService(errorOnSet: LaunchAtLoginTestError.requiresApproval)
         let store = InMemoryAppSettingsStore()
         let viewModel = StatusViewModel(settingsStore: store, launchAtLoginService: service)
 
@@ -31,7 +31,7 @@ import Testing
         #expect(service.requests == [true])
         #expect(viewModel.settings.launchAtLogin.isEnabled == false)
         #expect(persisted.launchAtLogin.isEnabled == false)
-        #expect(viewModel.launchAtLoginStatusMessage == "Launch at Login could not be updated")
+        #expect(viewModel.launchAtLoginStatusMessage == "Launch at Login could not be updated: requires approval in System Settings")
     }
 
     @Test func failedSettingsSaveRollsBackService() async {
@@ -52,18 +52,26 @@ import Testing
 private final class RecordingLaunchAtLoginService: LaunchAtLoginServicing {
     var requests: [Bool] = []
     var isEnabled = false
-    let errorOnSet: Bool
+    let errorOnSet: Error?
 
-    init(errorOnSet: Bool = false) {
+    init(errorOnSet: Error? = nil) {
         self.errorOnSet = errorOnSet
     }
 
     func setEnabled(_ enabled: Bool) throws {
         requests.append(enabled)
-        if errorOnSet {
-            throw LaunchAtLoginServiceError.operationFailed
+        if let errorOnSet {
+            throw errorOnSet
         }
         isEnabled = enabled
+    }
+}
+
+private enum LaunchAtLoginTestError: LocalizedError {
+    case requiresApproval
+
+    var errorDescription: String? {
+        "requires approval in System Settings"
     }
 }
 

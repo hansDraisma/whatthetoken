@@ -85,9 +85,9 @@ Claude Code and Codex connectors must discard raw provider responses after parsi
 
 ## Install And Updates
 
-Public V1 will ship as a signed and notarized DMG attached to GitHub Releases. Install by opening the DMG and moving `WhatTheToken.app` to `/Applications`.
+Public V1 will ship as a signed and notarized DMG attached to GitHub Releases. Install by opening the DMG and moving `WhatTheToken.app` to `/Applications`. macOS may show a Gatekeeper confirmation on first launch; choose Open, then the app appears in the menu bar with no Dock icon.
 
-For Public V1, updates are manual-first. GitHub Releases remains the fallback path for downloading the newest signed and notarized DMG. Sparkle is wired for an explicit `Check for Updates` action once the public appcast, EdDSA public key, and signed old-build to new-build smoke test are complete. Automatic background checks and silent installs remain disabled.
+For Public V1, updates are manual-first. GitHub Releases remains the supported fallback path for downloading the newest signed and notarized DMG. Sparkle is wired for an explicit `Check for Updates` action in builds that embed the public appcast URL and EdDSA public key. Do not market Sparkle as the primary update path until the public appcast and signed old-build to new-build smoke test are complete. Automatic background checks and silent installs remain disabled.
 
 Official release steps are documented in `docs/release/public-v1-checklist.md`.
 

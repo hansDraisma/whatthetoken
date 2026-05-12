@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$ROOT_DIR/WhatTheToken.xcodeproj"
 SCHEME="WhatTheToken"
 CONFIGURATION="Release"
+CONFIG="$ROOT_DIR/Packaging/WhatTheToken.xcconfig"
 EXPORT_OPTIONS="$ROOT_DIR/Packaging/ExportOptions.DeveloperID.plist"
 ARCHIVE_PATH="$ROOT_DIR/.build/archive/WhatTheToken.xcarchive"
 EXPORT_DIR="$ROOT_DIR/.build/export"
@@ -12,6 +13,8 @@ DRY_RUN=0
 VERSION=""
 BUILD=""
 TEAM_ID="${DEVELOPER_ID_TEAM_ID:-}"
+
+. "$ROOT_DIR/Scripts/release-inputs.sh"
 
 usage() {
     printf 'Usage: %s --version <version> --build <build> [--team-id <id>] [--archive-path <path>] [--export-dir <path>] [--dry-run]\n' "$0"
@@ -72,9 +75,16 @@ if [[ -z "$VERSION" || -z "$BUILD" ]]; then
     exit 64
 fi
 
+validate_release_version "$VERSION"
+validate_release_build "$BUILD"
+
 if [[ "$DRY_RUN" -eq 0 && -z "$TEAM_ID" ]]; then
     printf 'DEVELOPER_ID_TEAM_ID is required for a real release archive.\n' >&2
     exit 65
+fi
+
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    assert_release_matches_xcconfig "$VERSION" "$BUILD" "$CONFIG"
 fi
 
 EXPORT_OPTIONS_RESOLVED="$ROOT_DIR/.build/export-options/ExportOptions.DeveloperID.$VERSION.plist"
@@ -84,15 +94,22 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
     rm -rf "$EXPORT_DIR"
     mkdir -p "$(dirname "$EXPORT_OPTIONS_RESOLVED")" "$(dirname "$ARCHIVE_PATH")" "$EXPORT_DIR"
     cp "$EXPORT_OPTIONS" "$EXPORT_OPTIONS_RESOLVED"
-    /usr/libexec/PlistBuddy -c 'Delete :teamID' "$EXPORT_OPTIONS_RESOLVED" 2>/dev/null || true
+    plutil -lint "$EXPORT_OPTIONS_RESOLVED" >/dev/null
+    if /usr/libexec/PlistBuddy -c 'Print :teamID' "$EXPORT_OPTIONS_RESOLVED" >/dev/null 2>&1; then
+        /usr/libexec/PlistBuddy -c 'Delete :teamID' "$EXPORT_OPTIONS_RESOLVED"
+    fi
     /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_OPTIONS_RESOLVED"
+    plutil -lint "$EXPORT_OPTIONS_RESOLVED" >/dev/null
 else
     DRY_RUN_TEAM_ID="${TEAM_ID:-<DEVELOPER_ID_TEAM_ID>}"
     quote_command rm -rf "$ARCHIVE_PATH"
     quote_command rm -rf "$EXPORT_DIR"
     quote_command mkdir -p "$(dirname "$EXPORT_OPTIONS_RESOLVED")" "$(dirname "$ARCHIVE_PATH")" "$EXPORT_DIR"
     quote_command cp "$EXPORT_OPTIONS" "$EXPORT_OPTIONS_RESOLVED"
+    quote_command plutil -lint "$EXPORT_OPTIONS_RESOLVED"
+    quote_command /usr/libexec/PlistBuddy -c "Print :teamID" "$EXPORT_OPTIONS_RESOLVED"
     quote_command /usr/libexec/PlistBuddy -c "Add :teamID string $DRY_RUN_TEAM_ID" "$EXPORT_OPTIONS_RESOLVED"
+    quote_command plutil -lint "$EXPORT_OPTIONS_RESOLVED"
 fi
 
 archive_command=(

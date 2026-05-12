@@ -23,8 +23,8 @@ Do not resubmit a modified binary with the same build number.
 
 If a DMG is attached to GitHub Releases but `docs/appcast.xml` has not been published:
 
-1. Mark the GitHub Release as draft or delete the bad asset if no users have been told.
-2. Increment the build number if the asset may have been downloaded.
+1. If no user could have downloaded the asset, mark the GitHub Release as draft or delete the bad asset.
+2. If any user may have downloaded the asset, increment the build number before publishing a replacement.
 3. Publish a corrected release.
 4. Keep the appcast pointed only at the corrected artifact.
 

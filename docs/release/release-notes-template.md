@@ -41,6 +41,7 @@ shasum -a 256 -c WhatTheToken-<version>.dmg.sha256
 ### Verification
 
 - Developer ID signed app:
+- Build number, monotonically higher than the previous public release:
 - Hardened runtime:
 - Notarized and stapled DMG:
 - Gatekeeper accepted copied app from mounted DMG:

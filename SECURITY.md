@@ -6,7 +6,7 @@ Before Public V1, only the current private development branch is supported. Publ
 
 ## Reporting A Vulnerability
 
-Before Public V1, report vulnerabilities through an existing private maintainer channel. After the repository becomes public, use GitHub private vulnerability reporting if it is enabled.
+Before Public V1, report vulnerabilities through an existing private maintainer channel. GitHub private vulnerability reporting will be enabled before the repository becomes public. If GitHub private vulnerability reporting is unavailable, use the monitored fallback address `draisma.hans@gmail.com`.
 
 Do not paste secrets, provider tokens, cookies, auth headers, prompts, responses, raw provider payloads, raw local database rows, or sensitive local paths into issues, discussions, pull requests, or logs.
 
@@ -29,7 +29,7 @@ Provider credentials stay local. Connectors may use local provider credentials o
 
 ## Official Builds
 
-Public V1 official builds are the signed and notarized DMGs published by the project on GitHub Releases. Release checksums are published beside the DMG.
+Until Public V1 ships, there are no official builds. Public V1 official builds are the signed and notarized DMGs published by the project on GitHub Releases. Release checksums are published beside the DMG.
 
 Developer ID signing, notarization credentials, and Sparkle EdDSA private material must stay outside the repository. Sparkle appcast publishing is part of the release checklist and must not point to unpublished or unverified artifacts.
 

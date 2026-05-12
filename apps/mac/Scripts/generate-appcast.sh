@@ -26,6 +26,38 @@ run_command() {
     fi
 }
 
+resolve_generate_appcast() {
+    if [[ -n "$SPARKLE_BIN_DIR" ]]; then
+        printf '%s\n' "$SPARKLE_BIN_DIR/generate_appcast"
+        return
+    fi
+
+    if command -v generate_appcast >/dev/null 2>&1; then
+        command -v generate_appcast
+        return
+    fi
+
+    local derived_tool=""
+    derived_tool="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path '*/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast' -type f -print -quit 2>/dev/null || true)"
+    if [[ -n "$derived_tool" ]]; then
+        printf '%s\n' "$derived_tool"
+        return
+    fi
+
+    printf 'generate_appcast\n'
+}
+
+assert_generate_appcast_available() {
+    if [[ "$GENERATE_APPCAST" == */* ]]; then
+        [[ -x "$GENERATE_APPCAST" ]] && return
+    elif command -v "$GENERATE_APPCAST" >/dev/null 2>&1; then
+        return
+    fi
+
+    printf 'Sparkle generate_appcast tool not found. Set SPARKLE_BIN_DIR, add it to PATH, or resolve Xcode packages so it exists in DerivedData.\n' >&2
+    exit 69
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --updates-dir)
@@ -70,21 +102,14 @@ fi
 
 OUTPUT="${OUTPUT:-"$UPDATES_DIR/appcast.xml"}"
 
-if [[ -n "$SPARKLE_BIN_DIR" ]]; then
-    GENERATE_APPCAST="$SPARKLE_BIN_DIR/generate_appcast"
-else
-    GENERATE_APPCAST="generate_appcast"
-fi
+GENERATE_APPCAST="$(resolve_generate_appcast)"
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
     if [[ ! -d "$UPDATES_DIR" ]]; then
         printf 'Updates directory not found: %s\n' "$UPDATES_DIR" >&2
         exit 66
     fi
-    if ! command -v "$GENERATE_APPCAST" >/dev/null 2>&1 && [[ ! -x "$GENERATE_APPCAST" ]]; then
-        printf 'Sparkle generate_appcast tool not found. Set SPARKLE_BIN_DIR or add it to PATH.\n' >&2
-        exit 69
-    fi
+    assert_generate_appcast_available
 fi
 
 command_args=("$GENERATE_APPCAST" "$UPDATES_DIR")

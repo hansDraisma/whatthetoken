@@ -223,7 +223,7 @@ final class StatusViewModel {
         do {
             try launchAtLoginService.setEnabled(enabled)
         } catch {
-            launchAtLoginStatusMessage = "Launch at Login could not be updated"
+            launchAtLoginStatusMessage = "Launch at Login could not be updated: \(error.localizedDescription)"
             return false
         }
 

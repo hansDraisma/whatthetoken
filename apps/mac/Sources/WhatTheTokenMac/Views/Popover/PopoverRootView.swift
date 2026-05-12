@@ -3,7 +3,7 @@ import SwiftUI
 struct PopoverRootView: View {
     let viewModel: StatusViewModel
     let controller: PopoverRefreshController
-    let canCheckForUpdates: Bool
+    let canCheckForUpdates: @MainActor () -> Bool
     let onOpenSettings: () -> Void
     let onCheckForUpdates: () -> Void
     let onOpenDeveloperWindow: (() -> Void)?
@@ -30,7 +30,7 @@ struct PopoverRootView: View {
             PopoverFooterView(
                 state: footerState,
                 onRefresh: { controller.userTappedRefresh() },
-                canCheckForUpdates: canCheckForUpdates,
+                canCheckForUpdates: canCheckForUpdates(),
                 onOpenSettings: onOpenSettings,
                 onCheckForUpdates: onCheckForUpdates,
                 onOpenDeveloperWindow: onOpenDeveloperWindow

@@ -9,6 +9,8 @@ ARCHIVE_PATH="$ROOT_DIR/.build/archive-smoke/WhatTheToken.xcarchive"
 VERSION=""
 BUILD=""
 
+. "$ROOT_DIR/Scripts/release-inputs.sh"
+
 usage() {
     printf 'Usage: %s --version <version> --build <build> [--archive-path <path>]\n' "$0"
 }
@@ -43,6 +45,9 @@ if [[ -z "$VERSION" || -z "$BUILD" ]]; then
     exit 64
 fi
 
+validate_release_version "$VERSION"
+validate_release_build "$BUILD"
+
 rm -rf "$ARCHIVE_PATH"
 mkdir -p "$(dirname "$ARCHIVE_PATH")"
 
@@ -62,6 +67,7 @@ xcodebuild \
 APP_PATH="$ARCHIVE_PATH/Products/Applications/WhatTheToken.app"
 INFO_PLIST="$APP_PATH/Contents/Info.plist"
 ASSETS_CAR="$APP_PATH/Contents/Resources/Assets.car"
+PRIVACY_INFO="$APP_PATH/Contents/Resources/PrivacyInfo.xcprivacy"
 BINARY_PATH="$APP_PATH/Contents/MacOS/WhatTheTokenMac"
 
 if [[ ! -d "$APP_PATH" ]]; then
@@ -82,6 +88,11 @@ lipo "$BINARY_PATH" -verify_arch arm64 x86_64
 
 if [[ ! -f "$ASSETS_CAR" ]]; then
     printf 'Compiled asset catalog not found: %s\n' "$ASSETS_CAR" >&2
+    exit 66
+fi
+
+if [[ ! -f "$PRIVACY_INFO" ]]; then
+    printf 'Privacy manifest not found: %s\n' "$PRIVACY_INFO" >&2
     exit 66
 fi
 

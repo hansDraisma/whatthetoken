@@ -12,7 +12,7 @@ This spec defines release readiness, not just repository configuration. Passing 
 
 The public release must be a signed and notarized direct-distribution build that a non-developer can install without Gatekeeper friction. The release path must preserve the product's local-first trust story: no copied provider credentials, no raw provider payload persistence, no default telemetry, and no hidden update or network behavior that weakens the privacy promise.
 
-Sparkle is part of the Stage 5 architecture. Public V1 should be Sparkle-ready and may expose a manual `Check for Updates` path after update verification passes. Background automatic update checks and silent automatic installs must remain disabled until at least one signed/notarized release and one signed update path have been proven.
+Sparkle is part of the Stage 5 architecture. Public V1 should be Sparkle-ready and may expose a manual `Check for Updates` path when a stable appcast URL and public EdDSA key are embedded. Background automatic update checks and silent automatic installs must remain disabled until at least one signed/notarized release and one signed update path have been proven.
 
 ## Product Decision
 
@@ -48,7 +48,7 @@ Remaining before Public V1:
 - real Developer ID archive/export with maintainer certificate access
 - notarization submission, stapling, and Gatekeeper acceptance on the real DMG
 - Sparkle EdDSA public key embedding after maintainer key generation
-- signed old-build to new-build Sparkle update smoke before treating `Check for Updates` as live
+- signed old-build to new-build Sparkle update smoke before treating Sparkle as the primary supported update path
 - fresh-machine install and launch smoke from the notarized DMG
 - repository public-visibility scan for internal workspace names and release secrets
 
@@ -93,7 +93,7 @@ This is acceptable as a fallback but insufficient as the Stage 5 architecture.
 
 ### Option B: Sparkle-Ready Manual-First
 
-Build the release pipeline so Sparkle can be included safely, but keep automatic checks disabled by default for Public V1. Manual update instructions remain the primary Public V1 update path. A manual Sparkle `Check for Updates` affordance can ship only if update smoke tests pass against signed/notarized old and new builds.
+Build the release pipeline so Sparkle can be included safely, but keep automatic checks disabled by default for Public V1. Manual update instructions and GitHub Releases remain the supported Public V1 update path until a signed/notarized old-build to new-build Sparkle smoke passes.
 
 Advantages:
 
@@ -177,7 +177,7 @@ Complete when the maintainer runs the release flow with real credentials on a cl
 - DMG is created, notarized, stapled, and accepted by Gatekeeper
 - checksums are generated from final artifacts
 - launch, quit, settings, connector opt-in, disconnect, relaunch, and launch-at-login smoke tests pass on a fresh macOS account
-- Sparkle remains hidden unless signed update smoke passes
+- Sparkle remains manual-only; do not advertise it as the primary supported update path unless signed update smoke passes
 
 ### Stage 5C: Public Launch
 
@@ -293,7 +293,7 @@ Sparkle integration has two separate decisions:
 - packaging Sparkle safely in the Xcode app target
 - exposing an update-checking user experience
 
-The app target may link and embed Sparkle before Public V1 if signing and notarization still pass. User-visible update checks must remain hidden until the app has a stable feed URL, public EdDSA key, signed update archive, and passing old-build to new-build smoke test.
+The app target may link and embed Sparkle before Public V1 if signing and notarization still pass. Public V1 may ship the manual `Check for Updates` UI when the app has a stable feed URL, public EdDSA key, and manual-only Sparkle settings. Do not treat Sparkle as the primary supported update path until a signed old-build to signed new-build smoke test passes. If that smoke does not pass, ship GitHub Releases as the supported manual update path for that release.
 
 Required Sparkle setup:
 
@@ -311,10 +311,10 @@ Required Sparkle setup:
 Public V1 behavior:
 
 - manual update instructions are always present
+- manual `Check for Updates` may be visible when release metadata is embedded
 - no silent updates
 - no automatic background checks
 - no first-launch updater prompt
-- no user-visible `Check for Updates` UI unless a signed old-build to signed new-build update smoke passes
 - no Sparkle network request unless the user explicitly invokes an approved manual update check
 
 Post-Public V1 behavior:
@@ -474,8 +474,8 @@ Public V1 distribution is complete when:
 - `spctl` accepts both the app and DMG according to the release checklist
 - release scripts and docs are repeatable by the maintainer
 - signing/notarization/Sparkle private material is not in the repo
-- Public V1 docs explain official builds, manual updates, and the future Sparkle update path
-- Sparkle is either exposed in manual-check-only mode with passing update smoke tests, or explicitly hidden with keys/appcast decisions documented and no background update behavior enabled
+- Public V1 docs explain official builds, manual GitHub Release updates, and the manual Sparkle path
+- Sparkle is either exposed in manual-check-only mode with GitHub Releases as the fallback until update smoke passes, or explicitly hidden with keys/appcast decisions documented and no background update behavior enabled
 - launch at login is implemented as an explicit opt-in setting
 - repository visibility can flip public without exposing internal workspace names or release secrets
 

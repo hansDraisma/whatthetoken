@@ -39,6 +39,11 @@ jobs:
       - name: Build Mac Xcode app target
         run: xcodebuild -project apps/mac/WhatTheToken.xcodeproj -scheme WhatTheToken -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
 
+      - name: Verify resolved Release hardened runtime setting
+        run: |
+          xcodebuild -project apps/mac/WhatTheToken.xcodeproj -scheme WhatTheToken -configuration Release -showBuildSettings CODE_SIGNING_ALLOWED=NO > /tmp/whatthetoken-release-build-settings.txt
+          grep -F "ENABLE_HARDENED_RUNTIME = YES" /tmp/whatthetoken-release-build-settings.txt
+
       - name: Verify Mac release metadata
         run: |
           plutil -lint apps/mac/Packaging/Info.plist

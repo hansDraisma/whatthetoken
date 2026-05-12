@@ -37,6 +37,7 @@ curl -fL https://hansdraisma.github.io/whatthetoken/appcast.xml
 ```
 
 Do not embed `SUFeedURL` in a public build until this URL is stable and the Sparkle public key is embedded.
+Do not ship or announce a signed build with `SUFeedURL` until this curl probe returns a published appcast. A placeholder appcast is acceptable before the first release; the signed release appcast must point only at published GitHub Release assets.
 
 ## Public V1 Update Posture
 
@@ -45,9 +46,9 @@ Public V1 is manual-first:
 - GitHub Releases remain the fallback install/update path.
 - Sparkle automatic background checks stay disabled with `SUEnableAutomaticChecks = false`.
 - Silent installs stay disabled with `SUAutomaticallyUpdate = false`.
-- The in-app `Check for Updates` action is allowed only after the signed old-build to new-build Sparkle smoke passes.
+- The in-app `Check for Updates` action may be visible in builds that embed `SUFeedURL` and `SUPublicEDKey`; it must remain manual-only.
 
-The repo can prepare the action and scripts, but the maintainer must complete key custody, signed release publication, appcast generation, and update smoke before treating Sparkle as live.
+The repo can prepare the action and scripts, but the maintainer must complete key custody, signed release publication, appcast generation, and update smoke before treating Sparkle as live. Do not announce Sparkle update support until the signed old-build to new-build smoke passes.
 
 ## Long-Term Site Roadmap
 

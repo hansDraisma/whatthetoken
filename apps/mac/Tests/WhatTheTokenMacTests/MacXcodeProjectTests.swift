@@ -71,6 +71,15 @@ private struct AppIconContents: Decodable {
     #expect(project.contains("lastKnownFileType = text.plist.xml") || project.contains("lastKnownFileType = text.xml"))
 }
 
+@Test func ciVerifiesResolvedReleaseHardenedRuntimeBuildSetting() throws {
+    let workflow = try repositoryFileContents(".github/workflows/test.yml")
+
+    #expect(workflow.contains("xcodebuild -project apps/mac/WhatTheToken.xcodeproj"))
+    #expect(workflow.contains("-configuration Release"))
+    #expect(workflow.contains("-showBuildSettings"))
+    #expect(workflow.contains("ENABLE_HARDENED_RUNTIME = YES"))
+}
+
 @Test func releaseInfoPlistBindsAppIconAssetCatalog() throws {
     let plist = try packagingInfoPlist()
 
@@ -109,11 +118,15 @@ private struct AppIconContents: Decodable {
 
 @Test func sparkleUpdateControllerIsManualCheckOnly() throws {
     let source = try macFileContents("Sources/WhatTheTokenMac/Updates/SparkleUpdateController.swift")
+    let appSource = try macFileContents("Sources/WhatTheTokenMac/WhatTheTokenApp.swift")
+    let rootSource = try macFileContents("Sources/WhatTheTokenMac/Views/Popover/PopoverRootView.swift")
 
     #expect(source.contains("#if canImport(Sparkle)"))
     #expect(source.contains("SPUStandardUpdaterController"))
     #expect(source.contains("startingUpdater: false"))
     #expect(source.contains("checkForUpdates"))
     #expect(source.contains("startUpdater()"))
+    #expect(appSource.contains("canCheckForUpdates: { app.updateController.canCheckForUpdates }"))
+    #expect(rootSource.contains("canCheckForUpdates: canCheckForUpdates()"))
     #expect(!source.contains("checkForUpdatesInBackground"))
 }

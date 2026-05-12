@@ -12,7 +12,7 @@ Related runbooks:
 
 ## Preconditions
 
-- Use a clean checkout of `main`.
+- Use a clean checkout of `main`; signed release scripts enforce that the current branch is `main` and `HEAD` matches `origin/main`.
 - Confirm the public version and monotonically increasing build number.
 - Use `apps/mac/Scripts/bump-version.sh` for any version/build change before archiving.
 - Confirm `apps/mac/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` is committed after resolving Xcode package dependencies.
@@ -30,10 +30,11 @@ spctl --status | grep -F "assessments enabled"
 - Confirm GitHub Pages is enabled from the `main` branch `/docs` folder.
 - Confirm the public appcast URL is `https://hansdraisma.github.io/whatthetoken/appcast.xml`.
 - Confirm the DMG URL pattern is `https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/WhatTheToken-0.1.0.dmg`.
-- Use `hansDraisma` for GitHub repository URLs and `hansdraisma.github.io` for GitHub Pages URLs.
 - Confirm Sparkle EdDSA private material is stored outside the repo, CI, and release hosting.
 - Confirm no App Sandbox entitlement is enabled unless the connector compatibility matrix has passed.
 - Confirm the archived app contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
+
+Maintainer note: use `hansDraisma` for GitHub repository URLs and `hansdraisma.github.io` for GitHub Pages URLs.
 
 ## Build And Test
 
@@ -66,6 +67,9 @@ The unsigned smoke proves the Xcode target archives and the DMG script packages 
 ```bash
 git status --porcelain
 test -z "$(git status --porcelain)"
+git fetch --tags origin main:refs/remotes/origin/main
+test "$(git branch --show-current)" = "main"
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 git tag -s v0.1.0 -m "WhatTheToken 0.1.0"
 git verify-tag v0.1.0
 test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 refs/tags/v0.1.0)"
@@ -132,7 +136,7 @@ open "$DOWNLOADED_DMG"
 - Confirm launch at login defaults off and toggles only by explicit user action.
 - Confirm Claude Code and Codex remain disconnected until explicit connection.
 - Confirm disconnect removes provider cache.
-- Confirm `Check for Updates` is visible.
+- If `SUPublicEDKey` and `SUFeedURL` are embedded, confirm `Check for Updates` is visible; otherwise confirm the action is hidden or disabled.
 - Confirm first launch makes no network request before explicit user action:
 
 ```bash
@@ -149,7 +153,7 @@ test ! -s "$NETWORK_LOG"
 ```
 
 - Confirm no background update network request occurs.
-- Confirm the only update network request happens after choosing `Check for Updates`.
+- If Sparkle metadata is embedded, confirm the only update network request happens after choosing `Check for Updates`.
 
 After the GitHub Release is published, repeat one install smoke with the actual DMG downloaded through a browser. The `xattr` simulation is not a substitute for one real browser download.
 
@@ -180,7 +184,9 @@ shasum -a 256 -c WhatTheToken-0.1.0.dmg.sha256
 
 ## Sparkle Appcast
 
-Public V1 uses manual Sparkle checks. Automatic background checks and silent installs remain disabled.
+Public V1 may include manual Sparkle checks when `SUPublicEDKey` and `SUFeedURL` are embedded. Automatic background checks and silent installs remain disabled.
+
+If shipping a release with Sparkle intentionally inert, skip this section and remove or hide the in-app `Check for Updates` action for that release.
 
 Generate the appcast only after the GitHub Release DMG asset exists:
 
@@ -190,6 +196,7 @@ Before committing appcast changes:
 - Confirm `SUFeedURL` is `https://hansdraisma.github.io/whatthetoken/appcast.xml`.
 - Confirm the private EdDSA key stayed outside the repo, CI, and hosting machine.
 - Confirm the appcast points only to published GitHub Release artifacts.
+- Confirm Sparkle's `generate_appcast` tool is available through `SPARKLE_BIN_DIR`, `PATH`, or Xcode DerivedData package artifacts. The script auto-discovers all three locations; set `SPARKLE_BIN_DIR` only if discovery fails.
 
 ```bash
 mkdir -p "$HOME/ReleaseArtifacts/WhatTheToken/updates"
@@ -200,13 +207,14 @@ apps/mac/Scripts/generate-appcast.sh \
   --download-url-prefix https://github.com/hansDraisma/whatthetoken/releases/download/v0.1.0/ \
   --release-notes-url https://github.com/hansDraisma/whatthetoken/releases/tag/v0.1.0
 xmllint --noout docs/appcast.xml
-rg -n "sparkle:edSignature|WhatTheToken-0.1.0.dmg|github.com/hansDraisma/whatthetoken/releases/download/v0.1.0" docs/appcast.xml
+grep -E "sparkle:edSignature|WhatTheToken-0.1.0.dmg|github.com/hansDraisma/whatthetoken/releases/download/v0.1.0" docs/appcast.xml
 git add docs/appcast.xml
 git commit -m "release: publish appcast for v0.1.0"
 git push origin main
 ```
 
 - Confirm a previous signed build updates to the new signed/notarized build after GitHub Pages publishes `docs/appcast.xml`.
+- If the smoke has not passed, release notes must state GitHub Releases is the supported update path and must not market Sparkle as the primary update path.
 
 ## Credential-Gated Verification
 

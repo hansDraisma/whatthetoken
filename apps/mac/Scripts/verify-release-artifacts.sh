@@ -73,18 +73,18 @@ if [[ -n "$APP_PATH" ]]; then
     fi
     run_command codesign --verify --deep --strict --verbose=2 "$APP_PATH"
     if [[ "$DRY_RUN" -eq 0 ]]; then
-        codesign -dv --verbose=4 "$APP_PATH" 2>&1 | rg "Timestamp="
+        codesign -dv --verbose=4 "$APP_PATH" 2>&1 | grep -F "Timestamp="
     else
-        quote_command codesign -dv --verbose=4 "$APP_PATH" "2>&1" "|" rg "Timestamp="
+        quote_command codesign -dv --verbose=4 "$APP_PATH" "2>&1" "|" grep -F "Timestamp="
     fi
     run_command spctl -a -vv -t exec "$APP_PATH"
 fi
 
 run_command hdiutil verify "$DMG_PATH"
 if [[ "$DRY_RUN" -eq 0 ]]; then
-    codesign -dv --verbose=4 "$DMG_PATH" 2>&1 | rg "Timestamp="
+    codesign -dv --verbose=4 "$DMG_PATH" 2>&1 | grep -F "Timestamp="
 else
-    quote_command codesign -dv --verbose=4 "$DMG_PATH" "2>&1" "|" rg "Timestamp="
+    quote_command codesign -dv --verbose=4 "$DMG_PATH" "2>&1" "|" grep -F "Timestamp="
 fi
 run_command xcrun stapler validate "$DMG_PATH"
 run_command spctl -a -vv -t open --context context:primary-signature "$DMG_PATH"
@@ -111,15 +111,17 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
 
     cp -R "$MOUNT_DIR/WhatTheToken.app" "$COPY_DIR/WhatTheToken.app"
     codesign --verify --deep --strict --verbose=2 "$COPY_DIR/WhatTheToken.app"
-    codesign -dv --verbose=4 "$COPY_DIR/WhatTheToken.app" 2>&1 | rg "Timestamp="
+    codesign -dv --verbose=4 "$COPY_DIR/WhatTheToken.app" 2>&1 | grep -F "Timestamp="
     spctl -a -vv -t exec "$COPY_DIR/WhatTheToken.app"
     /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$COPY_DIR/WhatTheToken.app/Contents/Info.plist" | grep -Fx "AppIcon" >/dev/null
     test -f "$COPY_DIR/WhatTheToken.app/Contents/Resources/Assets.car"
+    test -f "$COPY_DIR/WhatTheToken.app/Contents/Resources/PrivacyInfo.xcprivacy"
     lipo "$COPY_DIR/WhatTheToken.app/Contents/MacOS/WhatTheTokenMac" -verify_arch arm64 x86_64
 else
     quote_command hdiutil attach "$DMG_PATH" -readonly -nobrowse -mountpoint /tmp/whatthetoken-dmg
     quote_command test -d /tmp/whatthetoken-dmg/WhatTheToken.app
     quote_command test -L /tmp/whatthetoken-dmg/Applications
+    quote_command test -f /tmp/whatthetoken-dmg/WhatTheToken.app/Contents/Resources/PrivacyInfo.xcprivacy
     quote_command hdiutil detach /tmp/whatthetoken-dmg
 fi
 

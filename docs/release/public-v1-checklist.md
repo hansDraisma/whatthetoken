@@ -110,7 +110,7 @@ Required checks:
 - The generated checksum verifies locally:
 
 ```bash
-shasum -a 256 -c apps/mac/.build/dmg/WhatTheToken-0.1.0.dmg.sha256
+( cd apps/mac/.build/dmg && shasum -a 256 -c WhatTheToken-0.1.0.dmg.sha256 )
 ```
 
 If notarization is rejected, do not resubmit a modified binary with the same build number. Save the notary log, sanitize any shared excerpt, fix the cause, increment `CURRENT_PROJECT_VERSION`, and archive a new candidate.

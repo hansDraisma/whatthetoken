@@ -127,10 +127,11 @@ fi
 
 checksum_path="$DMG_PATH.sha256"
 if [[ "$DRY_RUN" -eq 1 ]]; then
-    quote_command shasum -a 256 "$DMG_PATH" ">" "$checksum_path"
+    quote_command cd "$(dirname "$DMG_PATH")" "&&" shasum -a 256 "$(basename "$DMG_PATH")" ">" "$checksum_path"
+    quote_command cd "$(dirname "$DMG_PATH")" "&&" shasum -a 256 -c "$(basename "$DMG_PATH").sha256"
 else
-    shasum -a 256 "$DMG_PATH" > "$checksum_path"
-    shasum -a 256 -c "$checksum_path"
+    ( cd "$(dirname "$DMG_PATH")" && shasum -a 256 "$(basename "$DMG_PATH")" ) > "$checksum_path"
+    ( cd "$(dirname "$DMG_PATH")" && shasum -a 256 -c "$(basename "$DMG_PATH").sha256" )
     printf '%s\n' "$checksum_path"
 fi
 

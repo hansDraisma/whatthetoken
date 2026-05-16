@@ -71,6 +71,8 @@ import Testing
                 "assessments enabled",
                 "shasum -a 256",
                 "shasum -a 256 -c",
+                "cd \"$(dirname \"$DMG_PATH\")\"",
+                "shasum -a 256 \"$(basename \"$DMG_PATH\")\"",
                 "xcrun stapler validate",
                 "hdiutil verify",
                 "hdiutil attach",
@@ -119,7 +121,9 @@ import Testing
                 "codesign --verify",
                 "xcrun stapler validate",
                 "release-inputs.sh",
-                "validate_release_build"
+                "validate_release_build",
+                "cd \"$(dirname \"$DMG_PATH\")\"",
+                "shasum -a 256 \"$(basename \"$DMG_PATH\")\""
             ]
         ),
         (

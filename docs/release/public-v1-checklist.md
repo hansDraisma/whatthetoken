@@ -105,6 +105,9 @@ Required checks:
 - Gatekeeper accepts the exported app, DMG, and copied app from the mounted DMG.
 - DMG mounts read-only and contains `WhatTheToken.app` plus an `Applications` symlink.
 - Copied app contains `CFBundleIconName = AppIcon` and `Contents/Resources/Assets.car`.
+- Copied app contains `Contents/PlugIns/WhatTheTokenWidget.appex`.
+- `codesign --verify --deep --strict` passes on the embedded widget extension.
+- Notarization succeeds with the widget extension present.
 - Copied app binary contains both `arm64` and `x86_64`.
 - Notary submission JSON and notary log JSON are saved under `apps/mac/.build/notary`.
 - The generated checksum verifies locally:

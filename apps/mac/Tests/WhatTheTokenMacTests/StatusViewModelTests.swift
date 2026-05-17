@@ -1072,3 +1072,89 @@ final class FlakyNotificationStateStore: NotificationStateStore, @unchecked Send
 
     #expect(stateStore.saveCallCount == initialCount)
 }
+
+@MainActor
+@Test func setShowInDockPersists() async {
+    let viewModel = StatusViewModel()
+
+    await viewModel.setShowInDock(false)
+
+    #expect(viewModel.settings.appearance.showInDock == false)
+}
+
+@MainActor
+@Test func markOnboardingStepRecordsStateButDoesNotFlipFirstLaunchOnPartialProgress() async {
+    let viewModel = StatusViewModel()
+    #expect(viewModel.settings.onboarding.firstLaunchCompleted == false)
+
+    await viewModel.markOnboardingStep(.connectProviders, as: .done)
+
+    #expect(viewModel.settings.onboarding.steps.connectProviders == .done)
+    #expect(viewModel.settings.onboarding.firstLaunchCompleted == false)
+}
+
+@MainActor
+@Test func bannerDismissAlsoFlipsFirstLaunchCompleted() async {
+    let viewModel = StatusViewModel()
+
+    await viewModel.markOnboardingStep(.connectProviders, as: .done)
+    await viewModel.markOnboardingStep(.findMenuBar, as: .done)
+    await viewModel.markOnboardingStep(.addWidget, as: .done)
+    await viewModel.markOnboardingStep(.allowNotifications, as: .done)
+    await viewModel.markOnboardingStep(.setHotkey, as: .done)
+    await viewModel.markOnboardingStep(.launchAtLogin, as: .done)
+
+    #expect(viewModel.settings.onboarding.firstLaunchCompleted == true)
+}
+
+@MainActor
+@Test func skipAllFlipsFirstLaunchAndSkipsRemaining() async {
+    let viewModel = StatusViewModel()
+
+    await viewModel.skipAllOnboarding()
+
+    #expect(viewModel.settings.onboarding.firstLaunchCompleted == true)
+    #expect(viewModel.settings.onboarding.steps.connectProviders == .skipped)
+}
+
+@MainActor
+@Test func replayOnboardingResetsStepsButLeavesFirstLaunchCompleted() async {
+    let viewModel = StatusViewModel()
+    await viewModel.skipAllOnboarding()
+
+    await viewModel.replayOnboarding()
+
+    #expect(viewModel.settings.onboarding.firstLaunchCompleted == true)
+    #expect(viewModel.settings.onboarding.steps == .allPending)
+}
+
+@MainActor
+@Test func registerCurrentHotkeyUsesLoadedPersistedCombination() async {
+    let registrar = SpyHotkeyRegistrar()
+    let hotkeyService = GlobalHotkeyService(registrar: registrar)
+    let viewModel = StatusViewModel()
+    let custom = HotkeyCombination(modifiers: [.command, .shift], keyCode: 40)
+    var settings = viewModel.settings
+    settings.hotkey.combination = custom
+    await viewModel.saveSettings(settings)
+    viewModel.bindHotkeyService(hotkeyService) { }
+
+    await viewModel.registerCurrentHotkey()
+
+    #expect(registrar.lastKeyCode == 40)
+    #expect(registrar.lastModifierMask == GlobalHotkeyService.carbonModifierMask(for: [.command, .shift]))
+}
+
+@MainActor
+private final class SpyHotkeyRegistrar: HotkeyRegistering {
+    var lastKeyCode: UInt32?
+    var lastModifierMask: UInt32?
+
+    func register(keyCode: UInt32, modifierMask: UInt32, onTrigger: @escaping () -> Void) -> Bool {
+        lastKeyCode = keyCode
+        lastModifierMask = modifierMask
+        return true
+    }
+
+    func unregister() { }
+}

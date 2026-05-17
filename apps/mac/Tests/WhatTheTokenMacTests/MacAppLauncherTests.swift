@@ -21,7 +21,8 @@ private final class RecordingMacApplication: MacApplicationActivating {
 
     MacAppLauncher.configureForInteractiveLaunch(
         arguments: ["WhatTheTokenMac"],
-        application: application
+        application: application,
+        showInDock: { false }
     )
 
     #expect(application.policies == [.accessory])
@@ -45,7 +46,11 @@ private final class RecordingMacApplication: MacApplicationActivating {
 @Test func accessoryLaunchSetsAccessoryPolicy_noActivate() {
     let application = RecordingMacApplication()
 
-    MacAppLauncher.configureLaunch(arguments: ["WhatTheTokenMac"], application: application)
+    MacAppLauncher.configureLaunch(
+        arguments: ["WhatTheTokenMac"],
+        application: application,
+        showInDock: { false }
+    )
 
     #expect(application.policies == [.accessory])
     #expect(application.activateCount == 0)
@@ -79,4 +84,43 @@ private final class RecordingMacApplication: MacApplicationActivating {
 
     #expect(application.policies.isEmpty)
     #expect(application.activateCount == 0)
+}
+
+@MainActor
+@Test func choosesRegularWhenShowInDockIsTrue() {
+    let application = RecordingMacApplication()
+
+    MacAppLauncher.configureLaunch(
+        arguments: ["WhatTheToken"],
+        application: application,
+        showInDock: { true }
+    )
+
+    #expect(application.policies == [.regular])
+}
+
+@MainActor
+@Test func choosesAccessoryWhenShowInDockIsFalse() {
+    let application = RecordingMacApplication()
+
+    MacAppLauncher.configureLaunch(
+        arguments: ["WhatTheToken"],
+        application: application,
+        showInDock: { false }
+    )
+
+    #expect(application.policies == [.accessory])
+}
+
+@MainActor
+@Test func developerWindowOverrideAlwaysForcesRegular() {
+    let application = RecordingMacApplication()
+
+    MacAppLauncher.configureLaunch(
+        arguments: ["WhatTheToken", "--developer-window"],
+        application: application,
+        showInDock: { false }
+    )
+
+    #expect(application.policies == [.regular])
 }

@@ -62,3 +62,15 @@ import Testing
     #expect(security.contains("GitHub private vulnerability reporting will be enabled before the repository becomes public"))
     #expect(security.contains("draisma.hans@gmail.com"))
 }
+
+@Test func discoverabilityPlanTracksRebasedReleaseAndWidgetMetadataDecisions() throws {
+    let plan = try repositoryFileContents("docs/superpowers/plans/2026-05-09-menu-bar-app-discoverability.md")
+
+    #expect(plan.contains("<string>$(MARKETING_VERSION)</string>"))
+    #expect(plan.contains("<string>$(CURRENT_PROJECT_VERSION)</string>"))
+    #expect(plan.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER"))
+    #expect(plan.contains("DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER"))
+    #expect(plan.contains("Scripts/smoke-archive-unsigned.sh --version <version> --build <build>"))
+    #expect(plan.contains("--app-profile <name>"))
+    #expect(plan.contains("--widget-profile <name>"))
+}

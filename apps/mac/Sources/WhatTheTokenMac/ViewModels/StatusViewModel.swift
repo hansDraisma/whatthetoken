@@ -267,10 +267,14 @@ final class StatusViewModel {
     @discardableResult
     func setHotkey(_ combination: HotkeyCombination) async -> String? {
         let failureMessage = "Could not register this hotkey - try a different combination."
+        let saveFailureMessage = "Could not save this hotkey - try again."
         guard let hotkeyService, let hotkeyTrigger else {
             var nextSettings = settings
             nextSettings.hotkey.combination = combination
-            await saveSettings(nextSettings)
+            guard await saveSettings(nextSettings) else {
+                hotkeyRegistrationWarning = saveFailureMessage
+                return saveFailureMessage
+            }
             hotkeyRegistrationWarning = nil
             return nil
         }
@@ -278,9 +282,18 @@ final class StatusViewModel {
         let persistedCombination = settings.hotkey.combination
         switch hotkeyService.register(combination: combination, onTrigger: hotkeyTrigger) {
         case .registered:
+            guard persistedCombination != combination else {
+                hotkeyRegistrationWarning = nil
+                return nil
+            }
+
             var nextSettings = settings
             nextSettings.hotkey.combination = combination
-            await saveSettings(nextSettings)
+            guard await saveSettings(nextSettings) else {
+                _ = hotkeyService.register(combination: persistedCombination, onTrigger: hotkeyTrigger)
+                hotkeyRegistrationWarning = saveFailureMessage
+                return saveFailureMessage
+            }
             hotkeyRegistrationWarning = nil
             return nil
         case .invalidCombination:

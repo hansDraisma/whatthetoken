@@ -19,6 +19,8 @@ Related runbooks:
 - If `xcodebuild` fails to load `IDESimulatorFoundation` or reports first-launch content is missing, run `sudo xcodebuild -runFirstLaunch` on the signing machine before archive rehearsal.
 - Confirm `DEVELOPER_ID_TEAM_ID` is set for the release signer.
 - Confirm `DEVELOPER_ID_SIGNING_IDENTITY` is the exact Developer ID Application identity, including team suffix.
+- Confirm `DEVELOPER_ID_APP_PROFILE_SPECIFIER` is set to an installed Developer ID provisioning profile for `com.whatthetoken.mac`.
+- Confirm `DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER` is set to an installed Developer ID provisioning profile for `com.whatthetoken.mac.widget`.
 - Confirm the Developer ID Application certificate does not expire within the next 30 days.
 - Confirm `NOTARY_KEYCHAIN_PROFILE` exists in Keychain for `xcrun notarytool`.
 - Confirm Gatekeeper assessments are enabled:
@@ -82,6 +84,8 @@ Do not push the tag until the signed rehearsal and local fresh-account smoke pas
 ```bash
 : "${DEVELOPER_ID_TEAM_ID:?Set DEVELOPER_ID_TEAM_ID}"
 : "${DEVELOPER_ID_SIGNING_IDENTITY:?Set DEVELOPER_ID_SIGNING_IDENTITY}"
+: "${DEVELOPER_ID_APP_PROFILE_SPECIFIER:?Set DEVELOPER_ID_APP_PROFILE_SPECIFIER}"
+: "${DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER:?Set DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER}"
 : "${NOTARY_KEYCHAIN_PROFILE:?Set NOTARY_KEYCHAIN_PROFILE}"
 apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode signed
 ```

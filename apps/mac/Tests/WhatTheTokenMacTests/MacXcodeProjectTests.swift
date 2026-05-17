@@ -144,7 +144,7 @@ private struct AppIconContents: Decodable {
 
 @Test func sparkleUpdateControllerIsManualCheckOnly() throws {
     let source = try macFileContents("Sources/WhatTheTokenMac/Updates/SparkleUpdateController.swift")
-    let appSource = try macFileContents("Sources/WhatTheTokenMac/WhatTheTokenApp.swift")
+    let appModelSource = try macFileContents("Sources/WhatTheTokenMac/AppModel.swift")
     let rootSource = try macFileContents("Sources/WhatTheTokenMac/Views/Popover/PopoverRootView.swift")
 
     #expect(source.contains("#if canImport(Sparkle)"))
@@ -152,7 +152,7 @@ private struct AppIconContents: Decodable {
     #expect(source.contains("startingUpdater: false"))
     #expect(source.contains("checkForUpdates"))
     #expect(source.contains("startUpdater()"))
-    #expect(appSource.contains("canCheckForUpdates: { app.updateController.canCheckForUpdates }"))
+    #expect(appModelSource.contains("canCheckForUpdates: { updateController.canCheckForUpdates }"))
     #expect(rootSource.contains("canCheckForUpdates: canCheckForUpdates()"))
     #expect(!source.contains("checkForUpdatesInBackground"))
 }

@@ -22,7 +22,10 @@ final class GlobalHotkeyService {
     init(registrar: HotkeyRegistering) { self.registrar = registrar }
 
     func register(combination: HotkeyCombination, onTrigger: @escaping () -> Void) -> HotkeyRegistrationResult {
-        guard combination.isValidForGlobalRegistration else { return .invalidCombination }
+        guard combination.isValidForGlobalRegistration else {
+            registrar.unregister()
+            return .invalidCombination
+        }
         let mask = Self.carbonModifierMask(for: combination.modifiers)
         return registrar.register(keyCode: combination.keyCode, modifierMask: mask, onTrigger: onTrigger)
             ? .registered : .failed
@@ -52,9 +55,16 @@ import AppKit
 
 @MainActor
 final class CarbonHotkeyRegistrar: HotkeyRegistering {
-    private var hotKeyRef: EventHotKeyRef?
-    private var eventHandler: EventHandlerRef?
+    // Carbon event hot key cleanup APIs are safe to call from deinit, which can
+    // run outside the main actor in Swift 6. Keep these refs scoped to Carbon cleanup.
+    nonisolated(unsafe) private var hotKeyRef: EventHotKeyRef?
+    nonisolated(unsafe) private var eventHandler: EventHandlerRef?
     private var trigger: (() -> Void)?
+
+    deinit {
+        if let ref = hotKeyRef { UnregisterEventHotKey(ref) }
+        if let handler = eventHandler { RemoveEventHandler(handler) }
+    }
 
     func register(keyCode: UInt32, modifierMask: UInt32, onTrigger: @escaping () -> Void) -> Bool {
         unregister()

@@ -22,7 +22,7 @@ struct WidgetTimelineProvider: TimelineProvider {
         let payload: WidgetEntry
         if let url = sharedSnapshotURL(),
            let data = try? Data(contentsOf: url),
-           let snapshot = try? JSONDecoder().decode(SnapshotCache.self, from: data) {
+           let snapshot = try? SnapshotCache.decodeValidated(from: data) {
             payload = SnapshotEntryBuilder.entry(from: snapshot, now: now)
         } else {
             payload = SnapshotEntryBuilder.placeholder()

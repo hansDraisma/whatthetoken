@@ -1194,6 +1194,25 @@ final class FlakyNotificationStateStore: NotificationStateStore, @unchecked Send
 }
 
 @MainActor
+@Test func hotkeyReplacementSaveFailureReregistersPersistedCombination() async {
+    let registrar = SpyHotkeyRegistrar()
+    registrar.registrationResults = [true, true, true]
+    let hotkeyService = GlobalHotkeyService(registrar: registrar)
+    let viewModel = StatusViewModel(settingsStore: FailingHotkeySettingsStore())
+    viewModel.bindHotkeyService(hotkeyService) { }
+    await viewModel.registerCurrentHotkey()
+    let replacement = HotkeyCombination(modifiers: [.command, .shift], keyCode: 40)
+
+    let warning = await viewModel.setHotkey(replacement)
+
+    #expect(warning == "Could not save this hotkey - try again.")
+    #expect(viewModel.hotkeyRegistrationWarning == "Could not save this hotkey - try again.")
+    #expect(viewModel.settings.hotkey.combination == .default)
+    #expect(registrar.registeredKeyCodes == [17, 40, 17])
+    #expect(registrar.lastModifierMask == GlobalHotkeyService.carbonModifierMask(for: HotkeyCombination.default.modifiers))
+}
+
+@MainActor
 @Test func dismissHotkeyRegistrationWarningClearsOneShotBanner() async {
     let registrar = SpyHotkeyRegistrar()
     registrar.shouldRegister = false
@@ -1226,4 +1245,14 @@ private final class SpyHotkeyRegistrar: HotkeyRegistering {
     }
 
     func unregister() { }
+}
+
+private final class FailingHotkeySettingsStore: AppSettingsStore, @unchecked Sendable {
+    func load() async -> AppSettings {
+        .defaults
+    }
+
+    func save(_ settings: AppSettings) async -> Bool {
+        false
+    }
 }

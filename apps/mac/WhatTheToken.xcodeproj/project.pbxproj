@@ -68,6 +68,10 @@
 		200000000000000000000037 = {isa = PBXBuildFile; fileRef = 100000000000000000000037; };
 		200000000000000000000038 = {isa = PBXBuildFile; fileRef = 100000000000000000000038; };
 		200000000000000000000039 = {isa = PBXBuildFile; fileRef = 100000000000000000000039; };
+		20000000000000000000003A = {isa = PBXBuildFile; fileRef = 10000000000000000000003A; };
+		20000000000000000000003B = {isa = PBXBuildFile; fileRef = 10000000000000000000003B; };
+		20000000000000000000003C = {isa = PBXBuildFile; fileRef = 10000000000000000000003C; };
+		20000000000000000000003D = {isa = PBXBuildFile; fileRef = 10000000000000000000003D; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -137,6 +141,10 @@
 		100000000000000000000037 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Notifications/NotificationState.swift; sourceTree = "<group>"; };
 		100000000000000000000038 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/ViewModels/BackgroundRefreshController.swift; sourceTree = "<group>"; };
 		100000000000000000000039 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Popover/MenuBarStatusLabel.swift; sourceTree = "<group>"; };
+		10000000000000000000003A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Hotkey/HotkeyCombination.swift; sourceTree = "<group>"; };
+		10000000000000000000003B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/AppearanceSettings.swift; sourceTree = "<group>"; };
+		10000000000000000000003C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/HotkeySettings.swift; sourceTree = "<group>"; };
+		10000000000000000000003D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/OnboardingSettings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -195,12 +203,16 @@
 				100000000000000000000014,
 				100000000000000000000015,
 				100000000000000000000016,
+				10000000000000000000003A,
 				100000000000000000000035,
 				100000000000000000000036,
 				100000000000000000000037,
 				100000000000000000000017,
+				10000000000000000000003B,
 				100000000000000000000018,
 				100000000000000000000019,
+				10000000000000000000003C,
+				10000000000000000000003D,
 				10000000000000000000001A,
 				10000000000000000000001B,
 				10000000000000000000001C,
@@ -361,12 +373,16 @@
 				200000000000000000000014,
 				200000000000000000000015,
 				200000000000000000000016,
+				20000000000000000000003A,
 				200000000000000000000035,
 				200000000000000000000036,
 				200000000000000000000037,
 				200000000000000000000017,
+				20000000000000000000003B,
 				200000000000000000000018,
 				200000000000000000000019,
+				20000000000000000000003C,
+				20000000000000000000003D,
 				20000000000000000000001A,
 				20000000000000000000001B,
 				20000000000000000000001C,

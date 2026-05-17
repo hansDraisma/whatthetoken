@@ -181,4 +181,117 @@ import Testing
 
         #expect(loaded.connectors.claudeCode.isEnabled == true)
     }
+
+    @Test func defaultsAddNewSubstructuresWithFreshUserState() {
+        let s = AppSettings.defaults
+
+        #expect(s.appearance.showInDock == true)
+        #expect(s.hotkey.combination == HotkeyCombination.default)
+        #expect(s.onboarding.firstLaunchCompleted == false)
+        #expect(s.onboarding.steps.connectProviders == .pending)
+    }
+
+    @Test func decodesV2PayloadWithoutNewKeysAsExistingUser() throws {
+        let json = """
+        {
+          "schemaVersion" : 2,
+          "connectors" : {
+            "claudeCode" : { "isEnabled" : true,  "isPaused" : false },
+            "codex"      : { "isEnabled" : false, "isPaused" : false }
+          },
+          "refresh" : { "autoRefreshEnabled" : false, "intervalSeconds" : 300 },
+          "notifications" : {
+            "isEnabled" : true,
+            "warningThreshold" : 0.20,
+            "criticalThreshold" : 0.10,
+            "providerAlerts" : {
+              "claudeCode" : { "isEnabled" : true },
+              "codex"      : { "isEnabled" : true }
+            }
+          },
+          "launchAtLogin" : { "isEnabled" : false },
+          "menuBar" : { "displayMode" : "statusIcon" }
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try AppSettings.decodeValidated(from: json)
+
+        #expect(decoded.appearance == AppearanceSettings.default)
+        #expect(decoded.hotkey == HotkeySettings.default)
+        #expect(decoded.onboarding.firstLaunchCompleted == true)
+        #expect(decoded.onboarding.steps.connectProviders == .pending)
+    }
+
+    @Test func decodesV2PayloadWithAllNewKeysPreservesValues() throws {
+        let json = """
+        {
+          "schemaVersion" : 2,
+          "connectors" : {
+            "claudeCode" : { "isEnabled" : true,  "isPaused" : false },
+            "codex"      : { "isEnabled" : false, "isPaused" : false }
+          },
+          "refresh" : { "autoRefreshEnabled" : false, "intervalSeconds" : 300 },
+          "notifications" : {
+            "isEnabled" : false,
+            "warningThreshold" : 0.20,
+            "criticalThreshold" : 0.10,
+            "providerAlerts" : {
+              "claudeCode" : { "isEnabled" : true },
+              "codex"      : { "isEnabled" : true }
+            }
+          },
+          "launchAtLogin" : { "isEnabled" : true },
+          "menuBar" : { "displayMode" : "statusIcon" },
+          "appearance" : { "showInDock" : false },
+          "hotkey" : {
+            "combination" : { "modifiers" : { "rawValue" : 1 }, "keyCode" : 17 }
+          },
+          "onboarding" : {
+            "firstLaunchCompleted" : true,
+            "steps" : {
+              "connectProviders" : "done",
+              "findMenuBar" : "skipped",
+              "addWidget" : "done",
+              "allowNotifications" : "pending",
+              "setHotkey" : "done",
+              "launchAtLogin" : "skipped"
+            }
+          }
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try AppSettings.decodeValidated(from: json)
+
+        #expect(decoded.appearance.showInDock == false)
+        #expect(decoded.hotkey.combination.modifiers == [.command])
+        #expect(decoded.onboarding.firstLaunchCompleted == true)
+        #expect(decoded.onboarding.steps.addWidget == .done)
+        #expect(decoded.onboarding.steps.findMenuBar == .skipped)
+    }
+
+    @Test func v1MigrationDefaultsNewSubstructuresAsExistingUser() throws {
+        let json = """
+        {
+          "schemaVersion" : 1,
+          "connectors" : {
+            "claudeCode" : { "isEnabled" : true },
+            "codex"      : { "isEnabled" : false }
+          },
+          "refresh" : { "autoRefreshEnabled" : true, "intervalSeconds" : 600 },
+          "notifications" : {
+            "isEnabled" : true,
+            "lowThreshold" : 0.30,
+            "criticalThreshold" : 0.10
+          },
+          "menuBar" : { "displayMode" : "statusIcon" }
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try AppSettings.decodeValidated(from: json)
+
+        #expect(decoded.schemaVersion == 2)
+        #expect(decoded.appearance == AppearanceSettings.default)
+        #expect(decoded.hotkey == HotkeySettings.default)
+        #expect(decoded.onboarding.firstLaunchCompleted == true)
+    }
 }

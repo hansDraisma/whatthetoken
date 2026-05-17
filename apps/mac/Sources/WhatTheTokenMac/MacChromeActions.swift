@@ -33,6 +33,17 @@ enum MacChromeActions {
     }
 
     @MainActor
+    static func openLaunchWindow(
+        dismissPopover: @MainActor () -> Void = defaultDismissPopover,
+        activate: @MainActor () -> Void = defaultActivate,
+        openWindow: @MainActor () -> Void
+    ) {
+        dismissPopover()
+        activate()
+        openWindow()
+    }
+
+    @MainActor
     private static func defaultActivate() {
         #if canImport(AppKit)
         NSApplication.shared.activate(ignoringOtherApps: true)

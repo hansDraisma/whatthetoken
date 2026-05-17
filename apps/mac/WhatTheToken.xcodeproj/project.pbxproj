@@ -72,6 +72,7 @@
 		20000000000000000000003B = {isa = PBXBuildFile; fileRef = 10000000000000000000003B; };
 		20000000000000000000003C = {isa = PBXBuildFile; fileRef = 10000000000000000000003C; };
 		20000000000000000000003D = {isa = PBXBuildFile; fileRef = 10000000000000000000003D; };
+		20000000000000000000003E = {isa = PBXBuildFile; fileRef = 10000000000000000000003E; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -145,6 +146,7 @@
 		10000000000000000000003B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/AppearanceSettings.swift; sourceTree = "<group>"; };
 		10000000000000000000003C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/HotkeySettings.swift; sourceTree = "<group>"; };
 		10000000000000000000003D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/OnboardingSettings.swift; sourceTree = "<group>"; };
+		10000000000000000000003E = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Hotkey/GlobalHotkeyService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -204,6 +206,7 @@
 				100000000000000000000015,
 				100000000000000000000016,
 				10000000000000000000003A,
+				10000000000000000000003E,
 				100000000000000000000035,
 				100000000000000000000036,
 				100000000000000000000037,
@@ -374,6 +377,7 @@
 				200000000000000000000015,
 				200000000000000000000016,
 				20000000000000000000003A,
+				20000000000000000000003E,
 				200000000000000000000035,
 				200000000000000000000036,
 				200000000000000000000037,

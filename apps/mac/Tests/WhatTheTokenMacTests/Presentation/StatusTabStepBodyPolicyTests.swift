@@ -20,6 +20,11 @@ import Testing
         #expect(StatusTabStepBodyPolicy.shouldMarkHotkeyDone(warning: "Could not register this hotkey") == false)
     }
 
+    @Test func hotkeyWarningBannerShowsOnlyWhenWarningExists() {
+        #expect(StatusTabHotkeyWarningBanner.message(from: nil) == nil)
+        #expect(StatusTabHotkeyWarningBanner.message(from: "Could not register this hotkey") == "Could not register this hotkey")
+    }
+
     @Test func launchAtLoginStepCompletesOnlyOnSuccess() {
         #expect(StatusTabStepBodyPolicy.shouldMarkLaunchAtLoginDone(success: true) == true)
         #expect(StatusTabStepBodyPolicy.shouldMarkLaunchAtLoginDone(success: false) == false)

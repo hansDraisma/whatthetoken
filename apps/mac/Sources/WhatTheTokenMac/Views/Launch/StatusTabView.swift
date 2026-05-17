@@ -28,6 +28,12 @@ enum StatusTabStepBodyPolicy {
     }
 }
 
+enum StatusTabHotkeyWarningBanner {
+    static func message(from warning: String?) -> String? {
+        warning
+    }
+}
+
 struct StatusTabView: View {
     let viewModel: StatusViewModel
     @State private var selectedTab: ProviderTab = .codex
@@ -44,6 +50,24 @@ struct StatusTabView: View {
                         stepBody: { step in stepBody(for: step) },
                         onSkipAll: { Task { await viewModel.skipAllOnboarding() } }
                     )
+                }
+
+                if let warning = StatusTabHotkeyWarningBanner.message(from: viewModel.hotkeyRegistrationWarning) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(warning)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Dismiss") {
+                            viewModel.dismissHotkeyRegistrationWarning()
+                        }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 12)
+                    .background(Color.orange.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
                 Text("Quota")

@@ -1148,14 +1148,57 @@ final class FlakyNotificationStateStore: NotificationStateStore, @unchecked Send
 }
 
 @MainActor
+@Test func registerCurrentHotkeyStoresLaunchWarningWhenRegistrationFails() async {
+    let registrar = SpyHotkeyRegistrar()
+    registrar.shouldRegister = false
+    let hotkeyService = GlobalHotkeyService(registrar: registrar)
+    let viewModel = StatusViewModel()
+    viewModel.bindHotkeyService(hotkeyService) { }
+
+    await viewModel.registerCurrentHotkey()
+
+    #expect(viewModel.hotkeyRegistrationWarning == "Could not register this hotkey - try a different combination.")
+}
+
+@MainActor
+@Test func successfulHotkeyRegistrationClearsPreviousLaunchWarning() async {
+    let registrar = SpyHotkeyRegistrar()
+    registrar.shouldRegister = false
+    let hotkeyService = GlobalHotkeyService(registrar: registrar)
+    let viewModel = StatusViewModel()
+    viewModel.bindHotkeyService(hotkeyService) { }
+    await viewModel.registerCurrentHotkey()
+
+    registrar.shouldRegister = true
+    await viewModel.setHotkey(.default)
+
+    #expect(viewModel.hotkeyRegistrationWarning == nil)
+}
+
+@MainActor
+@Test func dismissHotkeyRegistrationWarningClearsOneShotBanner() async {
+    let registrar = SpyHotkeyRegistrar()
+    registrar.shouldRegister = false
+    let hotkeyService = GlobalHotkeyService(registrar: registrar)
+    let viewModel = StatusViewModel()
+    viewModel.bindHotkeyService(hotkeyService) { }
+    await viewModel.registerCurrentHotkey()
+
+    viewModel.dismissHotkeyRegistrationWarning()
+
+    #expect(viewModel.hotkeyRegistrationWarning == nil)
+}
+
+@MainActor
 private final class SpyHotkeyRegistrar: HotkeyRegistering {
     var lastKeyCode: UInt32?
     var lastModifierMask: UInt32?
+    var shouldRegister = true
 
     func register(keyCode: UInt32, modifierMask: UInt32, onTrigger: @escaping () -> Void) -> Bool {
         lastKeyCode = keyCode
         lastModifierMask = modifierMask
-        return true
+        return shouldRegister
     }
 
     func unregister() { }

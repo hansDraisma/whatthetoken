@@ -35,6 +35,16 @@ import Testing
         #expect(copy?.hint == "Open the app to connect Claude or Codex.")
     }
 
+    @Test func providerPillAppearanceUsesPaletteFillAndOutline() {
+        let connected = WidgetPreviewCopy.pillAppearance(isConnected: true)
+        let disconnected = WidgetPreviewCopy.pillAppearance(isConnected: false)
+
+        #expect(connected.fillColorName == "systemGreen")
+        #expect(disconnected.fillColorName == "controlBackgroundColor")
+        #expect(connected.outlineColorName == "labelColor")
+        #expect(disconnected.outlineColorName == "labelColor")
+    }
+
     @Test func staleEntryReportsStaleness() {
         let entry = WidgetEntry(
             rows: [WidgetRow(provider: .claude, state: .connected(percentage: 10))],

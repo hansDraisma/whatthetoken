@@ -112,6 +112,27 @@ private struct AppIconContents: Decodable {
     ))
 }
 
+@Test func widgetTargetBuildConfigurationsInheritVersionSettingsFromXcconfig() throws {
+    let project = try macFileContents("WhatTheToken.xcodeproj/project.pbxproj")
+
+    #expect(!projectMatches(
+        project,
+        #"(?s)000000000000000000000033 = \{.*?CURRENT_PROJECT_VERSION ="#
+    ))
+    #expect(!projectMatches(
+        project,
+        #"(?s)000000000000000000000033 = \{.*?MARKETING_VERSION ="#
+    ))
+    #expect(!projectMatches(
+        project,
+        #"(?s)000000000000000000000034 = \{.*?CURRENT_PROJECT_VERSION ="#
+    ))
+    #expect(!projectMatches(
+        project,
+        #"(?s)000000000000000000000034 = \{.*?MARKETING_VERSION ="#
+    ))
+}
+
 @Test func ciVerifiesResolvedReleaseHardenedRuntimeBuildSetting() throws {
     let workflow = try repositoryFileContents(".github/workflows/test.yml")
 

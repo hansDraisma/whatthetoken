@@ -275,6 +275,7 @@ final class StatusViewModel {
             return nil
         }
 
+        let persistedCombination = settings.hotkey.combination
         switch hotkeyService.register(combination: combination, onTrigger: hotkeyTrigger) {
         case .registered:
             var nextSettings = settings
@@ -285,6 +286,9 @@ final class StatusViewModel {
         case .invalidCombination:
             return "This combination needs at least one modifier."
         case .failed:
+            if persistedCombination != combination {
+                _ = hotkeyService.register(combination: persistedCombination, onTrigger: hotkeyTrigger)
+            }
             hotkeyRegistrationWarning = failureMessage
             return failureMessage
         }

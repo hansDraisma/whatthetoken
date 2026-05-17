@@ -62,7 +62,6 @@
 		20000000000000000000002F = {isa = PBXBuildFile; fileRef = 10000000000000000000002F; };
 		200000000000000000000030 = {isa = PBXBuildFile; fileRef = 100000000000000000000030; };
 		200000000000000000000031 = {isa = PBXBuildFile; fileRef = 100000000000000000000031; };
-		200000000000000000000032 = {isa = PBXBuildFile; fileRef = 100000000000000000000032; };
 		200000000000000000000033 = {isa = PBXBuildFile; fileRef = 100000000000000000000033; };
 		200000000000000000000034 = {isa = PBXBuildFile; fileRef = 100000000000000000000034; };
 		200000000000000000000035 = {isa = PBXBuildFile; fileRef = 100000000000000000000035; };
@@ -197,7 +196,6 @@
 		10000000000000000000002F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Settings/ConnectorActionTitle.swift; sourceTree = "<group>"; };
 		100000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Settings/ConnectorRowView.swift; sourceTree = "<group>"; };
 		100000000000000000000031 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Settings/ConnectorsView.swift; sourceTree = "<group>"; };
-		100000000000000000000032 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Settings/SettingsRootView.swift; sourceTree = "<group>"; };
 		100000000000000000000033 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/WhatTheTokenApp.swift; sourceTree = "<group>"; };
 		100000000000000000000034 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/XcodeSupport/XcodeBundleModule.swift; sourceTree = "<group>"; };
 		100000000000000000000035 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Notifications/NotificationDelivery.swift; sourceTree = "<group>"; };
@@ -353,7 +351,6 @@
 				10000000000000000000002F,
 				100000000000000000000030,
 				100000000000000000000031,
-				100000000000000000000032,
 				100000000000000000000033,
 				100000000000000000000034,
 			);
@@ -586,7 +583,6 @@
 				20000000000000000000002F,
 				200000000000000000000030,
 				200000000000000000000031,
-				200000000000000000000032,
 				200000000000000000000033,
 				200000000000000000000034,
 			);

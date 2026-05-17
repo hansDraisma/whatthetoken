@@ -11,6 +11,7 @@ final class StatusViewModel {
     var codexConnectorState: CodexConnectorSetupState
     var codexConnectorStatusMessage: String
     var launchAtLoginStatusMessage: String?
+    var hotkeyRegistrationWarning: String?
     private var cache: SnapshotCache
     private var notificationState: NotificationState
     private let settingsStore: AppSettingsStore
@@ -265,10 +266,12 @@ final class StatusViewModel {
 
     @discardableResult
     func setHotkey(_ combination: HotkeyCombination) async -> String? {
+        let failureMessage = "Could not register this hotkey - try a different combination."
         guard let hotkeyService, let hotkeyTrigger else {
             var nextSettings = settings
             nextSettings.hotkey.combination = combination
             await saveSettings(nextSettings)
+            hotkeyRegistrationWarning = nil
             return nil
         }
 
@@ -277,11 +280,13 @@ final class StatusViewModel {
             var nextSettings = settings
             nextSettings.hotkey.combination = combination
             await saveSettings(nextSettings)
+            hotkeyRegistrationWarning = nil
             return nil
         case .invalidCombination:
             return "This combination needs at least one modifier."
         case .failed:
-            return "Could not register this hotkey - try a different combination."
+            hotkeyRegistrationWarning = failureMessage
+            return failureMessage
         }
     }
 
@@ -291,6 +296,10 @@ final class StatusViewModel {
 
     func openPopoverProgrammatically() async {
         menuBarController?.openPopover()
+    }
+
+    func dismissHotkeyRegistrationWarning() {
+        hotkeyRegistrationWarning = nil
     }
 
     func replayOnboarding() async {

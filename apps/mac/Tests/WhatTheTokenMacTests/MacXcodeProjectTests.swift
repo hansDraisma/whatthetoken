@@ -47,6 +47,21 @@ private struct AppIconContents: Decodable {
     }
 }
 
+@Test func xcodeProjectReferencesOnlyExistingSwiftFiles() throws {
+    let project = try macFileContents("WhatTheToken.xcodeproj/project.pbxproj")
+    let regex = try #require(try? NSRegularExpression(pattern: #"path = ([^;]+\.swift);"#))
+    let range = NSRange(project.startIndex..<project.endIndex, in: project)
+    let referencedPaths = regex.matches(in: project, range: range).compactMap { match -> String? in
+        guard let pathRange = Range(match.range(at: 1), in: project) else { return nil }
+        return String(project[pathRange])
+    }
+
+    for referencedPath in referencedPaths.sorted() {
+        let url = macPackageRootURL().appendingPathComponent(referencedPath)
+        #expect(FileManager.default.fileExists(atPath: url.path), "Missing Xcode Swift source: \(referencedPath)")
+    }
+}
+
 @Test func xcodePackageResolutionPinsSparkleForReleaseReproducibility() throws {
     let resolved = try macFileContents("WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
 

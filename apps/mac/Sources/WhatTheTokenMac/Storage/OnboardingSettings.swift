@@ -23,6 +23,15 @@ struct OnboardingStepStates: Codable, Equatable, Sendable {
         launchAtLogin: .pending
     )
 
+    static let allSkipped = OnboardingStepStates(
+        connectProviders: .skipped,
+        findMenuBar: .skipped,
+        addWidget: .skipped,
+        allowNotifications: .skipped,
+        setHotkey: .skipped,
+        launchAtLogin: .skipped
+    )
+
     var allFinal: Bool {
         [connectProviders, findMenuBar, addWidget, allowNotifications, setHotkey, launchAtLogin]
             .allSatisfy { $0 != .pending }
@@ -34,5 +43,5 @@ struct OnboardingSettings: Codable, Equatable, Sendable {
     var steps: OnboardingStepStates
 
     static let `default` = OnboardingSettings(firstLaunchCompleted: false, steps: .allPending)
-    static let existingUser = OnboardingSettings(firstLaunchCompleted: true, steps: .allPending)
+    static let existingUser = OnboardingSettings(firstLaunchCompleted: true, steps: .allSkipped)
 }

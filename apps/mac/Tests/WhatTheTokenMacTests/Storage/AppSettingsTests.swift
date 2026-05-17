@@ -219,7 +219,7 @@ import Testing
         #expect(decoded.appearance == AppearanceSettings.default)
         #expect(decoded.hotkey == HotkeySettings.default)
         #expect(decoded.onboarding.firstLaunchCompleted == true)
-        #expect(decoded.onboarding.steps.connectProviders == .pending)
+        #expect(decoded.onboarding.steps.connectProviders == .skipped)
     }
 
     @Test func decodesV2PayloadWithAllNewKeysPreservesValues() throws {

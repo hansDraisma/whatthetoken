@@ -19,6 +19,14 @@ import Testing
         #expect(OnboardingSettings.existingUser.firstLaunchCompleted == true)
     }
 
+    @Test func existingUserHasFinalStepsSoBannerStaysHiddenUntilReplay() {
+        let settings = OnboardingSettings.existingUser
+        let state = OnboardingState(stepStates: settings.steps)
+
+        #expect(state.bannerDismissable == true)
+        #expect(state.nextStep == nil)
+    }
+
     @Test func codingRoundtripPreservesEveryStepState() throws {
         var s = OnboardingSettings.default
         s.firstLaunchCompleted = true

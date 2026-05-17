@@ -433,15 +433,17 @@ private func sensitiveKeyMatches(
     let counter = Counter()
     let vm = StatusViewModel(
         settings: settings,
-        claudeRefresher: SlowClaudeRefresher(counter: counter),
+        claudeRefresher: SlowClaudeRefresher(counter: counter, sleepNanoseconds: 5_000_000_000),
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0")
     )
 
     let task = Task { await vm.refreshAll(reason: .manual) }
-    for _ in 0..<20 {
+    for _ in 0..<200 {
         if vm.connectorState == .checking { break }
+        try? await Task.sleep(nanoseconds: 1_000_000)
         await Task.yield()
     }
+    #expect(vm.connectorState == .checking)
 
     settings.refresh.autoRefreshEnabled = true
     await vm.saveSettings(settings)

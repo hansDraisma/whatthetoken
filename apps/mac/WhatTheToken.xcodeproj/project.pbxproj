@@ -80,6 +80,7 @@
 		200000000000000000000043 = {isa = PBXBuildFile; fileRef = 100000000000000000000043; };
 		200000000000000000000044 = {isa = PBXBuildFile; fileRef = 100000000000000000000044; };
 		200000000000000000000045 = {isa = PBXBuildFile; fileRef = 100000000000000000000045; };
+		200000000000000000000046 = {isa = PBXBuildFile; fileRef = 100000000000000000000046; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -161,6 +162,7 @@
 		100000000000000000000043 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/MenuBar/MenuBarController.swift; sourceTree = "<group>"; };
 		100000000000000000000044 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Widget/SnapshotEntryBuilder.swift; sourceTree = "<group>"; };
 		100000000000000000000045 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Widget/WidgetEntry.swift; sourceTree = "<group>"; };
+		100000000000000000000046 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/WidgetPreviewView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -254,6 +256,7 @@
 				100000000000000000000028,
 				100000000000000000000045,
 				100000000000000000000039,
+				100000000000000000000046,
 				100000000000000000000029,
 				10000000000000000000002A,
 				10000000000000000000002B,
@@ -432,6 +435,7 @@
 				200000000000000000000028,
 				200000000000000000000045,
 				200000000000000000000039,
+				200000000000000000000046,
 				200000000000000000000029,
 				20000000000000000000002A,
 				20000000000000000000002B,

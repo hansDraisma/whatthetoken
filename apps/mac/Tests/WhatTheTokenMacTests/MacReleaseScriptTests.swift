@@ -184,7 +184,15 @@ import Testing
 @Test func releaseArchiveRequiresDistinctProvisioningProfilesForAppAndWidget() throws {
     let result = try runMacReleaseScript(
         "archive-release.sh",
-        arguments: ["--version", "0.1.0", "--build", "1", "--team-id", "3U98C8T3DT"]
+        arguments: ["--version", "0.1.0", "--build", "1", "--team-id", "3U98C8T3DT"],
+        environmentOverrides: [
+            "DEVELOPER_ID_APP_PROFILE_SPECIFIER": nil,
+            "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER": nil
+        ],
+        baseEnvironment: ProcessInfo.processInfo.environment.merging([
+            "DEVELOPER_ID_APP_PROFILE_SPECIFIER": "Installed App Profile",
+            "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER": "Installed Widget Profile"
+        ]) { _, new in new }
     )
 
     #expect(result.exitCode != 0)
@@ -276,10 +284,22 @@ private struct ScriptResult {
     let output: String
 }
 
-private func runMacReleaseScript(_ name: String, arguments: [String]) throws -> ScriptResult {
+private func runMacReleaseScript(
+    _ name: String,
+    arguments: [String],
+    environmentOverrides: [String: String?] = [:],
+    baseEnvironment: [String: String] = ProcessInfo.processInfo.environment
+) throws -> ScriptResult {
     let process = Process()
     process.executableURL = macPackageRootURL().appendingPathComponent("Scripts/\(name)")
     process.arguments = arguments
+    process.environment = environmentOverrides.reduce(into: baseEnvironment) { environment, override in
+        if let value = override.value {
+            environment[override.key] = value
+        } else {
+            environment.removeValue(forKey: override.key)
+        }
+    }
 
     let outputPipe = Pipe()
     process.standardOutput = outputPipe

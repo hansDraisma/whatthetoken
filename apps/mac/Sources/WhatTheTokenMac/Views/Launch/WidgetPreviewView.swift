@@ -12,6 +12,11 @@ enum WidgetPreviewCopy {
         let hint: String
     }
 
+    struct PillAppearance: Equatable {
+        let fillColorName: String
+        let outlineColorName: String
+    }
+
     static func row(for row: WidgetRow) -> Row {
         switch row.state {
         case let .connected(percentage):
@@ -30,6 +35,13 @@ enum WidgetPreviewCopy {
         return EmptyState(
             title: "No providers connected",
             hint: "Open the app to connect Claude or Codex."
+        )
+    }
+
+    static func pillAppearance(isConnected: Bool) -> PillAppearance {
+        PillAppearance(
+            fillColorName: isConnected ? "systemGreen" : "controlBackgroundColor",
+            outlineColorName: "labelColor"
         )
     }
 }
@@ -65,13 +77,18 @@ struct WidgetPreviewView: View {
 
     private func rowView(for row: WidgetRow) -> some View {
         let copy = WidgetPreviewCopy.row(for: row)
+        let pill = WidgetPreviewCopy.pillAppearance(isConnected: copy.isConnected)
         return HStack(spacing: 8) {
             Text(copy.providerLabel)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(copy.isConnected ? .white : .primary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(copy.isConnected ? Color.green : Color.gray)
+                .background(pillFillColor(named: pill.fillColorName))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(pillOutlineColor(named: pill.outlineColorName), lineWidth: 1)
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
             Spacer()
@@ -80,6 +97,39 @@ struct WidgetPreviewView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(copy.isConnected ? .primary : .secondary)
         }
+    }
+
+    private func pillFillColor(named name: String) -> Color {
+        #if canImport(AppKit)
+        switch name {
+        case "systemGreen":
+            return Color(nsColor: .systemGreen)
+        case "controlBackgroundColor":
+            return Color(nsColor: .controlBackgroundColor)
+        default:
+            return Color(nsColor: .controlBackgroundColor)
+        }
+        #else
+        switch name {
+        case "systemGreen":
+            return Color.accentColor
+        default:
+            return Color.secondary.opacity(0.16)
+        }
+        #endif
+    }
+
+    private func pillOutlineColor(named name: String) -> Color {
+        #if canImport(AppKit)
+        switch name {
+        case "labelColor":
+            return Color(nsColor: .labelColor).opacity(0.24)
+        default:
+            return Color.primary.opacity(0.24)
+        }
+        #else
+        return Color.primary.opacity(0.24)
+        #endif
     }
 }
 

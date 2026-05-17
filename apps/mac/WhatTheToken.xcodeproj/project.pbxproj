@@ -78,6 +78,8 @@
 		200000000000000000000041 = {isa = PBXBuildFile; fileRef = 100000000000000000000041; };
 		200000000000000000000042 = {isa = PBXBuildFile; fileRef = 100000000000000000000042; };
 		200000000000000000000043 = {isa = PBXBuildFile; fileRef = 100000000000000000000043; };
+		200000000000000000000044 = {isa = PBXBuildFile; fileRef = 100000000000000000000044; };
+		200000000000000000000045 = {isa = PBXBuildFile; fileRef = 100000000000000000000045; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -157,6 +159,8 @@
 		100000000000000000000041 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Animation/MenuBarIconPulseAnimator.swift; sourceTree = "<group>"; };
 		100000000000000000000042 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/MenuBar/MenuBarStatusItemImage.swift; sourceTree = "<group>"; };
 		100000000000000000000043 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/MenuBar/MenuBarController.swift; sourceTree = "<group>"; };
+		100000000000000000000044 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Widget/SnapshotEntryBuilder.swift; sourceTree = "<group>"; };
+		100000000000000000000045 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Widget/WidgetEntry.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -246,7 +250,9 @@
 				100000000000000000000025,
 				100000000000000000000026,
 				100000000000000000000027,
+				100000000000000000000044,
 				100000000000000000000028,
+				100000000000000000000045,
 				100000000000000000000039,
 				100000000000000000000029,
 				10000000000000000000002A,
@@ -422,7 +428,9 @@
 				200000000000000000000025,
 				200000000000000000000026,
 				200000000000000000000027,
+				200000000000000000000044,
 				200000000000000000000028,
+				200000000000000000000045,
 				200000000000000000000039,
 				200000000000000000000029,
 				20000000000000000000002A,

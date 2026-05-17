@@ -13,6 +13,7 @@ enum CachedProviderID: String, Codable, Equatable, Sendable {
         }
     }
 
+    #if !WTT_WIDGET_EXTENSION
     static func from(tab: ProviderTab) -> CachedProviderID {
         switch tab {
         case .claude:
@@ -21,6 +22,7 @@ enum CachedProviderID: String, Codable, Equatable, Sendable {
             return .codex
         }
     }
+    #endif
 }
 
 struct SnapshotCache: Codable, Equatable, Sendable {
@@ -100,6 +102,7 @@ struct SnapshotCache: Codable, Equatable, Sendable {
 struct SnapshotStalePolicy: Equatable, Sendable {
     let staleAfterMinutes: Int
 
+    #if !WTT_WIDGET_EXTENSION
     static func from(settings: AppSettings) -> SnapshotStalePolicy {
         guard settings.refresh.autoRefreshEnabled else {
             return SnapshotStalePolicy(staleAfterMinutes: 60)
@@ -107,6 +110,7 @@ struct SnapshotStalePolicy: Equatable, Sendable {
         let intervalMinutes = max(settings.refresh.intervalSeconds / 60, 1)
         return SnapshotStalePolicy(staleAfterMinutes: max(intervalMinutes * 2, 15))
     }
+    #endif
 }
 
 struct CachedProviderError: Codable, Equatable, Sendable {

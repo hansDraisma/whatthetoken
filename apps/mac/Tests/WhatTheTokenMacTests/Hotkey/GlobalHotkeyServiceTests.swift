@@ -14,6 +14,21 @@ import Testing
     }
 
     @MainActor
+    @Test func invalidReplacementUnregistersExistingHotkey() {
+        let registrar = SpyRegistrar()
+        let service = GlobalHotkeyService(registrar: registrar)
+
+        _ = service.register(combination: .default, onTrigger: { })
+        let result = service.register(
+            combination: HotkeyCombination(modifiers: [], keyCode: 17),
+            onTrigger: { }
+        )
+
+        #expect(result == .invalidCombination)
+        #expect(registrar.unregisterCount == 1)
+    }
+
+    @MainActor
     @Test func registerCallsRegistrarWithCarbonModifierMask() {
         let registrar = SpyRegistrar()
         let service = GlobalHotkeyService(registrar: registrar)
@@ -46,6 +61,18 @@ import Testing
         service.unregister()
 
         #expect(registrar.unregisterCount == 1)
+    }
+
+    @Test func carbonRegistrarDocumentsDeinitThreadSafetyAssumption() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/WhatTheTokenMac/Hotkey/GlobalHotkeyService.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("Carbon event hot key cleanup APIs are safe to call from deinit"))
     }
 }
 

@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 
+// These source-content checks are smoke tests for widget target wiring. The
+// Xcode build remains the compile coverage for the WidgetKit extension.
 @Suite struct WidgetExtensionFilesTests {
     @Test func widgetInfoPlistDeclaresWidgetKitExtensionPoint() throws {
         let plist = try widgetPlist("Widget/Info.plist")
@@ -23,6 +25,7 @@ import Testing
 
         #expect(source.contains("SnapshotEntryBuilder"))
         #expect(source.contains("SnapshotCache"))
+        #expect(source.contains("SnapshotCache.decodeValidated"))
         #expect(source.contains("group.com.whatthetoken.mac"))
         #expect(source.contains("snapshot-cache.json"))
     }

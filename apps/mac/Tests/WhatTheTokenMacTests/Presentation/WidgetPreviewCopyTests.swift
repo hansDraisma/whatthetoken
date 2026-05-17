@@ -19,6 +19,22 @@ import Testing
         #expect(copy.isConnected == false)
     }
 
+    @Test func bothDisconnectedShowsEmptyStateCopy() {
+        let entry = WidgetEntry(
+            rows: [
+                WidgetRow(provider: .claude, state: .notConnected),
+                WidgetRow(provider: .codex, state: .notConnected)
+            ],
+            isStale: false,
+            asOf: .now
+        )
+
+        let copy = WidgetPreviewCopy.emptyState(for: entry)
+
+        #expect(copy?.title == "No providers connected")
+        #expect(copy?.hint == "Open the app to connect Claude or Codex.")
+    }
+
     @Test func staleEntryReportsStaleness() {
         let entry = WidgetEntry(
             rows: [WidgetRow(provider: .claude, state: .connected(percentage: 10))],

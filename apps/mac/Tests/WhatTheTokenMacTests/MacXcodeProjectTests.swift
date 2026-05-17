@@ -71,6 +71,32 @@ private struct AppIconContents: Decodable {
     #expect(project.contains("lastKnownFileType = text.plist.xml") || project.contains("lastKnownFileType = text.xml"))
 }
 
+@Test func xcodeProjectDeclaresAndEmbedsWidgetExtensionTarget() throws {
+    let project = try macFileContents("WhatTheToken.xcodeproj/project.pbxproj")
+
+    #expect(project.contains("name = WhatTheTokenWidget;"))
+    #expect(project.contains("productType = \"com.apple.product-type.app-extension\";"))
+    #expect(project.contains("WidgetKit.framework"))
+    #expect(project.contains("WhatTheTokenWidget.appex"))
+    #expect(project.contains("name = \"Embed App Extensions\";"))
+    #expect(project.contains("dstSubfolderSpec = 13;"))
+    #expect(project.contains("Widget/Info.plist"))
+    #expect(project.contains("Packaging/WhatTheTokenWidget.entitlements"))
+}
+
+@Test func widgetTargetBuildConfigurationsInheritSharedXcconfigs() throws {
+    let project = try macFileContents("WhatTheToken.xcodeproj/project.pbxproj")
+
+    #expect(projectMatches(
+        project,
+        #"000000000000000000000033 = \{\s*isa = XCBuildConfiguration;\s*baseConfigurationReference = 000000000000000000000016;"#
+    ))
+    #expect(projectMatches(
+        project,
+        #"000000000000000000000034 = \{\s*isa = XCBuildConfiguration;\s*baseConfigurationReference = 000000000000000000000017;"#
+    ))
+}
+
 @Test func ciVerifiesResolvedReleaseHardenedRuntimeBuildSetting() throws {
     let workflow = try repositoryFileContents(".github/workflows/test.yml")
 
@@ -129,4 +155,8 @@ private struct AppIconContents: Decodable {
     #expect(appSource.contains("canCheckForUpdates: { app.updateController.canCheckForUpdates }"))
     #expect(rootSource.contains("canCheckForUpdates: canCheckForUpdates()"))
     #expect(!source.contains("checkForUpdatesInBackground"))
+}
+
+private func projectMatches(_ project: String, _ pattern: String) -> Bool {
+    project.range(of: pattern, options: .regularExpression) != nil
 }

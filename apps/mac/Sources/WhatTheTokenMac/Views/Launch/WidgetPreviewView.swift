@@ -7,6 +7,11 @@ enum WidgetPreviewCopy {
         let isConnected: Bool
     }
 
+    struct EmptyState: Equatable {
+        let title: String
+        let hint: String
+    }
+
     static func row(for row: WidgetRow) -> Row {
         switch row.state {
         case let .connected(percentage):
@@ -19,6 +24,14 @@ enum WidgetPreviewCopy {
     static func staleBadge(for entry: WidgetEntry) -> String? {
         entry.isStale ? "Stale" : nil
     }
+
+    static func emptyState(for entry: WidgetEntry) -> EmptyState? {
+        guard !entry.rows.isEmpty, entry.rows.allSatisfy(\.isNotConnected) else { return nil }
+        return EmptyState(
+            title: "No providers connected",
+            hint: "Open the app to connect Claude or Codex."
+        )
+    }
 }
 
 struct WidgetPreviewView: View {
@@ -26,8 +39,17 @@ struct WidgetPreviewView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(payload.rows, id: \.provider) { row in
-                rowView(for: row)
+            if let emptyState = WidgetPreviewCopy.emptyState(for: payload) {
+                Text(emptyState.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text(emptyState.hint)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(payload.rows, id: \.provider) { row in
+                    rowView(for: row)
+                }
             }
 
             Spacer()
@@ -58,5 +80,14 @@ struct WidgetPreviewView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(copy.isConnected ? .primary : .secondary)
         }
+    }
+}
+
+private extension WidgetRow {
+    var isNotConnected: Bool {
+        if case .notConnected = state {
+            return true
+        }
+        return false
     }
 }

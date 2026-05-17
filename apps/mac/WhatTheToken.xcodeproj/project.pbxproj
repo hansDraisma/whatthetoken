@@ -75,6 +75,7 @@
 		20000000000000000000003E = {isa = PBXBuildFile; fileRef = 10000000000000000000003E; };
 		20000000000000000000003F = {isa = PBXBuildFile; fileRef = 10000000000000000000003F; };
 		200000000000000000000040 = {isa = PBXBuildFile; fileRef = 100000000000000000000040; };
+		200000000000000000000041 = {isa = PBXBuildFile; fileRef = 100000000000000000000041; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -151,6 +152,7 @@
 		10000000000000000000003E = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Hotkey/GlobalHotkeyService.swift; sourceTree = "<group>"; };
 		10000000000000000000003F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/ViewModels/OnboardingState.swift; sourceTree = "<group>"; };
 		100000000000000000000040 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/StalenessThreshold.swift; sourceTree = "<group>"; };
+		100000000000000000000041 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Animation/MenuBarIconPulseAnimator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -188,6 +190,7 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000001,
+				100000000000000000000041,
 				100000000000000000000002,
 				100000000000000000000003,
 				100000000000000000000004,
@@ -361,6 +364,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				200000000000000000000001,
+				200000000000000000000041,
 				200000000000000000000002,
 				200000000000000000000003,
 				200000000000000000000004,

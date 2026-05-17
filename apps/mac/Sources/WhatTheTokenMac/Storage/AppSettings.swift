@@ -9,6 +9,9 @@ struct AppSettings: Codable, Equatable, Sendable {
     var notifications: NotificationSettings
     var launchAtLogin: LaunchAtLoginSettings
     var menuBar: MenuBarSettings
+    var appearance: AppearanceSettings
+    var hotkey: HotkeySettings
+    var onboarding: OnboardingSettings
 
     static let defaults = AppSettings(
         schemaVersion: currentSchemaVersion,
@@ -27,7 +30,10 @@ struct AppSettings: Codable, Equatable, Sendable {
             )
         ),
         launchAtLogin: LaunchAtLoginSettings(isEnabled: false),
-        menuBar: MenuBarSettings(displayMode: .statusIcon)
+        menuBar: MenuBarSettings(displayMode: .statusIcon),
+        appearance: .default,
+        hotkey: .default,
+        onboarding: .default
     )
 
     enum CodingKeys: String, CodingKey {
@@ -37,6 +43,9 @@ struct AppSettings: Codable, Equatable, Sendable {
         case notifications
         case launchAtLogin
         case menuBar
+        case appearance
+        case hotkey
+        case onboarding
     }
 
     init(
@@ -45,7 +54,10 @@ struct AppSettings: Codable, Equatable, Sendable {
         refresh: RefreshSettings,
         notifications: NotificationSettings,
         launchAtLogin: LaunchAtLoginSettings,
-        menuBar: MenuBarSettings
+        menuBar: MenuBarSettings,
+        appearance: AppearanceSettings = .default,
+        hotkey: HotkeySettings = .default,
+        onboarding: OnboardingSettings = .default
     ) {
         self.schemaVersion = schemaVersion
         self.connectors = connectors
@@ -53,6 +65,9 @@ struct AppSettings: Codable, Equatable, Sendable {
         self.notifications = notifications
         self.launchAtLogin = launchAtLogin
         self.menuBar = menuBar
+        self.appearance = appearance
+        self.hotkey = hotkey
+        self.onboarding = onboarding
     }
 
     init(from decoder: Decoder) throws {
@@ -64,6 +79,12 @@ struct AppSettings: Codable, Equatable, Sendable {
         launchAtLogin = try container.decodeIfPresent(LaunchAtLoginSettings.self, forKey: .launchAtLogin)
             ?? .defaults
         menuBar = try container.decode(MenuBarSettings.self, forKey: .menuBar)
+        appearance = try container.decodeIfPresent(AppearanceSettings.self, forKey: .appearance)
+            ?? .default
+        hotkey = try container.decodeIfPresent(HotkeySettings.self, forKey: .hotkey)
+            ?? .default
+        onboarding = try container.decodeIfPresent(OnboardingSettings.self, forKey: .onboarding)
+            ?? .existingUser
     }
 
     static func decodeValidated(from data: Data) throws -> AppSettings {
@@ -100,7 +121,10 @@ struct AppSettings: Codable, Equatable, Sendable {
                 )
             ),
             launchAtLogin: .defaults,
-            menuBar: v1.menuBar
+            menuBar: v1.menuBar,
+            appearance: .default,
+            hotkey: .default,
+            onboarding: .existingUser
         )
     }
 }

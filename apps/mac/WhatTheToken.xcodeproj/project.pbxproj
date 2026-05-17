@@ -84,6 +84,7 @@
 		200000000000000000000045 = {isa = PBXBuildFile; fileRef = 100000000000000000000045; };
 		200000000000000000000046 = {isa = PBXBuildFile; fileRef = 100000000000000000000046; };
 		200000000000000000000047 = {isa = PBXBuildFile; fileRef = 100000000000000000000047; };
+		200000000000000000000048 = {isa = PBXBuildFile; fileRef = 100000000000000000000048; };
 		300000000000000000000001 = {isa = PBXBuildFile; fileRef = 000000000000000000000026; };
 		300000000000000000000002 = {isa = PBXBuildFile; fileRef = 000000000000000000000027; };
 		300000000000000000000003 = {isa = PBXBuildFile; fileRef = 000000000000000000000028; };
@@ -209,6 +210,7 @@
 		100000000000000000000045 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Widget/WidgetEntry.swift; sourceTree = "<group>"; };
 		100000000000000000000046 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/WidgetPreviewView.swift; sourceTree = "<group>"; };
 		100000000000000000000047 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/HotkeyRecorderField.swift; sourceTree = "<group>"; };
+		100000000000000000000048 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/BannerProviderCard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -314,6 +316,7 @@
 				100000000000000000000039,
 				100000000000000000000046,
 				100000000000000000000047,
+				100000000000000000000048,
 				100000000000000000000029,
 				10000000000000000000002A,
 				10000000000000000000002B,
@@ -537,6 +540,7 @@
 				200000000000000000000039,
 				200000000000000000000046,
 				200000000000000000000047,
+				200000000000000000000048,
 				200000000000000000000029,
 				20000000000000000000002A,
 				20000000000000000000002B,

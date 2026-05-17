@@ -28,10 +28,11 @@ final class AppModel {
     }
 
     static func live() -> AppModel {
-        let directory = applicationSupportDirectory()
-        let settingsStore = JSONFileAppSettingsStore(url: directory.appendingPathComponent("settings.json"))
-        let cacheStore = JSONFileSnapshotCacheStore(url: directory.appendingPathComponent("snapshot-cache.json"))
-        let notificationStateStore = JSONFileNotificationStateStore(url: directory.appendingPathComponent("notification-state.json"))
+        let appSupport = applicationSupportDirectory()
+        let appGroup = appGroupContainerDirectory()
+        let settingsStore = JSONFileAppSettingsStore(url: appSupport.appendingPathComponent("settings.json"))
+        let cacheStore = JSONFileSnapshotCacheStore(url: appGroup.appendingPathComponent("snapshot-cache.json"))
+        let notificationStateStore = JSONFileNotificationStateStore(url: appSupport.appendingPathComponent("notification-state.json"))
         return AppModel(
             viewModel: .live(
                 settingsStore: settingsStore,
@@ -42,8 +43,18 @@ final class AppModel {
         )
     }
 
-    private static func applicationSupportDirectory() -> URL {
+    static func applicationSupportDirectory() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("WhatTheToken", isDirectory: true)
+    }
+
+    static func appGroupContainerDirectory() -> URL {
+        if let url = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "group.com.whatthetoken.mac"
+        ) {
+            return url
+        }
+        // SwiftPM builds are not codesigned with an App Group entitlement.
+        return applicationSupportDirectory()
     }
 }

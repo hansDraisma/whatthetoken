@@ -30,6 +30,9 @@ final class StatusViewModel {
     private var lastBackgroundRefreshAtByProvider: [CachedProviderID: Date] = [:]
     private var unsavedNotificationState = false
     private var lastFailedNotificationStateSaveAt: Date?
+    private weak var menuBarController: MenuBarController?
+    private var hotkeyService: GlobalHotkeyService?
+    private var hotkeyTrigger: (() -> Void)?
     var onSettingsChanged: (@MainActor () -> Void)?
 
     var isAnyRefreshing: Bool {
@@ -238,6 +241,93 @@ final class StatusViewModel {
         settings = nextSettings
         launchAtLoginStatusMessage = nil
         return true
+    }
+
+    func bindMenuBarController(_ controller: MenuBarController) {
+        menuBarController = controller
+    }
+
+    func bindHotkeyService(_ service: GlobalHotkeyService, onTrigger: @escaping () -> Void) {
+        hotkeyService = service
+        hotkeyTrigger = onTrigger
+    }
+
+    @discardableResult
+    func registerCurrentHotkey() async -> String? {
+        await setHotkey(settings.hotkey.combination)
+    }
+
+    func setShowInDock(_ value: Bool) async {
+        var nextSettings = settings
+        nextSettings.appearance.showInDock = value
+        await saveSettings(nextSettings)
+    }
+
+    @discardableResult
+    func setHotkey(_ combination: HotkeyCombination) async -> String? {
+        guard let hotkeyService, let hotkeyTrigger else {
+            var nextSettings = settings
+            nextSettings.hotkey.combination = combination
+            await saveSettings(nextSettings)
+            return nil
+        }
+
+        switch hotkeyService.register(combination: combination, onTrigger: hotkeyTrigger) {
+        case .registered:
+            var nextSettings = settings
+            nextSettings.hotkey.combination = combination
+            await saveSettings(nextSettings)
+            return nil
+        case .invalidCombination:
+            return "This combination needs at least one modifier."
+        case .failed:
+            return "Could not register this hotkey - try a different combination."
+        }
+    }
+
+    func pulseMenuBarIcon() async {
+        menuBarController?.pulse()
+    }
+
+    func openPopoverProgrammatically() async {
+        menuBarController?.openPopover()
+    }
+
+    func replayOnboarding() async {
+        var nextSettings = settings
+        nextSettings.onboarding.steps = OnboardingState.applyReplay(to: nextSettings.onboarding.steps)
+        await saveSettings(nextSettings)
+    }
+
+    func markOnboardingStep(_ step: OnboardingStep, as state: OnboardingStepState) async {
+        var nextSettings = settings
+        switch step {
+        case .connectProviders:
+            nextSettings.onboarding.steps.connectProviders = state
+        case .findMenuBar:
+            nextSettings.onboarding.steps.findMenuBar = state
+        case .addWidget:
+            nextSettings.onboarding.steps.addWidget = state
+        case .allowNotifications:
+            nextSettings.onboarding.steps.allowNotifications = state
+        case .setHotkey:
+            nextSettings.onboarding.steps.setHotkey = state
+        case .launchAtLogin:
+            nextSettings.onboarding.steps.launchAtLogin = state
+        }
+
+        if nextSettings.onboarding.steps.allFinal {
+            nextSettings.onboarding.firstLaunchCompleted = true
+        }
+
+        await saveSettings(nextSettings)
+    }
+
+    func skipAllOnboarding() async {
+        var nextSettings = settings
+        nextSettings.onboarding.steps = OnboardingState.applySkipAll(to: nextSettings.onboarding.steps)
+        nextSettings.onboarding.firstLaunchCompleted = true
+        await saveSettings(nextSettings)
     }
 
     func disconnect(_ provider: CachedProviderID) async {

@@ -38,6 +38,19 @@ import Testing
 
         #expect(recorder.calls == ["activate", "openWindow"])
     }
+
+    @MainActor
+    @Test func openLaunchWindowDismissesPopoverActivatesAndOpens() {
+        let recorder = ChromeActionRecorder()
+
+        MacChromeActions.openLaunchWindow(
+            dismissPopover: { recorder.record("dismissPopover") },
+            activate: { recorder.record("activate") },
+            openWindow: { recorder.record("openWindow") }
+        )
+
+        #expect(recorder.calls == ["dismissPopover", "activate", "openWindow"])
+    }
 }
 
 @MainActor

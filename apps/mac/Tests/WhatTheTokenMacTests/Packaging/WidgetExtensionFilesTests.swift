@@ -11,6 +11,13 @@ import Testing
         #expect(extensionDict["NSExtensionPointIdentifier"] as? String == "com.apple.widgetkit-extension")
     }
 
+    @Test func widgetInfoPlistUsesReleaseBuildSettingVersions() throws {
+        let plist = try widgetPlist("Widget/Info.plist")
+
+        #expect(plist["CFBundleShortVersionString"] as? String == "$(MARKETING_VERSION)")
+        #expect(plist["CFBundleVersion"] as? String == "$(CURRENT_PROJECT_VERSION)")
+    }
+
     @Test func widgetBundleSourceUsesTimelineProvider() throws {
         let source = try widgetFileContents("Widget/WhatTheTokenWidget.swift")
 

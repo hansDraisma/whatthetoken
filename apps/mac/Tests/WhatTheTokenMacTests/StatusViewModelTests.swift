@@ -1176,6 +1176,24 @@ final class FlakyNotificationStateStore: NotificationStateStore, @unchecked Send
 }
 
 @MainActor
+@Test func failedHotkeyReplacementReregistersPersistedCombination() async {
+    let registrar = SpyHotkeyRegistrar()
+    registrar.registrationResults = [true, false, true]
+    let hotkeyService = GlobalHotkeyService(registrar: registrar)
+    let viewModel = StatusViewModel()
+    viewModel.bindHotkeyService(hotkeyService) { }
+    await viewModel.registerCurrentHotkey()
+    let replacement = HotkeyCombination(modifiers: [.command, .shift], keyCode: 40)
+
+    let warning = await viewModel.setHotkey(replacement)
+
+    #expect(warning == "Could not register this hotkey - try a different combination.")
+    #expect(viewModel.settings.hotkey.combination == .default)
+    #expect(registrar.registeredKeyCodes == [17, 40, 17])
+    #expect(registrar.lastModifierMask == GlobalHotkeyService.carbonModifierMask(for: HotkeyCombination.default.modifiers))
+}
+
+@MainActor
 @Test func dismissHotkeyRegistrationWarningClearsOneShotBanner() async {
     let registrar = SpyHotkeyRegistrar()
     registrar.shouldRegister = false
@@ -1194,10 +1212,16 @@ private final class SpyHotkeyRegistrar: HotkeyRegistering {
     var lastKeyCode: UInt32?
     var lastModifierMask: UInt32?
     var shouldRegister = true
+    var registrationResults: [Bool] = []
+    var registeredKeyCodes: [UInt32] = []
 
     func register(keyCode: UInt32, modifierMask: UInt32, onTrigger: @escaping () -> Void) -> Bool {
         lastKeyCode = keyCode
         lastModifierMask = modifierMask
+        registeredKeyCodes.append(keyCode)
+        if !registrationResults.isEmpty {
+            return registrationResults.removeFirst()
+        }
         return shouldRegister
     }
 

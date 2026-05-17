@@ -234,6 +234,14 @@ import Testing
     #expect(script.contains("    archive >&2"))
 }
 
+@Test func unsignedSmokeArchiveVerifiesEmbeddedWidgetVersionMetadata() throws {
+    let script = try macFileContents("Scripts/smoke-archive-unsigned.sh")
+
+    #expect(script.contains("WIDGET_INFO_PLIST=\"$APP_PATH/Contents/PlugIns/WhatTheTokenWidget.appex/Contents/Info.plist\""))
+    #expect(script.contains("Print :CFBundleShortVersionString' \"$WIDGET_INFO_PLIST\" | grep -Fx \"$VERSION\""))
+    #expect(script.contains("Print :CFBundleVersion' \"$WIDGET_INFO_PLIST\" | grep -Fx \"$BUILD\""))
+}
+
 @Test func releaseRehearsalRejectsNonIntegerBuildNumbersBeforeRunningDryRun() throws {
     let result = try runMacReleaseScript(
         "rehearse-release.sh",

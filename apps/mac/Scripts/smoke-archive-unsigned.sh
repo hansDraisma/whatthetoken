@@ -69,6 +69,7 @@ INFO_PLIST="$APP_PATH/Contents/Info.plist"
 ASSETS_CAR="$APP_PATH/Contents/Resources/Assets.car"
 PRIVACY_INFO="$APP_PATH/Contents/Resources/PrivacyInfo.xcprivacy"
 BINARY_PATH="$APP_PATH/Contents/MacOS/WhatTheTokenMac"
+WIDGET_INFO_PLIST="$APP_PATH/Contents/PlugIns/WhatTheTokenWidget.appex/Contents/Info.plist"
 
 if [[ ! -d "$APP_PATH" ]]; then
     printf 'Archived app not found: %s\n' "$APP_PATH" >&2
@@ -80,8 +81,15 @@ if [[ ! -f "$INFO_PLIST" ]]; then
     exit 66
 fi
 
+if [[ ! -f "$WIDGET_INFO_PLIST" ]]; then
+    printf 'Archived widget Info.plist not found: %s\n' "$WIDGET_INFO_PLIST" >&2
+    exit 66
+fi
+
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST" | grep -Fx "$VERSION" >/dev/null
 /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST" | grep -Fx "$BUILD" >/dev/null
+/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$WIDGET_INFO_PLIST" | grep -Fx "$VERSION" >/dev/null
+/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$WIDGET_INFO_PLIST" | grep -Fx "$BUILD" >/dev/null
 /usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$INFO_PLIST" | grep -Fx "true" >/dev/null
 /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$INFO_PLIST" | grep -Fx "AppIcon" >/dev/null
 lipo "$BINARY_PATH" -verify_arch arm64 x86_64

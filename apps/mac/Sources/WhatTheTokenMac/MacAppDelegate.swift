@@ -29,12 +29,20 @@ final class MacAppDelegate: NSObject {
         }
         return false
     }
+
+    func applicationShouldTerminateAfterLastWindowClosed() -> Bool {
+        false
+    }
 }
 
 #if canImport(AppKit)
 extension MacAppDelegate: NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         applicationShouldHandleReopen(hasVisibleWindows: flag)
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        applicationShouldTerminateAfterLastWindowClosed()
     }
 }
 #endif

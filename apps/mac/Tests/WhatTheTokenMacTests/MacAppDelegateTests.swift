@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Testing
 @testable import WhatTheTokenMac
 
@@ -19,6 +20,25 @@ import Testing
         let delegate = MacAppDelegate(actions: actions)
 
         let result = delegate.applicationShouldHandleReopen(hasVisibleWindows: true)
+
+        #expect(result == false)
+    }
+
+    @MainActor
+    @Test func closingLastWindowKeepsMenuBarAppRunning() {
+        let actions = SpyDelegateActions()
+        let delegate = MacAppDelegate(actions: actions)
+
+        let result = delegate.applicationShouldTerminateAfterLastWindowClosed()
+
+        #expect(result == false)
+    }
+
+    @MainActor
+    @Test func appDelegateAdaptorKeepsMenuBarAppRunningAfterLastWindowCloses() {
+        let adaptor = MacAppDelegateAdaptor()
+
+        let result = adaptor.applicationShouldTerminateAfterLastWindowClosed(NSApplication.shared)
 
         #expect(result == false)
     }

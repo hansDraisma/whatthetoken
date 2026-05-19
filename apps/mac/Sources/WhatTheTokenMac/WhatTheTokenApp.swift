@@ -116,6 +116,10 @@ final class MacAppDelegateAdaptor: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         delegate?.applicationShouldHandleReopen(hasVisibleWindows: flag) ?? true
     }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        delegate?.applicationShouldTerminateAfterLastWindowClosed() ?? false
+    }
 }
 
 @MainActor

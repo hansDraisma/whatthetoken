@@ -20,9 +20,7 @@ struct WidgetTimelineProvider: TimelineProvider {
 
     private func currentEntry(now: Date) -> WidgetTimelineEntry {
         let payload: WidgetEntry
-        if let url = sharedSnapshotURL(),
-           let data = try? Data(contentsOf: url),
-           let snapshot = try? SnapshotCache.decodeValidated(from: data) {
+        if let snapshot = currentSnapshot() {
             payload = SnapshotEntryBuilder.entry(from: snapshot, now: now)
         } else {
             payload = SnapshotEntryBuilder.placeholder()
@@ -30,10 +28,14 @@ struct WidgetTimelineProvider: TimelineProvider {
         return WidgetTimelineEntry(date: now, payload: payload)
     }
 
-    private func sharedSnapshotURL() -> URL? {
-        FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: "group.com.whatthetoken.mac")?
-            .appendingPathComponent("snapshot-cache.json")
+    private func currentSnapshot() -> SnapshotCache? {
+        for url in WidgetSnapshotCacheFile.readableURLs() {
+            if let data = try? Data(contentsOf: url),
+               let snapshot = try? SnapshotCache.decodeValidated(from: data) {
+                return snapshot
+            }
+        }
+        return nil
     }
 }
 

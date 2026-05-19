@@ -39,5 +39,18 @@ struct HotkeyCombination: Codable, Equatable, Hashable, Sendable {
 
     static let `default` = HotkeyCombination(modifiers: [.control, .option], keyCode: 17)
 
-    var isValidForGlobalRegistration: Bool { !modifiers.isEmpty }
+    var isValidForGlobalRegistration: Bool {
+        let hardModifiers: ModifierSet = [.command, .control, .option]
+        guard !modifiers.intersection(hardModifiers).isEmpty else { return false }
+
+        let reserved: Set<HotkeyCombination> = [
+            HotkeyCombination(modifiers: [.command], keyCode: 12), // Cmd+Q
+            HotkeyCombination(modifiers: [.command], keyCode: 13), // Cmd+W
+            HotkeyCombination(modifiers: [.command], keyCode: 4),  // Cmd+H
+            HotkeyCombination(modifiers: [.command], keyCode: 46), // Cmd+M
+            HotkeyCombination(modifiers: [.command], keyCode: 48), // Cmd+Tab (kc 48 = Tab)
+            HotkeyCombination(modifiers: [.command], keyCode: 49)  // Cmd+Space
+        ]
+        return !reserved.contains(self)
+    }
 }

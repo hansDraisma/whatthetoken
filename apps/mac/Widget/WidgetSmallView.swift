@@ -5,5 +5,6 @@ struct WidgetSmallView: View {
 
     var body: some View {
         WidgetPreviewView(payload: entry.payload)
+            .containerBackground(.fill.tertiary, for: .widget)
     }
 }

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import WhatTheTokenMac
 
@@ -123,4 +124,15 @@ private final class RecordingMacApplication: MacApplicationActivating {
     )
 
     #expect(application.policies == [.regular])
+}
+
+@Test func persistedShowInDockLogsOnDecodeFailure() throws {
+    let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("corrupt-\(UUID().uuidString).json")
+    try "{ not json }".data(using: .utf8)!.write(to: tmp)
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    let logger = RecordingTestLogger()
+
+    _ = MacAppLauncher.persistedShowInDock(settingsURL: tmp, logger: logger)
+
+    #expect(logger.messages.contains { $0.contains("Failed to decode settings.json") })
 }

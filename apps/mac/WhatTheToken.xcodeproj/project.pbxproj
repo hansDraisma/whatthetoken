@@ -93,6 +93,11 @@
 		200000000000000000000055 = {isa = PBXBuildFile; fileRef = 100000000000000000000055; };
 		200000000000000000000056 = {isa = PBXBuildFile; fileRef = 100000000000000000000056; };
 		200000000000000000000057 = {isa = PBXBuildFile; fileRef = 100000000000000000000057; };
+		200000000000000000000058 = {isa = PBXBuildFile; fileRef = 100000000000000000000058; };
+		200000000000000000000059 = {isa = PBXBuildFile; fileRef = 100000000000000000000059; };
+		20000000000000000000005A = {isa = PBXBuildFile; fileRef = 10000000000000000000005A; };
+		20000000000000000000005B = {isa = PBXBuildFile; fileRef = 10000000000000000000005B; };
+		20000000000000000000005C = {isa = PBXBuildFile; fileRef = 10000000000000000000005C; };
 		300000000000000000000001 = {isa = PBXBuildFile; fileRef = 000000000000000000000026; };
 		300000000000000000000002 = {isa = PBXBuildFile; fileRef = 000000000000000000000027; };
 		300000000000000000000003 = {isa = PBXBuildFile; fileRef = 000000000000000000000028; };
@@ -104,6 +109,8 @@
 		300000000000000000000009 = {isa = PBXBuildFile; fileRef = 100000000000000000000045; };
 		30000000000000000000000A = {isa = PBXBuildFile; fileRef = 100000000000000000000044; };
 		30000000000000000000000B = {isa = PBXBuildFile; fileRef = 100000000000000000000046; };
+		30000000000000000000000C = {isa = PBXBuildFile; fileRef = 10000000000000000000001B; };
+		30000000000000000000000D = {isa = PBXBuildFile; fileRef = 100000000000000000000059; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -227,6 +234,11 @@
 		100000000000000000000055 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/NotificationsTabView.swift; sourceTree = "<group>"; };
 		100000000000000000000056 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/LaunchWindowRootView.swift; sourceTree = "<group>"; };
 		100000000000000000000057 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/MacAppDelegate.swift; sourceTree = "<group>"; };
+		100000000000000000000058 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/LaunchWindowController.swift; sourceTree = "<group>"; };
+		100000000000000000000059 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/AppGroupIdentifier.swift; sourceTree = "<group>"; };
+		10000000000000000000005A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/AppLogger.swift; sourceTree = "<group>"; };
+		10000000000000000000005B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/AppStartupRoutine.swift; sourceTree = "<group>"; };
+		10000000000000000000005C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/StatusTabCopy.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -342,6 +354,11 @@
 				100000000000000000000055,
 				100000000000000000000056,
 				100000000000000000000057,
+				100000000000000000000058,
+				100000000000000000000059,
+				10000000000000000000005A,
+				10000000000000000000005B,
+				10000000000000000000005C,
 				100000000000000000000029,
 				10000000000000000000002A,
 				10000000000000000000002B,
@@ -574,6 +591,11 @@
 				200000000000000000000055,
 				200000000000000000000056,
 				200000000000000000000057,
+				200000000000000000000058,
+				200000000000000000000059,
+				20000000000000000000005A,
+				20000000000000000000005B,
+				20000000000000000000005C,
 				200000000000000000000029,
 				20000000000000000000002A,
 				20000000000000000000002B,
@@ -603,6 +625,8 @@
 				300000000000000000000009,
 				30000000000000000000000A,
 				30000000000000000000000B,
+				30000000000000000000000C,
+				30000000000000000000000D,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -748,7 +772,6 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
-					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whatthetoken.mac.widget;
@@ -771,7 +794,6 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
-					"@executable_path/../../../../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.whatthetoken.mac.widget;

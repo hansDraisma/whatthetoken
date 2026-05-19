@@ -7,6 +7,9 @@ import AppKit
 protocol MacAppDelegateActions: AnyObject {
     func openPopover()
     func pulseMenuBarIcon()
+    var hasVisibleLaunchWindow: Bool { get }
+    func openLaunchWindow()
+    func bringLaunchWindowForward()
 }
 
 @MainActor
@@ -19,8 +22,11 @@ final class MacAppDelegate: NSObject {
 
     @discardableResult
     func applicationShouldHandleReopen(hasVisibleWindows: Bool) -> Bool {
-        actions.openPopover()
-        actions.pulseMenuBarIcon()
+        if actions.hasVisibleLaunchWindow {
+            actions.bringLaunchWindowForward()
+        } else {
+            actions.openLaunchWindow()
+        }
         return false
     }
 }
@@ -37,7 +43,7 @@ extension MacAppDelegate: NSApplicationDelegate {
 enum FirstLaunchAutoOpenSignaler {
     static func signalIfNeeded(
         settings: AppSettings,
-        open: () -> Void = { AppModel.openLaunchWindow() }
+        open: () -> Void
     ) {
         guard settings.onboarding.firstLaunchCompleted == false else { return }
         open()

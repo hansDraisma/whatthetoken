@@ -23,12 +23,34 @@ struct GetStartedBannerCopy {
             return "Launch at login"
         }
     }
+
+    static func accessibilityStatus(for state: OnboardingStepState) -> String {
+        switch state {
+        case .pending:
+            return "pending"
+        case .done:
+            return "completed"
+        case .skipped:
+            return "skipped"
+        }
+    }
 }
 
-struct GetStartedBanner: View {
+struct GetStartedBanner<StepBody: View>: View {
     let state: OnboardingState
-    let stepBody: (OnboardingStep) -> AnyView
+    let stepBody: (OnboardingStep) -> StepBody
     let onSkipAll: () -> Void
+    @AccessibilityFocusState private var focusedStep: OnboardingStep?
+
+    init(
+        state: OnboardingState,
+        @ViewBuilder stepBody: @escaping (OnboardingStep) -> StepBody,
+        onSkipAll: @escaping () -> Void
+    ) {
+        self.state = state
+        self.stepBody = stepBody
+        self.onSkipAll = onSkipAll
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -49,13 +71,18 @@ struct GetStartedBanner: View {
                     step: step,
                     state: state.stateFor(step),
                     isNext: state.nextStep == step,
-                    expandedBody: state.nextStep == step ? stepBody(step) : nil
-                )
+                    focusedStep: $focusedStep
+                ) {
+                    stepBody(step)
+                }
             }
 
             Button("Skip onboarding", action: onSkipAll)
                 .buttonStyle(.link)
                 .font(.caption)
+        }
+        .onChange(of: state.nextStep) { _, nextStep in
+            focusedStep = nextStep
         }
         .padding(16)
         .background(Color(nsColor: .controlBackgroundColor))
@@ -64,26 +91,55 @@ struct GetStartedBanner: View {
     }
 }
 
-private struct StepRow: View {
+private struct StepRow<ExpandedBody: View>: View {
     let step: OnboardingStep
     let state: OnboardingStepState
     let isNext: Bool
-    let expandedBody: AnyView?
+    var focusedStep: AccessibilityFocusState<OnboardingStep?>.Binding
+    let expandedBody: () -> ExpandedBody
+
+    init(
+        step: OnboardingStep,
+        state: OnboardingStepState,
+        isNext: Bool,
+        focusedStep: AccessibilityFocusState<OnboardingStep?>.Binding,
+        @ViewBuilder expandedBody: @escaping () -> ExpandedBody
+    ) {
+        self.step = step
+        self.state = state
+        self.isNext = isNext
+        self.focusedStep = focusedStep
+        self.expandedBody = expandedBody
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                checkmark
-                Text(GetStartedBannerCopy.title(for: step))
-                    .fontWeight(isNext ? .semibold : .regular)
-                    .foregroundStyle(state == .pending && !isNext ? .secondary : .primary)
-                Spacer()
-            }
-            if let expandedBody {
-                expandedBody.padding(.leading, 26)
+            StepHeader(step: step, state: state, isNext: isNext)
+                .accessibilityFocused(focusedStep, equals: step)
+            if isNext {
+                expandedBody()
+                    .padding(.leading, 26)
             }
         }
         .padding(.vertical, 6)
+    }
+}
+
+private struct StepHeader: View {
+    let step: OnboardingStep
+    let state: OnboardingStepState
+    let isNext: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            checkmark
+            Text(GetStartedBannerCopy.title(for: step))
+                .fontWeight(isNext ? .semibold : .regular)
+                .foregroundStyle(state == .pending && !isNext ? .secondary : .primary)
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(GetStartedBannerCopy.title(for: step)), \(GetStartedBannerCopy.accessibilityStatus(for: state))")
     }
 
     private var checkmark: some View {
@@ -98,5 +154,6 @@ private struct StepRow: View {
             }
         }
         .frame(width: 16, height: 16)
+        .accessibilityHidden(true)
     }
 }

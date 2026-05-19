@@ -16,7 +16,6 @@ enum ToolsTabCopy {
 
 struct ToolsTabView: View {
     let viewModel: StatusViewModel
-    @State private var hotkeyWarning: String?
 
     var body: some View {
         Form {
@@ -34,10 +33,10 @@ struct ToolsTabView: View {
                 HotkeyRecorderField(
                     combination: Binding(
                         get: { viewModel.settings.hotkey.combination },
-                        set: { value in Task { hotkeyWarning = await viewModel.setHotkey(value) } }
+                        set: { value in Task { _ = await viewModel.setHotkey(value) } }
                     ),
-                    onRecord: { value in Task { hotkeyWarning = await viewModel.setHotkey(value) } },
-                    warningText: hotkeyWarning
+                    onRecord: { value in Task { _ = await viewModel.setHotkey(value) } },
+                    warningText: viewModel.hotkeyRegistrationWarning
                 )
             }
 

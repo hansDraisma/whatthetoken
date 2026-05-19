@@ -36,8 +36,13 @@ enum StatusTabHotkeyWarningBanner {
 
 struct StatusTabView: View {
     let viewModel: StatusViewModel
+    let onOpenConnectors: () -> Void
     @State private var selectedTab: ProviderTab = .codex
-    @State private var hotkeyWarning: String?
+
+    init(viewModel: StatusViewModel, onOpenConnectors: @escaping () -> Void = {}) {
+        self.viewModel = viewModel
+        self.onOpenConnectors = onOpenConnectors
+    }
 
     var body: some View {
         let onboarding = OnboardingState(stepStates: viewModel.settings.onboarding.steps)
@@ -58,7 +63,7 @@ struct StatusTabView: View {
                             .font(.caption)
                             .foregroundStyle(.orange)
                         Spacer()
-                        Button("Dismiss") {
+                        Button(StatusTabCopy.hotkeyWarningDismissTitle) {
                             viewModel.dismissHotkeyRegistrationWarning()
                         }
                         .buttonStyle(.link)
@@ -70,11 +75,14 @@ struct StatusTabView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
 
-                Text("Quota")
+                Text(StatusTabCopy.quotaTitle)
                     .font(.headline)
                 quotaCards
             }
             .padding(20)
+        }
+        .task {
+            await viewModel.reconcileOnboardingFromSystemState()
         }
     }
 
@@ -82,7 +90,7 @@ struct StatusTabView: View {
     private var quotaCards: some View {
         if !viewModel.settings.connectors.claudeCode.isEnabled
             && !viewModel.settings.connectors.codex.isEnabled {
-            Text("No providers connected yet - start with the banner above.")
+            Text(StatusTabCopy.noProvidersConnected)
                 .foregroundStyle(.secondary)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -94,7 +102,7 @@ struct StatusTabView: View {
                 ProviderTabBarView(selected: $selectedTab, indicators: chromeState.indicators)
                 ProviderTabContentView(
                     model: ProviderTabModel.from(viewModel: viewModel, tab: selectedTab),
-                    onOpenSettings: { },
+                    onOpenSettings: onOpenConnectors,
                     onRetry: { Task { await viewModel.refreshAll(reason: .retry) } },
                     onRefresh: { Task { await viewModel.refreshAll(reason: .manual) } }
                 )
@@ -104,42 +112,43 @@ struct StatusTabView: View {
         }
     }
 
-    private func stepBody(for step: OnboardingStep) -> AnyView {
+    @ViewBuilder
+    private func stepBody(for step: OnboardingStep) -> some View {
         switch step {
         case .connectProviders:
-            return AnyView(connectProvidersBody)
+            connectProvidersBody
         case .findMenuBar:
-            return AnyView(findMenuBarBody)
+            findMenuBarBody
         case .addWidget:
-            return AnyView(addWidgetBody)
+            addWidgetBody
         case .allowNotifications:
-            return AnyView(allowNotificationsBody)
+            allowNotificationsBody
         case .setHotkey:
-            return AnyView(setHotkeyBody)
+            setHotkeyBody
         case .launchAtLogin:
-            return AnyView(launchAtLoginBody)
+            launchAtLoginBody
         }
     }
 
     private var connectProvidersBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             BannerProviderCard(
-                title: "Claude Code",
-                subtitle: "Anthropic - usage from your local Claude Code OAuth session.",
+                title: StatusTabCopy.claudeProviderTitle,
+                subtitle: StatusTabCopy.claudeProviderSubtitle,
                 isConnected: viewModel.settings.connectors.claudeCode.isEnabled,
-                connectActionTitle: "Connect",
+                connectActionTitle: StatusTabCopy.connectActionTitle,
                 onConnect: { Task { await viewModel.connectClaudeCode() } }
             )
             BannerProviderCard(
-                title: "Codex",
-                subtitle: "OpenAI - usage from the local Codex app-server.",
+                title: StatusTabCopy.codexProviderTitle,
+                subtitle: StatusTabCopy.codexProviderSubtitle,
                 isConnected: viewModel.settings.connectors.codex.isEnabled,
-                connectActionTitle: "Connect",
+                connectActionTitle: StatusTabCopy.connectActionTitle,
                 onConnect: { Task { await viewModel.connectCodex() } }
             )
             HStack {
                 Spacer()
-                Button("Skip step") {
+                Button(StatusTabCopy.skipStepTitle) {
                     Task { await viewModel.markOnboardingStep(.connectProviders, as: .skipped) }
                 }
                 .buttonStyle(.link)
@@ -162,21 +171,21 @@ struct StatusTabView: View {
 
     private var findMenuBarBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Click the button below to pulse the menu bar icon so you can spot it. If you ever lose it, the Dock icon is your backup - disable it any time in Tools.")
+            Text(StatusTabCopy.findMenuBarInstruction)
                 .font(.caption)
             HStack {
-                Button("Pulse the icon") {
+                Button(StatusTabCopy.pulseIconTitle) {
                     Task {
                         await viewModel.pulseMenuBarIcon()
                         await viewModel.markOnboardingStep(.findMenuBar, as: .done)
                     }
                 }
-                Button("Skip step") {
+                Button(StatusTabCopy.skipStepTitle) {
                     Task { await viewModel.markOnboardingStep(.findMenuBar, as: .skipped) }
                 }
                 .buttonStyle(.link)
             }
-            Text("Tip: hold Command and drag the icon to reveal it from the overflow area.")
+            Text(StatusTabCopy.findMenuBarTip)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -191,10 +200,10 @@ struct StatusTabView: View {
 
     private var allowNotificationsBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Get a banner before quota runs out - even when the menu bar icon is hidden.")
+            Text(StatusTabCopy.allowNotificationsInstruction)
                 .font(.caption)
             HStack {
-                Button("Enable notifications") {
+                Button(StatusTabCopy.enableNotificationsTitle) {
                     Task {
                         let status = await viewModel.setNotificationsEnabled(true)
                         if StatusTabStepBodyPolicy.shouldMarkNotificationsDone(status: status) {
@@ -202,7 +211,7 @@ struct StatusTabView: View {
                         }
                     }
                 }
-                Button("Skip step") {
+                Button(StatusTabCopy.skipStepTitle) {
                     Task { await viewModel.markOnboardingStep(.allowNotifications, as: .skipped) }
                 }
                 .buttonStyle(.link)
@@ -212,7 +221,7 @@ struct StatusTabView: View {
 
     private var setHotkeyBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Press the hotkey from anywhere to open WhatTheToken. Default is Control-Option-T - change it any time.")
+            Text(StatusTabCopy.setHotkeyInstruction)
                 .font(.caption)
             HotkeyRecorderField(
                 combination: Binding(
@@ -222,9 +231,6 @@ struct StatusTabView: View {
                             let warning = await viewModel.setHotkey(value)
                             if StatusTabStepBodyPolicy.shouldMarkHotkeyDone(warning: warning) {
                                 await viewModel.markOnboardingStep(.setHotkey, as: .done)
-                                hotkeyWarning = nil
-                            } else {
-                                hotkeyWarning = warning
                             }
                         }
                     }
@@ -234,15 +240,12 @@ struct StatusTabView: View {
                         let warning = await viewModel.setHotkey(value)
                         if StatusTabStepBodyPolicy.shouldMarkHotkeyDone(warning: warning) {
                             await viewModel.markOnboardingStep(.setHotkey, as: .done)
-                            hotkeyWarning = nil
-                        } else {
-                            hotkeyWarning = warning
                         }
                     }
                 },
-                warningText: hotkeyWarning
+                warningText: viewModel.hotkeyRegistrationWarning
             )
-            Button("Skip step") {
+            Button(StatusTabCopy.skipStepTitle) {
                 Task { await viewModel.markOnboardingStep(.setHotkey, as: .skipped) }
             }
             .buttonStyle(.link)
@@ -251,10 +254,10 @@ struct StatusTabView: View {
 
     private var launchAtLoginBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Want WhatTheToken to start automatically when you log in?")
+            Text(StatusTabCopy.launchAtLoginInstruction)
                 .font(.caption)
             HStack {
-                Button("Launch at login") {
+                Button(StatusTabCopy.launchAtLoginTitle) {
                     Task {
                         let success = await viewModel.setLaunchAtLoginEnabled(true)
                         if StatusTabStepBodyPolicy.shouldMarkLaunchAtLoginDone(success: success) {
@@ -262,7 +265,7 @@ struct StatusTabView: View {
                         }
                     }
                 }
-                Button("Skip step") {
+                Button(StatusTabCopy.skipStepTitle) {
                     Task { await viewModel.markOnboardingStep(.launchAtLogin, as: .skipped) }
                 }
                 .buttonStyle(.link)

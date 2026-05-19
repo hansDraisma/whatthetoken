@@ -48,13 +48,20 @@ enum MacAppLauncher {
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("WhatTheToken", isDirectory: true)
             .appendingPathComponent("settings.json")
-        guard
-            let data = try? Data(contentsOf: url),
-            let settings = try? AppSettings.decodeValidated(from: data)
-        else {
+        return persistedShowInDock(settingsURL: url, logger: OSLogAppLogger(category: "MacAppLauncher"))
+    }
+
+    static func persistedShowInDock(settingsURL: URL, logger: AppLogger) -> Bool {
+        do {
+            let data = try Data(contentsOf: settingsURL)
+            let settings = try AppSettings.decodeValidated(from: data)
+            return settings.appearance.showInDock
+        } catch CocoaError.fileReadNoSuchFile {
+            return AppearanceSettings.default.showInDock
+        } catch {
+            logger.error("Failed to decode settings.json: \(error.localizedDescription) - falling back to dock-visible default")
             return AppearanceSettings.default.showInDock
         }
-        return settings.appearance.showInDock
     }
 }
 

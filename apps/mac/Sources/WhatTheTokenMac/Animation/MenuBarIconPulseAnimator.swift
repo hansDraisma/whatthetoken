@@ -7,6 +7,7 @@ import AppKit
 protocol PulseAnimationDriving: AnyObject {
     func runFadeHold()
     func runRepeatingPulse()
+    func removeAnimation(forKey key: String)
 }
 
 @MainActor
@@ -16,8 +17,10 @@ struct MenuBarIconPulseAnimator {
 
     func pulse() {
         if reduceMotion() {
+            driver.removeAnimation(forKey: "wtt-pulse-repeating")
             driver.runFadeHold()
         } else {
+            driver.removeAnimation(forKey: "wtt-pulse-fade")
             driver.runRepeatingPulse()
         }
     }
@@ -60,6 +63,10 @@ final class StatusItemPulseDriver: PulseAnimationDriving {
         group.repeatCount = 5
         group.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         layer.add(group, forKey: "wtt-pulse-repeating")
+    }
+
+    func removeAnimation(forKey key: String) {
+        statusItem.button?.layer?.removeAnimation(forKey: key)
     }
 }
 

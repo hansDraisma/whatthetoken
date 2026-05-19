@@ -26,6 +26,22 @@ import Testing
         #expect(plist["com.apple.security.files.user-selected.read-write"] == nil)
     }
 
+    @Test func sourceCodeUsesCentralizedAppGroupConstant() throws {
+        let appModel = try String(
+            contentsOf: repoURL().appendingPathComponent("apps/mac/Sources/WhatTheTokenMac/AppModel.swift"),
+            encoding: .utf8
+        )
+        let store = try String(
+            contentsOf: repoURL().appendingPathComponent("apps/mac/Sources/WhatTheTokenMac/Storage/SnapshotCacheStore.swift"),
+            encoding: .utf8
+        )
+
+        #expect(!appModel.contains("\"group.com.whatthetoken.mac\""))
+        #expect(!store.contains("\"group.com.whatthetoken.mac\""))
+        #expect(appModel.contains("AppGroupIdentifier.shared"))
+        #expect(store.contains("AppGroupIdentifier.shared"))
+    }
+
     private func repoURL() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent() // Packaging

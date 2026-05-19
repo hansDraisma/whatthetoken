@@ -4,15 +4,13 @@ import Testing
 
 @Suite struct MacAppDelegateTests {
     @MainActor
-    @Test func reopenOpensPopoverAndPulses() {
+    @Test func reopenSuppressesDefaultHandling() {
         let actions = SpyDelegateActions()
         let delegate = MacAppDelegate(actions: actions)
 
         let result = delegate.applicationShouldHandleReopen(hasVisibleWindows: false)
 
         #expect(result == false)
-        #expect(actions.openPopoverCount == 1)
-        #expect(actions.pulseCount == 1)
     }
 
     @MainActor
@@ -23,7 +21,28 @@ import Testing
         let result = delegate.applicationShouldHandleReopen(hasVisibleWindows: true)
 
         #expect(result == false)
-        #expect(actions.openPopoverCount == 1)
+    }
+
+    @MainActor
+    @Test func reopenWithVisibleLaunchWindowBringsItForward() {
+        let actions = SpyDelegateActions(hasVisibleLaunchWindow: true)
+        let delegate = MacAppDelegate(actions: actions)
+
+        let result = delegate.applicationShouldHandleReopen(hasVisibleWindows: true)
+
+        #expect(result == false)
+        #expect(actions.calls == ["bringLaunchWindowForward"])
+    }
+
+    @MainActor
+    @Test func reopenWithNoVisibleLaunchWindowOpensIt() {
+        let actions = SpyDelegateActions(hasVisibleLaunchWindow: false)
+        let delegate = MacAppDelegate(actions: actions)
+
+        let result = delegate.applicationShouldHandleReopen(hasVisibleWindows: false)
+
+        #expect(result == false)
+        #expect(actions.calls == ["openLaunchWindow"])
     }
 
     @MainActor
@@ -53,12 +72,28 @@ import Testing
 private final class SpyDelegateActions: MacAppDelegateActions {
     var openPopoverCount = 0
     var pulseCount = 0
+    var calls: [String] = []
+    var hasVisibleLaunchWindow: Bool
+
+    init(hasVisibleLaunchWindow: Bool = false) {
+        self.hasVisibleLaunchWindow = hasVisibleLaunchWindow
+    }
 
     func openPopover() {
         openPopoverCount += 1
+        calls.append("openPopover")
     }
 
     func pulseMenuBarIcon() {
         pulseCount += 1
+        calls.append("pulseMenuBarIcon")
+    }
+
+    func openLaunchWindow() {
+        calls.append("openLaunchWindow")
+    }
+
+    func bringLaunchWindowForward() {
+        calls.append("bringLaunchWindowForward")
     }
 }

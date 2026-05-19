@@ -27,7 +27,8 @@ enum WidgetPreviewCopy {
     }
 
     static func staleBadge(for entry: WidgetEntry) -> String? {
-        entry.isStale ? "Stale" : nil
+        guard emptyState(for: entry) == nil else { return nil }
+        return entry.isStale ? "Stale" : nil
     }
 
     static func emptyState(for entry: WidgetEntry) -> EmptyState? {
@@ -44,6 +45,10 @@ enum WidgetPreviewCopy {
             outlineColorName: "labelColor"
         )
     }
+
+    static func rowAccessibilityLabel(provider: String, percent: Int, connected: Bool) -> String {
+        connected ? "\(provider), \(percent) percent remaining" : "\(provider), not connected"
+    }
 }
 
 struct WidgetPreviewView: View {
@@ -53,10 +58,12 @@ struct WidgetPreviewView: View {
         VStack(alignment: .leading, spacing: 6) {
             if let emptyState = WidgetPreviewCopy.emptyState(for: payload) {
                 Text(emptyState.title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
+                    .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                     .foregroundStyle(.primary)
                 Text(emptyState.hint)
                     .font(.caption2)
+                    .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(payload.rows, id: \.provider) { row in
@@ -81,6 +88,7 @@ struct WidgetPreviewView: View {
         return HStack(spacing: 8) {
             Text(copy.providerLabel)
                 .font(.system(size: 11, weight: .semibold))
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .foregroundStyle(copy.isConnected ? .white : .primary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -94,9 +102,16 @@ struct WidgetPreviewView: View {
             Spacer()
 
             Text(copy.valueLabel)
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .foregroundStyle(copy.isConnected ? .primary : .secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(WidgetPreviewCopy.rowAccessibilityLabel(
+            provider: copy.providerLabel,
+            percent: row.connectedPercent ?? 0,
+            connected: copy.isConnected
+        ))
     }
 
     private func pillFillColor(named name: String) -> Color {
@@ -139,5 +154,12 @@ private extension WidgetRow {
             return true
         }
         return false
+    }
+
+    var connectedPercent: Int? {
+        if case let .connected(percentage) = state {
+            return percentage
+        }
+        return nil
     }
 }

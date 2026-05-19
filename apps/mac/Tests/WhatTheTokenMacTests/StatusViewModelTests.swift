@@ -169,6 +169,26 @@ private func sensitiveKeyMatches(
 }
 
 @MainActor
+@Test func refreshAllReloadsWidgetTimelinesAfterSavingSnapshots() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
+    let widgetReloader = RecordingWidgetTimelineReloader()
+    let vm = StatusViewModel(
+        snapshots: [],
+        settings: settings,
+        claudeRefresher: SnapshotClaudeRefresher(snapshots: [UsageSnapshotFixture.claudeSample()]),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        codexRefresher: NoopCodexRefresher(),
+        widgetTimelineReloader: widgetReloader
+    )
+
+    await vm.refreshAll(reason: .manual)
+
+    #expect(widgetReloader.reloadCount == 2)
+}
+
+@MainActor
 @Test func refreshAll_dropsOverlappingChromeRefresh() async {
     var settings = AppSettings.defaults
     settings.connectors.claudeCode.isEnabled = true
@@ -342,6 +362,39 @@ private func sensitiveKeyMatches(
     #expect(vm.settings.connectors.claudeCode.isEnabled == true)
     #expect(vm.connectorState == .connected)
     #expect(vm.snapshots.map(\.id) == [UsageSnapshotFixture.claudeSample().id])
+}
+
+@MainActor
+@Test func loadPersistedStateMarksAlreadyConnectedProviderOnboardingDone() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.onboarding.steps.connectProviders = .pending
+
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings))
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(vm.settings.onboarding.steps.connectProviders == .done)
+}
+
+@MainActor
+@Test func loadPersistedStateReloadsWidgetTimelinesWhenCachedSnapshotsAreAvailable() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+    let widgetReloader = RecordingWidgetTimelineReloader()
+    let vm = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(data: try! JSONEncoder.prettyStable.encode(settings)),
+        cacheStore: InMemorySnapshotCacheStore(data: try! JSONEncoder.cacheEncoder.encode(cache)),
+        widgetTimelineReloader: widgetReloader
+    )
+
+    await vm.loadPersistedState()
+
+    #expect(widgetReloader.reloadCount == 1)
 }
 
 @MainActor
@@ -1120,14 +1173,53 @@ final class FlakyNotificationStateStore: NotificationStateStore, @unchecked Send
 }
 
 @MainActor
-@Test func replayOnboardingResetsStepsButLeavesFirstLaunchCompleted() async {
+@Test func replayOnboardingResetsStepsAndReopensLaunchWindow() async {
     let viewModel = StatusViewModel()
     await viewModel.skipAllOnboarding()
 
     await viewModel.replayOnboarding()
 
-    #expect(viewModel.settings.onboarding.firstLaunchCompleted == true)
+    #expect(viewModel.settings.onboarding.firstLaunchCompleted == false)
     #expect(viewModel.settings.onboarding.steps == .allPending)
+}
+
+@MainActor
+@Test func replayOnboardingMarksAlreadyConnectedProvidersDone() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let viewModel = StatusViewModel(settings: settings)
+
+    await viewModel.replayOnboarding()
+
+    #expect(viewModel.settings.onboarding.steps.connectProviders == .done)
+}
+
+@MainActor
+@Test func reconcileOnboardingMarksLaunchAtLoginDoneWhenEnabled() async {
+    var settings = AppSettings.defaults
+    settings.launchAtLogin.isEnabled = true
+    settings.onboarding.steps.launchAtLogin = .pending
+    let viewModel = StatusViewModel(settings: settings)
+
+    await viewModel.reconcileOnboardingFromSystemState()
+
+    #expect(viewModel.settings.onboarding.steps.launchAtLogin == .done)
+}
+
+@MainActor
+@Test func reconcileOnboardingMarksNotificationsDoneWhenAuthorized() async {
+    var settings = AppSettings.defaults
+    settings.onboarding.steps.allowNotifications = .pending
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    _ = await delivery.requestAuthorization()
+    let viewModel = StatusViewModel(
+        settings: settings,
+        notificationDelivery: delivery
+    )
+
+    await viewModel.reconcileOnboardingFromSystemState()
+
+    #expect(viewModel.settings.onboarding.steps.allowNotifications == .done)
 }
 
 @MainActor
@@ -1205,11 +1297,25 @@ final class FlakyNotificationStateStore: NotificationStateStore, @unchecked Send
 
     let warning = await viewModel.setHotkey(replacement)
 
-    #expect(warning == "Could not save this hotkey - try again.")
-    #expect(viewModel.hotkeyRegistrationWarning == "Could not save this hotkey - try again.")
+    #expect(warning == "Could not save hotkey. Previous shortcut restored.")
+    #expect(viewModel.hotkeyRegistrationWarning == "Could not save hotkey. Previous shortcut restored.")
     #expect(viewModel.settings.hotkey.combination == .default)
     #expect(registrar.registeredKeyCodes == [17, 40, 17])
     #expect(registrar.lastModifierMask == GlobalHotkeyService.carbonModifierMask(for: HotkeyCombination.default.modifiers))
+}
+
+@MainActor
+@Test func failedSaveAndFailedRollbackSurfacesNoHotkeyWarning() async {
+    let registrar = SpyHotkeyRegistrar()
+    registrar.registrationResults = [true, true, false]
+    let hotkeyService = GlobalHotkeyService(registrar: registrar)
+    let viewModel = StatusViewModel(settingsStore: FailingHotkeySettingsStore())
+    viewModel.bindHotkeyService(hotkeyService) { }
+    await viewModel.registerCurrentHotkey()
+
+    _ = await viewModel.setHotkey(HotkeyCombination(modifiers: [.command], keyCode: 17))
+
+    #expect(viewModel.hotkeyRegistrationWarning?.contains("no active hotkey") == true)
 }
 
 @MainActor
@@ -1254,5 +1360,14 @@ private final class FailingHotkeySettingsStore: AppSettingsStore, @unchecked Sen
 
     func save(_ settings: AppSettings) async -> Bool {
         false
+    }
+}
+
+@MainActor
+private final class RecordingWidgetTimelineReloader: WidgetTimelineReloading {
+    private(set) var reloadCount = 0
+
+    func reloadAllTimelines() {
+        reloadCount += 1
     }
 }

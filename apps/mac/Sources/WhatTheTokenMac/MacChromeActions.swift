@@ -54,10 +54,7 @@ enum MacChromeActions {
     private static func defaultDismissPopover() {
         #if canImport(AppKit)
         guard let key = NSApplication.shared.keyWindow else { return }
-        // The MenuBarExtra(.window) popover host has an empty title; SwiftUI's
-        // Settings and Developer windows always have a title. Use that to avoid
-        // accidentally closing a regular scene that happens to be key.
-        guard key.title.isEmpty else { return }
+        guard key.identifier == .whatTheTokenMenuBarPopover else { return }
         key.close()
         #endif
     }
@@ -69,3 +66,9 @@ enum MacChromeActions {
         #endif
     }
 }
+
+#if canImport(AppKit)
+extension NSUserInterfaceItemIdentifier {
+    static let whatTheTokenMenuBarPopover = NSUserInterfaceItemIdentifier("com.whatthetoken.mac.menu-bar-popover")
+}
+#endif

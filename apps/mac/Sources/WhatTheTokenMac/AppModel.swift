@@ -11,16 +11,19 @@ final class AppModel {
     let backgroundRefreshController: BackgroundRefreshController
     let updateController: SparkleUpdateController
     let menuBarController: MenuBarController
+    let launchWindowController: LaunchWindowController
 
     init(
         viewModel: StatusViewModel,
         refreshController: PopoverRefreshController,
         menuBarController: MenuBarController,
+        launchWindowController: LaunchWindowController,
         updateController: SparkleUpdateController = SparkleUpdateController()
     ) {
         self.viewModel = viewModel
         self.refreshController = refreshController
         self.menuBarController = menuBarController
+        self.launchWindowController = launchWindowController
         self.updateController = updateController
         let backgroundRefreshController = BackgroundRefreshController(viewModel: viewModel)
         self.backgroundRefreshController = backgroundRefreshController
@@ -28,24 +31,32 @@ final class AppModel {
             backgroundRefreshController?.settingsDidChange()
         }
         Task { @MainActor in
-            await viewModel.loadPersistedState()
-            await viewModel.registerCurrentHotkey()
-            backgroundRefreshController.start()
-            FirstLaunchAutoOpenSignaler.signalIfNeeded(settings: viewModel.settings)
+            await AppStartupRoutine.run(
+                loadPersistedState: { try await viewModel.loadPersistedStateThrowing() },
+                logger: OSLogAppLogger(category: "AppModel.live"),
+                registerHotkey: { await viewModel.registerCurrentHotkey() },
+                startRefresh: { backgroundRefreshController.start() },
+                autoOpenLaunchWindow: {
+                    FirstLaunchAutoOpenSignaler.signalIfNeeded(
+                        settings: viewModel.settings,
+                        open: { launchWindowController.open() }
+                    )
+                }
+            )
         }
-    }
-
-    @MainActor
-    static func openLaunchWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     static func live() -> AppModel {
         let appSupport = applicationSupportDirectory()
-        let appGroup = appGroupContainerDirectory()
         let settingsStore = JSONFileAppSettingsStore(url: appSupport.appendingPathComponent("settings.json"))
-        let cacheStore = JSONFileSnapshotCacheStore(url: appGroup.appendingPathComponent("snapshot-cache.json"))
+        let primaryCacheURL = WidgetSnapshotCacheFile.appGroupURL()
+            ?? WidgetSnapshotCacheFile.localAppGroupURL()
+        let cacheStore = MirroringSnapshotCacheStore(
+            primary: JSONFileSnapshotCacheStore(url: primaryCacheURL),
+            mirrors: [
+                JSONFileSnapshotCacheStore(url: WidgetSnapshotCacheFile.widgetContainerMirrorURL())
+            ]
+        )
         let notificationStateStore = JSONFileNotificationStateStore(url: appSupport.appendingPathComponent("notification-state.json"))
 
         let viewModel = StatusViewModel.live(
@@ -56,6 +67,7 @@ final class AppModel {
         )
         let updateController = SparkleUpdateController()
         let refreshController = PopoverRefreshController(viewModel: viewModel)
+        let launchWindowController = LaunchWindowController(viewModel: viewModel)
 
         weak var menuBarControllerWeak: MenuBarController?
         let popoverRoot = PopoverRootView(
@@ -65,7 +77,7 @@ final class AppModel {
             onOpenSettings: {
                 MacChromeActions.openLaunchWindow(
                     dismissPopover: { menuBarControllerWeak?.closePopover() },
-                    openWindow: { AppModel.openLaunchWindow() }
+                    openWindow: { launchWindowController.open() }
                 )
             },
             onCheckForUpdates: { updateController.checkForUpdates(nil) },
@@ -87,6 +99,7 @@ final class AppModel {
             viewModel: viewModel,
             refreshController: refreshController,
             menuBarController: menuBarController,
+            launchWindowController: launchWindowController,
             updateController: updateController
         )
     }
@@ -98,7 +111,7 @@ final class AppModel {
 
     static func appGroupContainerDirectory() -> URL {
         if let url = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.com.whatthetoken.mac"
+            forSecurityApplicationGroupIdentifier: AppGroupIdentifier.shared
         ) {
             return url
         }

@@ -70,7 +70,7 @@ case "$MODE" in
         hdiutil detach "$MOUNT_DIR" >/dev/null
         trap - EXIT
         rm -rf "$MOUNT_DIR"
-        shasum -a 256 "$DMG_PATH" > "$DMG_PATH.sha256"
+        ( cd "$(dirname "$DMG_PATH")" && shasum -a 256 "$(basename "$DMG_PATH")" ) > "$DMG_PATH.sha256"
         printf '%s\n' "$DMG_PATH"
         ;;
     signed)

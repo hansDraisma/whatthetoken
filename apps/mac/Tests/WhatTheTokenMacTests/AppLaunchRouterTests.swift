@@ -68,4 +68,89 @@ import Testing
         #expect(app == "live")
         #expect(events == ["configure", "make"])
     }
+
+    @MainActor
+    @Test func startupRoutineLogsLoadFailure() async {
+        let logger = RecordingTestLogger()
+        var loadStarted = false
+
+        await AppStartupRoutine.run(
+            loadPersistedState: {
+                loadStarted = true
+                throw NSError(domain: "test", code: 1)
+            },
+            logger: logger,
+            registerHotkey: { Issue.record("registerHotkey should not run after load failure") },
+            startRefresh: { Issue.record("startRefresh should not run after load failure") },
+            autoOpenLaunchWindow: { Issue.record("autoOpenLaunchWindow should not run after load failure") }
+        )
+
+        #expect(loadStarted)
+        #expect(logger.messages.contains { $0.contains("Failed to load persisted state") })
+    }
+
+    @MainActor
+    @Test func startupRoutineAwaitsHotkeyRegistrationBeforeRefreshStarts() async {
+        let logger = RecordingTestLogger()
+        var events: [String] = []
+
+        await AppStartupRoutine.run(
+            loadPersistedState: { events.append("load") },
+            logger: logger,
+            registerHotkey: {
+                events.append("register:start")
+                await Task.yield()
+                events.append("register:end")
+            },
+            startRefresh: { events.append("refresh") },
+            autoOpenLaunchWindow: { events.append("open") }
+        )
+
+        #expect(events == ["load", "register:start", "register:end", "refresh", "open"])
+    }
+
+    @MainActor
+    @Test func startupRoutineTreatsMissingSettingsFileAsFreshInstall() async {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("missing-settings-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let settingsStore = JSONFileAppSettingsStore(
+            url: root.appendingPathComponent("settings.json"),
+            logger: nil
+        )
+        let logger = RecordingTestLogger()
+        var events: [String] = []
+
+        await AppStartupRoutine.run(
+            loadPersistedState: {
+                let settings = try await settingsStore.loadValidated()
+                #expect(settings == .defaults)
+                events.append("load")
+            },
+            logger: logger,
+            registerHotkey: { events.append("register") },
+            startRefresh: { events.append("refresh") },
+            autoOpenLaunchWindow: { events.append("open") }
+        )
+
+        #expect(events == ["load", "register", "refresh", "open"])
+        #expect(logger.messages.isEmpty)
+    }
+
+    @Test func liveStartupUsesThrowingPersistedStateLoadForLoggingPath() throws {
+        let appModel = try sourceContents("AppModel.swift")
+        let statusViewModel = try sourceContents("ViewModels/StatusViewModel.swift")
+
+        #expect(appModel.contains("try await viewModel.loadPersistedStateThrowing()"))
+        #expect(statusViewModel.contains("func loadPersistedStateThrowing() async throws"))
+    }
+
+    private func sourceContents(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/WhatTheTokenMac/\(relativePath)")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
 }

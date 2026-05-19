@@ -8,6 +8,67 @@ import Testing
     #expect(script.contains("Public releases must use WhatTheToken.xcodeproj"))
 }
 
+@Test func developmentPackageScriptEmbedsWidgetExtensionForLocalTesting() throws {
+    let script = try macFileContents("Scripts/package-app.sh")
+
+    #expect(script.contains("xcodebuild"))
+    #expect(script.contains("WhatTheToken.xcodeproj"))
+    #expect(script.contains("CONFIGURATION_BUILD_DIR"))
+    #expect(script.contains("Contents/PlugIns/WhatTheTokenWidget.appex"))
+    #expect(script.contains("SPARKLE_FRAMEWORK=\"$APP_DIR/Contents/Frameworks/Sparkle.framework\""))
+    #expect(script.contains("codesign --force --deep --sign - \"$SPARKLE_FRAMEWORK\""))
+    #expect(script.contains("codesign --force --sign - --entitlements \"$ROOT_DIR/Packaging/WhatTheTokenWidget.entitlements\" \"$WIDGET_EXTENSION\""))
+    #expect(script.contains("codesign --force --sign - --entitlements \"$ROOT_DIR/Packaging/WhatTheToken.entitlements\" \"$APP_DIR\""))
+    #expect(script.contains("codesign --verify --strict --verbose=2 \"$APP_DIR\""))
+    #expect(script.contains("codesign --verify --strict --verbose=2 \"$WIDGET_EXTENSION\""))
+    #expect(script.contains("\"$LSREGISTER\" -f -R -trusted \"$APP_DIR\""))
+    #expect(script.contains("pluginkit -m -A -i com.whatthetoken.mac.widget -vv"))
+    #expect(script.contains("expected PlugInKit to register widget at $WIDGET_EXTENSION"))
+}
+
+@Test func developmentPackageScriptNormalizesXcodeConfigurationInput() throws {
+    let script = try macFileContents("Scripts/package-app.sh")
+
+    #expect(script.contains(#"case "$CONFIGURATION" in"#))
+    #expect(script.contains(#"debug|Debug)"#))
+    #expect(script.contains(#"release|Release)"#))
+    #expect(script.contains("CONFIGURATION must be Debug or Release"))
+}
+
+@Test func developmentPackageScriptRetriesPlugInKitRegistrationAndReportsState() throws {
+    let script = try macFileContents("Scripts/package-app.sh")
+
+    #expect(script.contains("for attempt in 1 2 3 4 5; do"))
+    #expect(script.contains("PLUGIN_OUTPUT=\"$(pluginkit -m -A -i com.whatthetoken.mac.widget -vv 2>&1 || true)\""))
+    #expect(script.contains("grep -qF \"Path = $WIDGET_EXTENSION\""))
+    #expect(script.contains("printf '%s\\n' \"$PLUGIN_OUTPUT\" >&2"))
+    #expect(script.contains("sleep 1"))
+}
+
+@Test func developmentPackageScriptDocumentsDevOnlyDeepSigningAndMissingSparkle() throws {
+    let script = try macFileContents("Scripts/package-app.sh")
+
+    #expect(script.contains("--deep is intentional for this ad-hoc development helper"))
+    #expect(script.contains("note: Sparkle.framework not present, skipping re-sign"))
+}
+
+@Test func releaseArtifactVerificationDoesNotDeepVerifyOuterAppPath() throws {
+    let script = try macFileContents("Scripts/verify-release-artifacts.sh")
+
+    #expect(!script.contains("run_command codesign --verify --deep --strict --verbose=2 \"$APP_PATH\""))
+    #expect(script.contains("run_command codesign --verify --strict --verbose=2 \"$APP_PATH\""))
+}
+
+@Test func releaseArtifactDryRunPipelinesArePrintedAsShellCommands() throws {
+    let script = try macFileContents("Scripts/verify-release-artifacts.sh")
+
+    #expect(script.contains("print_shell_command"))
+    #expect(!script.contains("quote_command WIDGET_TEAM="))
+    #expect(!script.contains("quote_command APP_TEAM="))
+    #expect(!script.contains("quote_command codesign -d --entitlements :- \"$APP_PATH\" \"|\" grep"))
+    #expect(!script.contains("quote_command codesign -d --entitlements :- \"$WIDGET_PATH\" \"|\" grep"))
+}
+
 @Test func releaseScriptsUseExpectedToolsAndAvoidSecretEchoes() throws {
     let scripts: [(name: String, requiredFragments: [String])] = [
         (
@@ -33,6 +94,8 @@ import Testing
                 "WTT_DEVELOPER_ID_APP_PROFILE_SPECIFIER",
                 "WTT_DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER",
                 "provisioningProfiles",
+                "plutil -replace 'provisioningProfiles.com.whatthetoken.mac' -string",
+                "plutil -replace 'provisioningProfiles.com.whatthetoken.mac.widget' -string",
                 "com.whatthetoken.mac.widget",
                 "-verify_arch"
             ]
@@ -85,7 +148,18 @@ import Testing
                 "CFBundleIconName",
                 "Assets.car",
                 "PrivacyInfo.xcprivacy",
-                "Timestamp="
+                "Timestamp=",
+                "Contents/PlugIns/WhatTheTokenWidget.appex",
+                "test -d \"$APP_PATH/Contents/PlugIns/WhatTheTokenWidget.appex\"",
+                "codesign --verify --strict",
+                "com.whatthetoken.mac.widget",
+                "WIDGET_TEAM=",
+                "APP_TEAM=",
+                "widget TeamIdentifier",
+                "codesign -d --entitlements",
+                "group.com.whatthetoken.mac",
+                "App Group entitlement",
+                "cd \"$(dirname \"$DMG_PATH\")\" && shasum -a 256 \"$(basename \"$DMG_PATH\")\""
             ]
         ),
         (
@@ -125,7 +199,8 @@ import Testing
                 "codesign --verify",
                 "xcrun stapler validate",
                 "release-inputs.sh",
-                "validate_release_build"
+                "validate_release_build",
+                "cd \"$(dirname \"$DMG_PATH\")\" && shasum -a 256 \"$(basename \"$DMG_PATH\")\""
             ]
         ),
         (
@@ -199,6 +274,56 @@ import Testing
     #expect(result.output.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER is required"))
     #expect(result.output.contains("DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER is required"))
     #expect(!result.output.contains("xcodebuild"))
+}
+
+@Test func releaseArchiveReportsOnlyTheMissingProfileVariable() throws {
+    let result = try runMacReleaseScript(
+        "archive-release.sh",
+        arguments: ["--version", "0.1.0", "--build", "1", "--team-id", "3U98C8T3DT"],
+        environmentOverrides: [
+            "DEVELOPER_ID_APP_PROFILE_SPECIFIER": nil
+        ],
+        baseEnvironment: ProcessInfo.processInfo.environment.merging([
+            "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER": "Installed Widget Profile"
+        ]) { _, new in new }
+    )
+
+    #expect(result.exitCode != 0)
+    #expect(result.output.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER is required"))
+    #expect(!result.output.contains("DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER is required"))
+}
+
+@Test func releaseArchiveReportsOnlyWidgetSpecifierMissing() throws {
+    let result = try runMacReleaseScript(
+        "archive-release.sh",
+        arguments: ["--version", "0.1.0", "--build", "1", "--team-id", "3U98C8T3DT"],
+        environmentOverrides: [
+            "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER": nil
+        ],
+        baseEnvironment: ProcessInfo.processInfo.environment.merging([
+            "DEVELOPER_ID_APP_PROFILE_SPECIFIER": "Installed App Profile"
+        ]) { _, new in new }
+    )
+
+    #expect(result.exitCode != 0)
+    #expect(result.output.contains("DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER is required"))
+    #expect(!result.output.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER is required"))
+}
+
+@Test func releaseArchiveDryRunUsesEnvVarNamesInsteadOfAngleBracketPlaceholders() throws {
+    let script = try macFileContents("Scripts/archive-release.sh")
+
+    #expect(!script.contains("<DEVELOPER_ID_APP_PROFILE_SPECIFIER>"))
+    #expect(!script.contains("<DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER>"))
+}
+
+@Test func releaseArchiveDryRunAvoidsEscapedDollarPlaceholders() throws {
+    let script = try macFileContents("Scripts/archive-release.sh")
+
+    #expect(!script.contains(#"\${DEVELOPER_ID_"#))
+    #expect(script.contains(#"DRY_RUN_TEAM_ID="${TEAM_ID:-DEVELOPER_ID_TEAM_ID}""#))
+    #expect(script.contains(#"DRY_RUN_APP_PROFILE="${APP_PROFILE_SPECIFIER:-DEVELOPER_ID_APP_PROFILE_SPECIFIER}""#))
+    #expect(script.contains(#"DRY_RUN_WIDGET_PROFILE="${WIDGET_PROFILE_SPECIFIER:-DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER}""#))
 }
 
 @Test func releaseInputValidatorOwnsSharedReleaseMetadataRules() throws {

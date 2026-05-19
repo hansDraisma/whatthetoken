@@ -133,6 +133,16 @@ private struct AppIconContents: Decodable {
     ))
 }
 
+@Test func widgetTargetDoesNotInheritHostFrameworksRpath() throws {
+    let project = try macFileContents("WhatTheToken.xcodeproj/project.pbxproj")
+    let widgetSection = try #require(project.range(of: "WTT_WIDGET_EXTENSION").flatMap {
+        let end = project.index($0.lowerBound, offsetBy: 4_000, limitedBy: project.endIndex) ?? project.endIndex
+        return String(project[$0.lowerBound..<end])
+    })
+
+    #expect(!widgetSection.contains("@executable_path/../../../../Frameworks"))
+}
+
 @Test func releaseBuildConfigurationsUseTargetSpecificProvisioningProfileSpecifiers() throws {
     let project = try macFileContents("WhatTheToken.xcodeproj/project.pbxproj")
 

@@ -18,9 +18,9 @@ enum MenuBarStatusItemImage {
             accessibilityLabel: isCritical
                 ? "WhatTheToken: critical quota"
                 : "WhatTheToken: quota OK",
-            usesPaletteRendering: true,
-            fillColorName: isCritical ? "systemRed" : "systemGreen",
-            outlineColorName: "labelColor"
+            usesPaletteRendering: false,
+            fillColorName: "labelColor",
+            outlineColorName: isCritical ? "systemRed" : "clear"
         )
     }
 
@@ -28,15 +28,20 @@ enum MenuBarStatusItemImage {
     @MainActor
     static func make(isCritical: Bool) -> NSImage {
         let d = descriptor(isCritical: isCritical)
-        let config = NSImage.SymbolConfiguration(paletteColors: [
-            isCritical ? NSColor.systemRed : NSColor.systemGreen,
-            NSColor.labelColor
-        ])
         let base = NSImage(systemSymbolName: d.symbolName, accessibilityDescription: d.accessibilityLabel)
             ?? NSImage()
-        let configured = base.withSymbolConfiguration(config) ?? base
-        configured.isTemplate = false
-        return configured
+        base.isTemplate = true
+        guard isCritical else { return base }
+
+        let composite = NSImage(size: base.size, flipped: false) { rect in
+            base.draw(in: rect)
+            NSColor.systemRed.setFill()
+            let dotSize: CGFloat = 5
+            NSBezierPath(ovalIn: NSRect(x: rect.maxX - dotSize, y: 0, width: dotSize, height: dotSize)).fill()
+            return true
+        }
+        composite.isTemplate = false
+        return composite
     }
     #endif
 }

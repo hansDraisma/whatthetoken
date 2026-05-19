@@ -29,4 +29,22 @@ import Testing
 
         #expect(combo.isValidForGlobalRegistration == true)
     }
+
+    @Test func cmdQIsRejectedAsReserved() {
+        let combo = HotkeyCombination(modifiers: [.command], keyCode: 12)
+
+        #expect(combo.isValidForGlobalRegistration == false)
+    }
+
+    @Test func shiftOnlyComboIsRejected() {
+        let combo = HotkeyCombination(modifiers: [.shift], keyCode: 17)
+
+        #expect(combo.isValidForGlobalRegistration == false)
+    }
+
+    @Test func cmdShiftTIsAccepted() {
+        let combo = HotkeyCombination(modifiers: [.command, .shift], keyCode: 17)
+
+        #expect(combo.isValidForGlobalRegistration == true)
+    }
 }

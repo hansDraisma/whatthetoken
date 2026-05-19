@@ -6,6 +6,6 @@ enum StalenessThreshold {
     static let minimum: Duration = .seconds(15 * 60)
 
     static func isStale(snapshotAge age: Duration) -> Bool {
-        age > minimum
+        age >= minimum
     }
 }

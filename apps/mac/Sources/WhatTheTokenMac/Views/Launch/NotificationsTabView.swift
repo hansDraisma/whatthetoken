@@ -5,7 +5,7 @@ struct NotificationsTabView: View {
 
     var body: some View {
         Form {
-            if viewModel.settings.notifications.isEnabled == false {
+            if !viewModel.settings.notifications.isEnabled {
                 Section {
                     Text("Notifications are off. Enable them below to be warned before quota runs out.")
                         .font(.caption)

@@ -19,4 +19,24 @@ import Testing
         #expect(LaunchTab.about.title == "About")
         #expect(LaunchTab.about.systemImage == "info.circle")
     }
+
+    @Test func statusTabDisconnectedProviderActionNavigatesToConnectors() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let launchRoot = try String(
+            contentsOf: root.appendingPathComponent("Sources/WhatTheTokenMac/Views/Launch/LaunchWindowRootView.swift"),
+            encoding: .utf8
+        )
+        let statusTab = try String(
+            contentsOf: root.appendingPathComponent("Sources/WhatTheTokenMac/Views/Launch/StatusTabView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(launchRoot.contains("StatusTabView(viewModel: viewModel, onOpenConnectors: { selection = .connectors })"))
+        #expect(statusTab.contains("let onOpenConnectors: () -> Void"))
+        #expect(statusTab.contains("onOpenSettings: onOpenConnectors"))
+    }
 }

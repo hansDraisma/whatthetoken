@@ -55,4 +55,47 @@ import Testing
 
         #expect(copy == "Stale")
     }
+
+    @Test func emptyStateSuppressesStaleness() {
+        let entry = WidgetEntry(
+            rows: [
+                WidgetRow(provider: .claude, state: .notConnected),
+                WidgetRow(provider: .codex, state: .notConnected)
+            ],
+            isStale: true,
+            asOf: .distantPast
+        )
+
+        #expect(WidgetPreviewCopy.emptyState(for: entry) != nil)
+        #expect(WidgetPreviewCopy.staleBadge(for: entry) == nil)
+    }
+
+    @Test func widgetPreviewRowExposesCombinedAccessibilityLabel() {
+        let label = WidgetPreviewCopy.rowAccessibilityLabel(provider: "Claude", percent: 47, connected: true)
+
+        #expect(label == "Claude, 47 percent remaining")
+    }
+
+    @Test func widgetPreviewRowExposesDisconnectedLabel() {
+        let label = WidgetPreviewCopy.rowAccessibilityLabel(provider: "Codex", percent: 0, connected: false)
+
+        #expect(label == "Codex, not connected")
+    }
+
+    @Test func emptyStateTextClampsDynamicTypeLikeRows() throws {
+        let source = try launchSourceContents("WidgetPreviewView.swift")
+
+        #expect(source.contains("Text(emptyState.title)\n                    .font(.caption.weight(.semibold))\n                    .dynamicTypeSize(...DynamicTypeSize.xxLarge)"))
+        #expect(source.contains("Text(emptyState.hint)\n                    .font(.caption2)\n                    .dynamicTypeSize(...DynamicTypeSize.xxLarge)"))
+    }
+
+    private func launchSourceContents(_ name: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/WhatTheTokenMac/Views/Launch/\(name)")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
 }

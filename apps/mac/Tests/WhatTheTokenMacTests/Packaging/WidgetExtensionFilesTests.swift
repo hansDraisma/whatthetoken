@@ -33,14 +33,21 @@ import Testing
         #expect(source.contains("SnapshotEntryBuilder"))
         #expect(source.contains("SnapshotCache"))
         #expect(source.contains("SnapshotCache.decodeValidated"))
-        #expect(source.contains("group.com.whatthetoken.mac"))
-        #expect(source.contains("snapshot-cache.json"))
+        #expect(source.contains("WidgetSnapshotCacheFile.readableURLs"))
+        #expect(source.contains("SnapshotCache.decodeValidated"))
     }
 
     @Test func widgetSmallViewUsesSharedPreviewView() throws {
         let source = try widgetFileContents("Widget/WidgetSmallView.swift")
 
         #expect(source.contains("WidgetPreviewView(payload: entry.payload)"))
+    }
+
+    @Test func widgetSmallViewAppliesContainerBackground() throws {
+        let source = try widgetFileContents("Widget/WidgetSmallView.swift")
+
+        #expect(source.contains(".containerBackground"))
+        #expect(source.contains("for: .widget"))
     }
 }
 

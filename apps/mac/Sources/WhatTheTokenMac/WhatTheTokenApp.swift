@@ -64,14 +64,6 @@ struct WhatTheTokenApp: App {
 
     @SceneBuilder
     var body: some Scene {
-        Settings {
-            if let app {
-                LaunchWindowRootView(viewModel: app.viewModel)
-            } else {
-                EmptyView()
-            }
-        }
-
         #if DEBUG
         Window("WhatTheToken - Developer", id: "developer") {
             if let app {
@@ -88,6 +80,21 @@ struct WhatTheTokenApp: App {
                 .keyboardShortcut("d", modifiers: [.command, .shift])
             }
         }
+        #else
+        Window("WhatTheToken", id: "command-host") {
+            EmptyView()
+        }
+            .commands {
+                CommandGroup(replacing: .appSettings) {
+                    Button("Settings...") {
+                        MacChromeActions.openLaunchWindow(
+                            dismissPopover: { app?.menuBarController.closePopover() },
+                            openWindow: { app?.launchWindowController.open() }
+                        )
+                    }
+                    .keyboardShortcut(",", modifiers: .command)
+                }
+            }
         #endif
     }
 }
@@ -125,5 +132,17 @@ private final class AppModelDelegateActions: MacAppDelegateActions {
 
     func pulseMenuBarIcon() {
         Task { await app.viewModel.pulseMenuBarIcon() }
+    }
+
+    var hasVisibleLaunchWindow: Bool {
+        app.launchWindowController.hasVisibleWindow
+    }
+
+    func openLaunchWindow() {
+        app.launchWindowController.open()
+    }
+
+    func bringLaunchWindowForward() {
+        app.launchWindowController.bringToFront()
     }
 }

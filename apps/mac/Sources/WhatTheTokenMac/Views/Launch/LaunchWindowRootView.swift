@@ -52,7 +52,7 @@ struct LaunchWindowRootView: View {
         } detail: {
             switch selection {
             case .status:
-                StatusTabView(viewModel: viewModel)
+                StatusTabView(viewModel: viewModel, onOpenConnectors: { selection = .connectors })
             case .connectors:
                 ConnectorsView(viewModel: viewModel)
             case .notifications:

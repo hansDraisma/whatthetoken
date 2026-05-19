@@ -93,10 +93,17 @@ if [[ "$DRY_RUN" -eq 0 && -z "$TEAM_ID" ]]; then
     exit 65
 fi
 
-if [[ "$DRY_RUN" -eq 0 && ( -z "$APP_PROFILE_SPECIFIER" || -z "$WIDGET_PROFILE_SPECIFIER" ) ]]; then
-    printf 'DEVELOPER_ID_APP_PROFILE_SPECIFIER is required for a real release archive.\n' >&2
-    printf 'DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER is required for a real release archive.\n' >&2
-    exit 65
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    MISSING_PROFILE=0
+    if [[ -z "$APP_PROFILE_SPECIFIER" ]]; then
+        printf 'DEVELOPER_ID_APP_PROFILE_SPECIFIER is required for a real release archive.\n' >&2
+        MISSING_PROFILE=1
+    fi
+    if [[ -z "$WIDGET_PROFILE_SPECIFIER" ]]; then
+        printf 'DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER is required for a real release archive.\n' >&2
+        MISSING_PROFILE=1
+    fi
+    [[ "$MISSING_PROFILE" -eq 1 ]] && exit 65
 fi
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
@@ -119,13 +126,13 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
     fi
     /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_OPTIONS_RESOLVED"
     /usr/libexec/PlistBuddy -c 'Add :provisioningProfiles dict' "$EXPORT_OPTIONS_RESOLVED"
-    /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:com.whatthetoken.mac string $APP_PROFILE_SPECIFIER" "$EXPORT_OPTIONS_RESOLVED"
-    /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:com.whatthetoken.mac.widget string $WIDGET_PROFILE_SPECIFIER" "$EXPORT_OPTIONS_RESOLVED"
+    plutil -replace 'provisioningProfiles.com.whatthetoken.mac' -string "$APP_PROFILE_SPECIFIER" "$EXPORT_OPTIONS_RESOLVED"
+    plutil -replace 'provisioningProfiles.com.whatthetoken.mac.widget' -string "$WIDGET_PROFILE_SPECIFIER" "$EXPORT_OPTIONS_RESOLVED"
     plutil -lint "$EXPORT_OPTIONS_RESOLVED" >/dev/null
 else
-    DRY_RUN_TEAM_ID="${TEAM_ID:-<DEVELOPER_ID_TEAM_ID>}"
-    DRY_RUN_APP_PROFILE="${APP_PROFILE_SPECIFIER:-<DEVELOPER_ID_APP_PROFILE_SPECIFIER>}"
-    DRY_RUN_WIDGET_PROFILE="${WIDGET_PROFILE_SPECIFIER:-<DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER>}"
+    DRY_RUN_TEAM_ID="${TEAM_ID:-DEVELOPER_ID_TEAM_ID}"
+    DRY_RUN_APP_PROFILE="${APP_PROFILE_SPECIFIER:-DEVELOPER_ID_APP_PROFILE_SPECIFIER}"
+    DRY_RUN_WIDGET_PROFILE="${WIDGET_PROFILE_SPECIFIER:-DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER}"
     quote_command rm -rf "$ARCHIVE_PATH"
     quote_command rm -rf "$EXPORT_DIR"
     quote_command mkdir -p "$(dirname "$EXPORT_OPTIONS_RESOLVED")" "$(dirname "$ARCHIVE_PATH")" "$EXPORT_DIR"
@@ -135,8 +142,8 @@ else
     quote_command /usr/libexec/PlistBuddy -c "Add :teamID string $DRY_RUN_TEAM_ID" "$EXPORT_OPTIONS_RESOLVED"
     quote_command /usr/libexec/PlistBuddy -c "Print :provisioningProfiles" "$EXPORT_OPTIONS_RESOLVED"
     quote_command /usr/libexec/PlistBuddy -c "Add :provisioningProfiles dict" "$EXPORT_OPTIONS_RESOLVED"
-    quote_command /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:com.whatthetoken.mac string $DRY_RUN_APP_PROFILE" "$EXPORT_OPTIONS_RESOLVED"
-    quote_command /usr/libexec/PlistBuddy -c "Add :provisioningProfiles:com.whatthetoken.mac.widget string $DRY_RUN_WIDGET_PROFILE" "$EXPORT_OPTIONS_RESOLVED"
+    quote_command plutil -replace 'provisioningProfiles.com.whatthetoken.mac' -string "$DRY_RUN_APP_PROFILE" "$EXPORT_OPTIONS_RESOLVED"
+    quote_command plutil -replace 'provisioningProfiles.com.whatthetoken.mac.widget' -string "$DRY_RUN_WIDGET_PROFILE" "$EXPORT_OPTIONS_RESOLVED"
     quote_command plutil -lint "$EXPORT_OPTIONS_RESOLVED"
 fi
 
@@ -148,8 +155,8 @@ archive_command=(
     -archivePath "$ARCHIVE_PATH"
     MARKETING_VERSION="$VERSION"
     CURRENT_PROJECT_VERSION="$BUILD"
-    WTT_DEVELOPER_ID_APP_PROFILE_SPECIFIER="${APP_PROFILE_SPECIFIER:-<DEVELOPER_ID_APP_PROFILE_SPECIFIER>}"
-    WTT_DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER="${WIDGET_PROFILE_SPECIFIER:-<DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER>}"
+    WTT_DEVELOPER_ID_APP_PROFILE_SPECIFIER="${APP_PROFILE_SPECIFIER:-DEVELOPER_ID_APP_PROFILE_SPECIFIER}"
+    WTT_DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER="${WIDGET_PROFILE_SPECIFIER:-DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER}"
 )
 
 if [[ -n "$TEAM_ID" ]]; then

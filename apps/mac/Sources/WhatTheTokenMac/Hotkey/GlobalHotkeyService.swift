@@ -59,7 +59,9 @@ final class CarbonHotkeyRegistrar: HotkeyRegistering {
     // run outside the main actor in Swift 6. Keep these refs scoped to Carbon cleanup.
     nonisolated(unsafe) private var hotKeyRef: EventHotKeyRef?
     nonisolated(unsafe) private var eventHandler: EventHandlerRef?
-    private var trigger: (() -> Void)?
+    // Carbon invokes the callback outside Swift actor isolation; access is
+    // immediately re-hopped to MainActor before invoking this closure.
+    nonisolated(unsafe) private var trigger: (() -> Void)?
 
     deinit {
         if let ref = hotKeyRef { UnregisterEventHotKey(ref) }
@@ -83,8 +85,21 @@ final class CarbonHotkeyRegistrar: HotkeyRegistering {
         var handler: EventHandlerRef?
         let installStatus = InstallEventHandler(
             GetApplicationEventTarget(),
-            { (_, _, userData) -> OSStatus in
-                guard let userData else { return noErr }
+            { (_, event, userData) -> OSStatus in
+                guard let event, let userData else { return noErr }
+                var eventHotKeyID = EventHotKeyID()
+                let parameterStatus = GetEventParameter(
+                    event,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &eventHotKeyID
+                )
+                guard parameterStatus == noErr,
+                      eventHotKeyID.signature == OSType(0x57544B59),
+                      eventHotKeyID.id == 1 else { return noErr }
                 let registrar = Unmanaged<CarbonHotkeyRegistrar>.fromOpaque(userData).takeUnretainedValue()
                 Task { @MainActor in registrar.trigger?() }
                 return noErr
@@ -92,7 +107,8 @@ final class CarbonHotkeyRegistrar: HotkeyRegistering {
             1, &spec, selfPtr, &handler
         )
         if installStatus != noErr {
-            UnregisterEventHotKey(registeredRef)
+            if let installedHandler = handler { RemoveEventHandler(installedHandler) }
+            if let registered = hotKeyRef { UnregisterEventHotKey(registered) }
             hotKeyRef = nil
             trigger = nil
             return false

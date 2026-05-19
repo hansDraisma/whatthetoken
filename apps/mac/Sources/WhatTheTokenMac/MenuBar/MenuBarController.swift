@@ -5,11 +5,13 @@ import SwiftUI
 #endif
 
 @MainActor
-protocol MenuBarHosting: AnyObject {
+protocol MenuBarHosting: AnyObject, Sendable {
     var isOpen: Bool { get }
+    func activateAppForPopover()
     func openPopover()
     func closePopover()
     func setIconCritical(_ isCritical: Bool)
+    func teardown()
 }
 
 @MainActor
@@ -27,18 +29,30 @@ final class MenuBarController {
         self.pulseAnimator = pulseAnimator
     }
 
-    func openPopover() { hosting.openPopover() }
+    deinit {
+        let hosting = hosting
+        Task { @MainActor in
+            hosting.teardown()
+        }
+    }
+
+    func openPopover() {
+        hosting.activateAppForPopover()
+        hosting.openPopover()
+    }
     func closePopover() { hosting.closePopover() }
-    func togglePopover() { hosting.isOpen ? hosting.closePopover() : hosting.openPopover() }
+    func togglePopover() { hosting.isOpen ? hosting.closePopover() : openPopover() }
     func pulse() { pulseAnimator.pulse() }
     func updateCriticalState(isCritical: Bool) { hosting.setIconCritical(isCritical) }
 }
 
 #if canImport(AppKit)
 @MainActor
-final class LiveMenuBarHosting: NSObject, MenuBarHosting {
+final class LiveMenuBarHosting: NSObject, MenuBarHosting, @unchecked Sendable {
     let statusItem: NSStatusItem
     let popover: NSPopover
+    nonisolated(unsafe) private var globalMonitor: Any?
+    private var closeObserver: NSObjectProtocol?
 
     init(popoverContent: NSViewController) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -53,13 +67,29 @@ final class LiveMenuBarHosting: NSObject, MenuBarHosting {
         statusItem.button?.action = #selector(handleButtonClick)
         statusItem.button?.sendAction(on: [.leftMouseUp])
         statusItem.button?.wantsLayer = true
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSPopover.didCloseNotification,
+            object: popover,
+            queue: .main
+        ) { [weak self] _ in
+            self?.removeGlobalMonitor()
+        }
     }
 
     var isOpen: Bool { popover.isShown }
 
+    func activateAppForPopover() {
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     func openPopover() {
         guard let button = statusItem.button else { return }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.identifier = .whatTheTokenMenuBarPopover
+        removeGlobalMonitor()
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.popover.performClose(nil)
+        }
     }
 
     func closePopover() {
@@ -70,8 +100,31 @@ final class LiveMenuBarHosting: NSObject, MenuBarHosting {
         statusItem.button?.image = MenuBarStatusItemImage.make(isCritical: isCritical)
     }
 
+    func teardown() {
+        removeGlobalMonitor()
+        if let closeObserver {
+            NotificationCenter.default.removeObserver(closeObserver)
+            self.closeObserver = nil
+        }
+        popover.performClose(nil)
+        statusItem.button?.target = nil
+        NSStatusBar.system.removeStatusItem(statusItem)
+    }
+
+    nonisolated private func removeGlobalMonitor() {
+        if let globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
+            self.globalMonitor = nil
+        }
+    }
+
     @objc private func handleButtonClick() {
-        isOpen ? closePopover() : openPopover()
+        if isOpen {
+            closePopover()
+        } else {
+            activateAppForPopover()
+            openPopover()
+        }
     }
 }
 

@@ -18,4 +18,26 @@ import Testing
         #expect(stale == true)
         #expect(fresh == false)
     }
+
+    @Test func ageEqualToThresholdIsStale() {
+        #expect(StalenessThreshold.isStale(snapshotAge: StalenessThreshold.minimum) == true)
+    }
+
+    @Test func futureSnapshotTimestampsRecordClockSkew() {
+        let snapshot = UsageSnapshotFixture.claudeSample()
+            .copy(confidence: "verified", staleReason: nil)
+        let evaluated = snapshot.evaluatingStaleness(
+            now: ISO8601DateFormatter().date(from: "2026-05-06T23:59:00Z")!,
+            staleAfterMinutes: 60
+        )
+
+        #expect(evaluated.confidence == "verified")
+        #expect(evaluated.staleReason == "Last update timestamp is in the future.")
+    }
+
+    @Test func utilizationRoundsToNearestPercent() {
+        #expect(SnapshotEntryBuilder.percent(for: 0.495) == 50)
+        #expect(SnapshotEntryBuilder.percent(for: 0.005) == 1)
+        #expect(SnapshotEntryBuilder.percent(for: 0.0) == 0)
+    }
 }

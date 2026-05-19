@@ -74,6 +74,60 @@ import Testing
 
         #expect(source.contains("Carbon event hot key cleanup APIs are safe to call from deinit"))
     }
+
+    @Test func carbonTriggerDocumentsActorIsolationBoundary() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/WhatTheTokenMac/Hotkey/GlobalHotkeyService.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("nonisolated(unsafe) private var trigger"))
+        #expect(source.contains("re-hopped to MainActor"))
+    }
+
+    @Test func reservedSystemHotkeyDocumentsTabKeyCode() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/WhatTheTokenMac/Hotkey/HotkeyCombination.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("kc 48 = Tab"))
+    }
+
+    @Test func carbonInstallFailureRemovesPartialEventHandler() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/WhatTheTokenMac/Hotkey/GlobalHotkeyService.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("if let installedHandler = handler"))
+        #expect(source.contains("RemoveEventHandler(installedHandler)"))
+    }
+
+    @Test func carbonHotkeyCallbackFiltersForeignHotkeyEvents() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/WhatTheTokenMac/Hotkey/GlobalHotkeyService.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("GetEventParameter"))
+        #expect(source.contains("kEventParamDirectObject"))
+        #expect(source.contains("typeEventHotKeyID"))
+        #expect(source.contains("eventHotKeyID.signature == OSType(0x57544B59)"))
+        #expect(source.contains("eventHotKeyID.id == 1"))
+    }
 }
 
 @MainActor

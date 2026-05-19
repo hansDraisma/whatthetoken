@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import WhatTheTokenMac
 
@@ -21,7 +22,8 @@ private final class RecordingMacApplication: MacApplicationActivating {
 
     MacAppLauncher.configureForInteractiveLaunch(
         arguments: ["WhatTheTokenMac"],
-        application: application
+        application: application,
+        showInDock: { false }
     )
 
     #expect(application.policies == [.accessory])
@@ -45,7 +47,11 @@ private final class RecordingMacApplication: MacApplicationActivating {
 @Test func accessoryLaunchSetsAccessoryPolicy_noActivate() {
     let application = RecordingMacApplication()
 
-    MacAppLauncher.configureLaunch(arguments: ["WhatTheTokenMac"], application: application)
+    MacAppLauncher.configureLaunch(
+        arguments: ["WhatTheTokenMac"],
+        application: application,
+        showInDock: { false }
+    )
 
     #expect(application.policies == [.accessory])
     #expect(application.activateCount == 0)
@@ -79,4 +85,54 @@ private final class RecordingMacApplication: MacApplicationActivating {
 
     #expect(application.policies.isEmpty)
     #expect(application.activateCount == 0)
+}
+
+@MainActor
+@Test func choosesRegularWhenShowInDockIsTrue() {
+    let application = RecordingMacApplication()
+
+    MacAppLauncher.configureLaunch(
+        arguments: ["WhatTheToken"],
+        application: application,
+        showInDock: { true }
+    )
+
+    #expect(application.policies == [.regular])
+}
+
+@MainActor
+@Test func choosesAccessoryWhenShowInDockIsFalse() {
+    let application = RecordingMacApplication()
+
+    MacAppLauncher.configureLaunch(
+        arguments: ["WhatTheToken"],
+        application: application,
+        showInDock: { false }
+    )
+
+    #expect(application.policies == [.accessory])
+}
+
+@MainActor
+@Test func developerWindowOverrideAlwaysForcesRegular() {
+    let application = RecordingMacApplication()
+
+    MacAppLauncher.configureLaunch(
+        arguments: ["WhatTheToken", "--developer-window"],
+        application: application,
+        showInDock: { false }
+    )
+
+    #expect(application.policies == [.regular])
+}
+
+@Test func persistedShowInDockLogsOnDecodeFailure() throws {
+    let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("corrupt-\(UUID().uuidString).json")
+    try "{ not json }".data(using: .utf8)!.write(to: tmp)
+    defer { try? FileManager.default.removeItem(at: tmp) }
+    let logger = RecordingTestLogger()
+
+    _ = MacAppLauncher.persistedShowInDock(settingsURL: tmp, logger: logger)
+
+    #expect(logger.messages.contains { $0.contains("Failed to decode settings.json") })
 }

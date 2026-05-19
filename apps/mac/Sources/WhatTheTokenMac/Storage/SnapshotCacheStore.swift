@@ -1,5 +1,44 @@
 import Foundation
 
+enum WidgetSnapshotCacheFile {
+    static let appGroupIdentifier = AppGroupIdentifier.shared
+    static let fileName = "snapshot-cache.json"
+
+    static func appGroupURL(fileManager: FileManager = .default) -> URL? {
+        fileManager
+            .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)?
+            .appendingPathComponent(fileName)
+    }
+
+    static func localAppGroupURL(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        homeDirectory
+            .appendingPathComponent("Library/Group Containers/\(appGroupIdentifier)", isDirectory: true)
+            .appendingPathComponent(fileName)
+    }
+
+    static func widgetSandboxURL(fileManager: FileManager = .default) -> URL {
+        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("WhatTheToken", isDirectory: true)
+            .appendingPathComponent(fileName)
+    }
+
+    static func widgetContainerMirrorURL(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        homeDirectory
+            .appendingPathComponent("Library/Containers/com.whatthetoken.mac.widget/Data/Library/Application Support/WhatTheToken", isDirectory: true)
+            .appendingPathComponent(fileName)
+    }
+
+    static func readableURLs(fileManager: FileManager = .default) -> [URL] {
+        var urls: [URL] = []
+        if let appGroup = appGroupURL(fileManager: fileManager) {
+            urls.append(appGroup)
+        }
+        urls.append(localAppGroupURL())
+        urls.append(widgetSandboxURL(fileManager: fileManager))
+        return urls
+    }
+}
+
 protocol SnapshotCacheStore: Sendable {
     func load() async -> SnapshotCache
     @discardableResult
@@ -47,6 +86,29 @@ struct JSONFileSnapshotCacheStore: SnapshotCacheStore {
     }
 }
 
+struct MirroringSnapshotCacheStore: SnapshotCacheStore {
+    let primary: SnapshotCacheStore
+    let mirrors: [SnapshotCacheStore]
+
+    func load() async -> SnapshotCache {
+        let cache = await primary.load()
+        for mirror in mirrors {
+            _ = await mirror.save(cache)
+        }
+        return cache
+    }
+
+    @discardableResult
+    func save(_ cache: SnapshotCache) async -> Bool {
+        let saved = await primary.save(cache)
+        guard saved else { return false }
+        for mirror in mirrors {
+            _ = await mirror.save(cache)
+        }
+        return true
+    }
+}
+
 final class InMemorySnapshotCacheStore: SnapshotCacheStore, @unchecked Sendable {
     private let lock = NSLock()
     private var data: Data?
@@ -73,9 +135,20 @@ final class InMemorySnapshotCacheStore: SnapshotCacheStore, @unchecked Sendable 
 }
 
 extension JSONEncoder {
+    static var prettyStable: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return encoder
+    }
+
     static var cacheEncoder: JSONEncoder {
         let encoder = JSONEncoder.prettyStable
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            var container = encoder.singleValueContainer()
+            try container.encode(formatter.string(from: date))
+        }
         return encoder
     }
 }

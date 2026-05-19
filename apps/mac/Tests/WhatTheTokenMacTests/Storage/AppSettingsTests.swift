@@ -135,6 +135,126 @@ import Testing
         #expect(loaded == .defaults)
     }
 
+    @Test func decodeIgnoresMalformedHotkeySubstruct() throws {
+        let json = """
+        {
+          "schemaVersion": 2,
+          "connectors": {
+            "claudeCode": { "isEnabled": false, "isPaused": false },
+            "codex": { "isEnabled": false, "isPaused": false }
+          },
+          "refresh": { "autoRefreshEnabled": false, "intervalSeconds": 300 },
+          "notifications": {
+            "isEnabled": false,
+            "warningThreshold": 0.2,
+            "criticalThreshold": 0.1,
+            "providerAlerts": {
+              "claudeCode": { "isEnabled": true },
+              "codex": { "isEnabled": true }
+            }
+          },
+          "launchAtLogin": { "isEnabled": false },
+          "menuBar": { "displayMode": "statusIcon" },
+          "hotkey": { "keyCode": "not-a-number" }
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try AppSettings.decodeValidated(from: json)
+
+        #expect(decoded.hotkey == .default)
+    }
+
+    @Test func decodeLogsMalformedHotkeySubstructFallback() throws {
+        let logger = RecordingTestLogger()
+        let json = """
+        {
+          "schemaVersion": 2,
+          "connectors": {
+            "claudeCode": { "isEnabled": false, "isPaused": false },
+            "codex": { "isEnabled": false, "isPaused": false }
+          },
+          "refresh": { "autoRefreshEnabled": false, "intervalSeconds": 300 },
+          "notifications": {
+            "isEnabled": false,
+            "warningThreshold": 0.2,
+            "criticalThreshold": 0.1,
+            "providerAlerts": {
+              "claudeCode": { "isEnabled": true },
+              "codex": { "isEnabled": true }
+            }
+          },
+          "launchAtLogin": { "isEnabled": false },
+          "menuBar": { "displayMode": "statusIcon" },
+          "hotkey": { "keyCode": "not-a-number" }
+        }
+        """.data(using: .utf8)!
+
+        _ = try AppSettings.decodeValidated(from: json, logger: logger)
+
+        #expect(logger.messages.contains { $0.contains("settings.hotkey") })
+        #expect(logger.messages.contains { $0.contains("using default") })
+    }
+
+    @Test func storeLogsMalformedSettingsSubstructFallback() async throws {
+        let logger = RecordingTestLogger()
+        let json = """
+        {
+          "schemaVersion": 2,
+          "connectors": {
+            "claudeCode": { "isEnabled": false, "isPaused": false },
+            "codex": { "isEnabled": false, "isPaused": false }
+          },
+          "refresh": { "autoRefreshEnabled": false, "intervalSeconds": 300 },
+          "notifications": {
+            "isEnabled": false,
+            "warningThreshold": 0.2,
+            "criticalThreshold": 0.1,
+            "providerAlerts": {
+              "claudeCode": { "isEnabled": true },
+              "codex": { "isEnabled": true }
+            }
+          },
+          "launchAtLogin": { "isEnabled": false },
+          "menuBar": { "displayMode": "statusIcon" },
+          "appearance": { "showInDock": "not-a-bool" }
+        }
+        """.data(using: .utf8)!
+        let store = InMemoryAppSettingsStore(data: json, logger: logger)
+
+        _ = await store.load()
+
+        #expect(logger.messages.contains { $0.contains("settings.appearance") })
+    }
+
+    @Test func decodeIgnoresMalformedAppearanceSubstruct() throws {
+        let json = """
+        {
+          "schemaVersion": 2,
+          "connectors": {
+            "claudeCode": { "isEnabled": false, "isPaused": false },
+            "codex": { "isEnabled": false, "isPaused": false }
+          },
+          "refresh": { "autoRefreshEnabled": false, "intervalSeconds": 300 },
+          "notifications": {
+            "isEnabled": false,
+            "warningThreshold": 0.2,
+            "criticalThreshold": 0.1,
+            "providerAlerts": {
+              "claudeCode": { "isEnabled": true },
+              "codex": { "isEnabled": true }
+            }
+          },
+          "launchAtLogin": { "isEnabled": false },
+          "menuBar": { "displayMode": "statusIcon" },
+          "appearance": ["not", "an", "object"]
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try AppSettings.decodeValidated(from: json)
+
+        #expect(decoded.appearance == .default)
+    }
+
     @Test func encodedSettingsDoNotContainSensitiveKeys() throws {
         var settings = AppSettings.defaults
         settings.connectors.codex.isEnabled = true
@@ -180,5 +300,118 @@ import Testing
         let loaded = await store.load()
 
         #expect(loaded.connectors.claudeCode.isEnabled == true)
+    }
+
+    @Test func defaultsAddNewSubstructuresWithFreshUserState() {
+        let s = AppSettings.defaults
+
+        #expect(s.appearance.showInDock == true)
+        #expect(s.hotkey.combination == HotkeyCombination.default)
+        #expect(s.onboarding.firstLaunchCompleted == false)
+        #expect(s.onboarding.steps.connectProviders == .pending)
+    }
+
+    @Test func decodesV2PayloadWithoutNewKeysAsExistingUser() throws {
+        let json = """
+        {
+          "schemaVersion" : 2,
+          "connectors" : {
+            "claudeCode" : { "isEnabled" : true,  "isPaused" : false },
+            "codex"      : { "isEnabled" : false, "isPaused" : false }
+          },
+          "refresh" : { "autoRefreshEnabled" : false, "intervalSeconds" : 300 },
+          "notifications" : {
+            "isEnabled" : true,
+            "warningThreshold" : 0.20,
+            "criticalThreshold" : 0.10,
+            "providerAlerts" : {
+              "claudeCode" : { "isEnabled" : true },
+              "codex"      : { "isEnabled" : true }
+            }
+          },
+          "launchAtLogin" : { "isEnabled" : false },
+          "menuBar" : { "displayMode" : "statusIcon" }
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try AppSettings.decodeValidated(from: json)
+
+        #expect(decoded.appearance == AppearanceSettings.default)
+        #expect(decoded.hotkey == HotkeySettings.default)
+        #expect(decoded.onboarding.firstLaunchCompleted == true)
+        #expect(decoded.onboarding.steps.connectProviders == .skipped)
+    }
+
+    @Test func decodesV2PayloadWithAllNewKeysPreservesValues() throws {
+        let json = """
+        {
+          "schemaVersion" : 2,
+          "connectors" : {
+            "claudeCode" : { "isEnabled" : true,  "isPaused" : false },
+            "codex"      : { "isEnabled" : false, "isPaused" : false }
+          },
+          "refresh" : { "autoRefreshEnabled" : false, "intervalSeconds" : 300 },
+          "notifications" : {
+            "isEnabled" : false,
+            "warningThreshold" : 0.20,
+            "criticalThreshold" : 0.10,
+            "providerAlerts" : {
+              "claudeCode" : { "isEnabled" : true },
+              "codex"      : { "isEnabled" : true }
+            }
+          },
+          "launchAtLogin" : { "isEnabled" : true },
+          "menuBar" : { "displayMode" : "statusIcon" },
+          "appearance" : { "showInDock" : false },
+          "hotkey" : {
+            "combination" : { "modifiers" : { "rawValue" : 1 }, "keyCode" : 17 }
+          },
+          "onboarding" : {
+            "firstLaunchCompleted" : true,
+            "steps" : {
+              "connectProviders" : "done",
+              "findMenuBar" : "skipped",
+              "addWidget" : "done",
+              "allowNotifications" : "pending",
+              "setHotkey" : "done",
+              "launchAtLogin" : "skipped"
+            }
+          }
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try AppSettings.decodeValidated(from: json)
+
+        #expect(decoded.appearance.showInDock == false)
+        #expect(decoded.hotkey.combination.modifiers == [.command])
+        #expect(decoded.onboarding.firstLaunchCompleted == true)
+        #expect(decoded.onboarding.steps.addWidget == .done)
+        #expect(decoded.onboarding.steps.findMenuBar == .skipped)
+    }
+
+    @Test func v1MigrationDefaultsNewSubstructuresAsExistingUser() throws {
+        let json = """
+        {
+          "schemaVersion" : 1,
+          "connectors" : {
+            "claudeCode" : { "isEnabled" : true },
+            "codex"      : { "isEnabled" : false }
+          },
+          "refresh" : { "autoRefreshEnabled" : true, "intervalSeconds" : 600 },
+          "notifications" : {
+            "isEnabled" : true,
+            "lowThreshold" : 0.30,
+            "criticalThreshold" : 0.10
+          },
+          "menuBar" : { "displayMode" : "statusIcon" }
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try AppSettings.decodeValidated(from: json)
+
+        #expect(decoded.schemaVersion == 2)
+        #expect(decoded.appearance == AppearanceSettings.default)
+        #expect(decoded.hotkey == HotkeySettings.default)
+        #expect(decoded.onboarding.firstLaunchCompleted == true)
     }
 }

@@ -1,19 +1,46 @@
 import SwiftUI
+import AppKit
+
+enum AppLaunchRouter {
+    static func route<LaunchApp>(
+        arguments: [String],
+        shouldRunClaudeSmoke: ([String]) -> Bool,
+        shouldRunCodexSmoke: ([String]) -> Bool,
+        startClaudeSmoke: () -> Void,
+        startCodexSmoke: () -> Void,
+        configureInteractiveLaunch: () -> Void,
+        makeLiveApp: () -> LaunchApp
+    ) -> LaunchApp? {
+        if shouldRunClaudeSmoke(arguments) {
+            startClaudeSmoke()
+            return nil
+        }
+        if shouldRunCodexSmoke(arguments) {
+            startCodexSmoke()
+            return nil
+        }
+
+        configureInteractiveLaunch()
+        return makeLiveApp()
+    }
+}
 
 @main
 struct WhatTheTokenApp: App {
     private let app: AppModel?
-    @Environment(\.openWindow)   private var openWindow
-    @Environment(\.openSettings) private var openSettingsScene
+    @Environment(\.openWindow) private var openWindow
+    @NSApplicationDelegateAdaptor(MacAppDelegateAdaptor.self) private var delegateAdaptor
 
     init() {
-        app = Self.makeAppForLaunch(
+        let app = Self.makeAppForLaunch(
             arguments: CommandLine.arguments,
             makeLiveApp: { AppModel.live() },
             startClaudeSmoke: { _ = ClaudeConnectorSmokeCommand.startCommandLineSmoke() },
             startCodexSmoke: { _ = CodexConnectorSmokeCommand.startCommandLineSmoke() },
             configureInteractiveLaunch: { MacAppLauncher.configureLaunch() }
         )
+        self.app = app
+        delegateAdaptor.bind(app: app)
     }
 
     @MainActor
@@ -24,51 +51,19 @@ struct WhatTheTokenApp: App {
         startCodexSmoke: () -> Void,
         configureInteractiveLaunch: () -> Void
     ) -> AppModel? {
-        if ClaudeConnectorSmokeCommand.shouldRun(arguments: arguments) {
-            startClaudeSmoke()
-            return nil
-        }
-        if CodexConnectorSmokeCommand.shouldRun(arguments: arguments) {
-            startCodexSmoke()
-            return nil
-        }
-
-        configureInteractiveLaunch()
-        return makeLiveApp()
+        AppLaunchRouter.route(
+            arguments: arguments,
+            shouldRunClaudeSmoke: { ClaudeConnectorSmokeCommand.shouldRun(arguments: $0) },
+            shouldRunCodexSmoke: { CodexConnectorSmokeCommand.shouldRun(arguments: $0) },
+            startClaudeSmoke: startClaudeSmoke,
+            startCodexSmoke: startCodexSmoke,
+            configureInteractiveLaunch: configureInteractiveLaunch,
+            makeLiveApp: makeLiveApp
+        )
     }
 
     @SceneBuilder
     var body: some Scene {
-        MenuBarExtra {
-            if let app {
-                PopoverRootView(
-                    viewModel: app.viewModel,
-                    controller: app.refreshController,
-                    canCheckForUpdates: { app.updateController.canCheckForUpdates },
-                    onOpenSettings: openSettingsAction,
-                    onCheckForUpdates: { app.updateController.checkForUpdates(nil) },
-                    onOpenDeveloperWindow: developerWindowOpener
-                )
-            } else {
-                EmptyView()
-            }
-        } label: {
-            if let app {
-                MenuBarStatusLabel(viewModel: app.viewModel)
-            } else {
-                EmptyView()
-            }
-        }
-        .menuBarExtraStyle(.window)
-
-        Settings {
-            if let app {
-                SettingsRootView(viewModel: app.viewModel)
-            } else {
-                EmptyView()
-            }
-        }
-
         #if DEBUG
         Window("WhatTheToken - Developer", id: "developer") {
             if let app {
@@ -77,29 +72,77 @@ struct WhatTheTokenApp: App {
                 EmptyView()
             }
         }
-        #endif
-    }
-
-    /// Activate first so the responder chain has a frontmost app, then ask
-    /// SwiftUI to open the Settings scene. The previous `NSApp.sendAction`
-    /// approach dispatched into nothing because `.accessory` apps are not
-    /// frontmost when the menu-bar popover is shown.
-    private func openSettingsAction() {
-        MacChromeActions.openSettings {
-            openSettingsScene()
-        }
-    }
-
-    private var developerWindowOpener: (() -> Void)? {
-        #if DEBUG
-        let openWindow = self.openWindow
-        return {
-            MacChromeActions.openDeveloperWindow {
-                openWindow(id: "developer")
+        .commands {
+            CommandMenu("Debug") {
+                Button("Developer Window") {
+                    openWindow(id: "developer")
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
             }
         }
         #else
-        return nil
+        Window("WhatTheToken", id: "command-host") {
+            EmptyView()
+        }
+            .commands {
+                CommandGroup(replacing: .appSettings) {
+                    Button("Settings...") {
+                        MacChromeActions.openLaunchWindow(
+                            dismissPopover: { app?.menuBarController.closePopover() },
+                            openWindow: { app?.launchWindowController.open() }
+                        )
+                    }
+                    .keyboardShortcut(",", modifiers: .command)
+                }
+            }
         #endif
+    }
+}
+
+@MainActor
+final class MacAppDelegateAdaptor: NSObject, NSApplicationDelegate {
+    private weak var app: AppModel?
+    private var delegate: MacAppDelegate?
+
+    func bind(app: AppModel?) {
+        self.app = app
+        if let app {
+            delegate = MacAppDelegate(actions: AppModelDelegateActions(app: app))
+        } else {
+            delegate = nil
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        delegate?.applicationShouldHandleReopen(hasVisibleWindows: flag) ?? true
+    }
+}
+
+@MainActor
+private final class AppModelDelegateActions: MacAppDelegateActions {
+    let app: AppModel
+
+    init(app: AppModel) {
+        self.app = app
+    }
+
+    func openPopover() {
+        Task { await app.viewModel.openPopoverProgrammatically() }
+    }
+
+    func pulseMenuBarIcon() {
+        Task { await app.viewModel.pulseMenuBarIcon() }
+    }
+
+    var hasVisibleLaunchWindow: Bool {
+        app.launchWindowController.hasVisibleWindow
+    }
+
+    func openLaunchWindow() {
+        app.launchWindowController.open()
+    }
+
+    func bringLaunchWindowForward() {
+        app.launchWindowController.bringToFront()
     }
 }

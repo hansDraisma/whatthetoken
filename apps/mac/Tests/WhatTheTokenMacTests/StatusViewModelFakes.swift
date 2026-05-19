@@ -53,14 +53,16 @@ final class RecordingClaudeRefresher: ClaudeConnectorRefreshing, @unchecked Send
 
 final class SlowClaudeRefresher: ClaudeConnectorRefreshing, @unchecked Sendable {
     let counter: Counter
+    let sleepNanoseconds: UInt64
 
-    init(counter: Counter) {
+    init(counter: Counter, sleepNanoseconds: UInt64 = 50_000_000) {
         self.counter = counter
+        self.sleepNanoseconds = sleepNanoseconds
     }
 
     func refresh() async throws -> ClaudeConnectorResult {
         counter.increment()
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await Task.sleep(nanoseconds: sleepNanoseconds)
         return stubClaudeResult()
     }
 }

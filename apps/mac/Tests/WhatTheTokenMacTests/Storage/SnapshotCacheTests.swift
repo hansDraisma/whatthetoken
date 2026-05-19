@@ -39,6 +39,107 @@ import Testing
         #expect(loaded == .empty)
     }
 
+    @Test func decoderAcceptsFractionalIso8601Dates() throws {
+        let json = #"{"schemaVersion":1,"snapshots":[],"updatedAtByProvider":{"anthropic_claude_code":"2026-05-18T12:34:56.789Z"},"lastSuccessfulRefreshAtByProvider":{},"lastErrorByProvider":{}}"#
+            .data(using: .utf8)!
+
+        let cache = try SnapshotCache.decodeValidated(from: json)
+
+        #expect(cache.updatedAtByProvider[CachedProviderID.claude.rawValue] != nil)
+    }
+
+    @Test func fractionalIso8601DatesRoundTripThroughCacheEncoder() throws {
+        let json = #"{"schemaVersion":1,"snapshots":[],"updatedAtByProvider":{"anthropic_claude_code":"2026-05-18T12:34:56.789Z"},"lastSuccessfulRefreshAtByProvider":{},"lastErrorByProvider":{}}"#
+            .data(using: .utf8)!
+        let cache = try SnapshotCache.decodeValidated(from: json)
+
+        let encoded = try JSONEncoder.cacheEncoder.encode(cache)
+        let decoded = try SnapshotCache.decodeValidated(from: encoded)
+
+        #expect(decoded == cache)
+    }
+
+    @Test func cacheEncoderUsesSharedPrettyStableFormattingConvention() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/WhatTheTokenMac/Storage/SnapshotCacheStore.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(source.contains("let encoder = JSONEncoder.prettyStable"))
+    }
+
+    @Test func mirroringStoreWritesWidgetReadableCacheCopy() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WhatTheTokenSnapshotCacheTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let primaryURL = root.appendingPathComponent("primary/snapshot-cache.json")
+        let mirrorURL = root.appendingPathComponent("widget/Data/Library/Application Support/WhatTheToken/snapshot-cache.json")
+        let store = MirroringSnapshotCacheStore(
+            primary: JSONFileSnapshotCacheStore(url: primaryURL),
+            mirrors: [JSONFileSnapshotCacheStore(url: mirrorURL)]
+        )
+        var cache = SnapshotCache.empty
+        cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+
+        let saved = await store.save(cache)
+
+        #expect(saved)
+        #expect(try SnapshotCache.decodeValidated(from: Data(contentsOf: primaryURL)) == cache)
+        #expect(try SnapshotCache.decodeValidated(from: Data(contentsOf: mirrorURL)) == cache)
+    }
+
+    @Test func mirroringStoreBackfillsWidgetReadableCacheCopyOnLoad() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WhatTheTokenSnapshotCacheTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let primaryURL = root.appendingPathComponent("primary/snapshot-cache.json")
+        let mirrorURL = root.appendingPathComponent("widget/Data/Library/Application Support/WhatTheToken/snapshot-cache.json")
+        var cache = SnapshotCache.empty
+        cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+        _ = await JSONFileSnapshotCacheStore(url: primaryURL).save(cache)
+        let store = MirroringSnapshotCacheStore(
+            primary: JSONFileSnapshotCacheStore(url: primaryURL),
+            mirrors: [JSONFileSnapshotCacheStore(url: mirrorURL)]
+        )
+
+        let loaded = await store.load()
+
+        #expect(loaded == cache)
+        #expect(try SnapshotCache.decodeValidated(from: Data(contentsOf: mirrorURL)) == cache)
+    }
+
+    @Test func mirroringStoreBackfillsEmptyCacheToClearStaleMirrorOnLoad() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WhatTheTokenSnapshotCacheTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let primaryURL = root.appendingPathComponent("primary/snapshot-cache.json")
+        let mirrorURL = root.appendingPathComponent("widget/Data/Library/Application Support/WhatTheToken/snapshot-cache.json")
+        var staleMirror = SnapshotCache.empty
+        staleMirror.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1_000))
+        _ = await JSONFileSnapshotCacheStore(url: primaryURL).save(.empty)
+        _ = await JSONFileSnapshotCacheStore(url: mirrorURL).save(staleMirror)
+        let store = MirroringSnapshotCacheStore(
+            primary: JSONFileSnapshotCacheStore(url: primaryURL),
+            mirrors: [JSONFileSnapshotCacheStore(url: mirrorURL)]
+        )
+
+        let loaded = await store.load()
+
+        #expect(loaded == .empty)
+        #expect(try SnapshotCache.decodeValidated(from: Data(contentsOf: mirrorURL)) == .empty)
+    }
+
+    @Test func localAppGroupURLUsesExpectedDevelopmentContainerPath() {
+        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+
+        let url = WidgetSnapshotCacheFile.localAppGroupURL(homeDirectory: home)
+
+        #expect(url.path == "/Users/example/Library/Group Containers/group.com.whatthetoken.mac/snapshot-cache.json")
+    }
+
     @Test func replaceSnapshotsOnlyReplacesMatchingProvider() {
         var cache = SnapshotCache.empty
         cache.replaceSnapshots([UsageSnapshotFixture.claudeSample()], for: .claude, at: Date(timeIntervalSince1970: 1))

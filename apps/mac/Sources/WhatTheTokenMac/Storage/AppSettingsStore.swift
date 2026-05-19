@@ -2,22 +2,40 @@ import Foundation
 
 protocol AppSettingsStore: Sendable {
     func load() async -> AppSettings
+    func loadValidated() async throws -> AppSettings
     @discardableResult
     func save(_ settings: AppSettings) async -> Bool
 }
 
+extension AppSettingsStore {
+    func loadValidated() async throws -> AppSettings {
+        await load()
+    }
+}
+
 struct JSONFileAppSettingsStore: AppSettingsStore {
     let url: URL
+    let logger: (any AppLogger)?
 
-    init(url: URL) {
+    init(url: URL, logger: (any AppLogger)? = OSLogAppLogger(category: "AppSettingsStore")) {
         self.url = url
+        self.logger = logger
     }
 
     func load() async -> AppSettings {
         do {
             let data = try Data(contentsOf: url)
-            return try AppSettings.decodeValidated(from: data)
+            return try AppSettings.decodeValidated(from: data, logger: logger)
         } catch {
+            return .defaults
+        }
+    }
+
+    func loadValidated() async throws -> AppSettings {
+        do {
+            let data = try Data(contentsOf: url)
+            return try AppSettings.decodeValidated(from: data, logger: logger)
+        } catch CocoaError.fileReadNoSuchFile {
             return .defaults
         }
     }
@@ -50,16 +68,24 @@ struct JSONFileAppSettingsStore: AppSettingsStore {
 final class InMemoryAppSettingsStore: AppSettingsStore, @unchecked Sendable {
     private let lock = NSLock()
     private var data: Data?
+    private let logger: (any AppLogger)?
 
-    init(data: Data? = nil) {
+    init(data: Data? = nil, logger: (any AppLogger)? = nil) {
         self.data = data
+        self.logger = logger
     }
 
     func load() async -> AppSettings {
         lock.withLock {
             guard let data else { return .defaults }
-            return (try? AppSettings.decodeValidated(from: data)) ?? .defaults
+            return (try? AppSettings.decodeValidated(from: data, logger: logger)) ?? .defaults
         }
+    }
+
+    func loadValidated() async throws -> AppSettings {
+        let loadedData = lock.withLock { data }
+        guard let loadedData else { return .defaults }
+        return try AppSettings.decodeValidated(from: loadedData, logger: logger)
     }
 
     @discardableResult
@@ -69,13 +95,5 @@ final class InMemoryAppSettingsStore: AppSettingsStore, @unchecked Sendable {
             data = encoded
         }
         return true
-    }
-}
-
-extension JSONEncoder {
-    static var prettyStable: JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return encoder
     }
 }

@@ -9,6 +9,9 @@ struct AppSettings: Codable, Equatable, Sendable {
     var notifications: NotificationSettings
     var launchAtLogin: LaunchAtLoginSettings
     var menuBar: MenuBarSettings
+    var appearance: AppearanceSettings
+    var hotkey: HotkeySettings
+    var onboarding: OnboardingSettings
 
     static let defaults = AppSettings(
         schemaVersion: currentSchemaVersion,
@@ -27,7 +30,10 @@ struct AppSettings: Codable, Equatable, Sendable {
             )
         ),
         launchAtLogin: LaunchAtLoginSettings(isEnabled: false),
-        menuBar: MenuBarSettings(displayMode: .statusIcon)
+        menuBar: MenuBarSettings(displayMode: .statusIcon),
+        appearance: .default,
+        hotkey: .default,
+        onboarding: .default
     )
 
     enum CodingKeys: String, CodingKey {
@@ -37,6 +43,9 @@ struct AppSettings: Codable, Equatable, Sendable {
         case notifications
         case launchAtLogin
         case menuBar
+        case appearance
+        case hotkey
+        case onboarding
     }
 
     init(
@@ -45,7 +54,10 @@ struct AppSettings: Codable, Equatable, Sendable {
         refresh: RefreshSettings,
         notifications: NotificationSettings,
         launchAtLogin: LaunchAtLoginSettings,
-        menuBar: MenuBarSettings
+        menuBar: MenuBarSettings,
+        appearance: AppearanceSettings = .default,
+        hotkey: HotkeySettings = .default,
+        onboarding: OnboardingSettings = .default
     ) {
         self.schemaVersion = schemaVersion
         self.connectors = connectors
@@ -53,10 +65,29 @@ struct AppSettings: Codable, Equatable, Sendable {
         self.notifications = notifications
         self.launchAtLogin = launchAtLogin
         self.menuBar = menuBar
+        self.appearance = appearance
+        self.hotkey = hotkey
+        self.onboarding = onboarding
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let logger = decoder.userInfo[.appLogger] as? any AppLogger
+
+        func decodeSalvaged<T: Decodable>(
+            _ type: T.Type,
+            forKey key: CodingKeys,
+            fallback: T
+        ) -> T {
+            guard container.contains(key) else { return fallback }
+            do {
+                return try container.decodeIfPresent(type, forKey: key) ?? fallback
+            } catch {
+                logger?.error("Failed to decode settings.\(key.stringValue): \(error.localizedDescription) - using default")
+                return fallback
+            }
+        }
+
         schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
         connectors = try container.decode(ConnectorSettings.self, forKey: .connectors)
         refresh = try container.decode(RefreshSettings.self, forKey: .refresh)
@@ -64,13 +95,20 @@ struct AppSettings: Codable, Equatable, Sendable {
         launchAtLogin = try container.decodeIfPresent(LaunchAtLoginSettings.self, forKey: .launchAtLogin)
             ?? .defaults
         menuBar = try container.decode(MenuBarSettings.self, forKey: .menuBar)
+        appearance = decodeSalvaged(AppearanceSettings.self, forKey: .appearance, fallback: .default)
+        hotkey = decodeSalvaged(HotkeySettings.self, forKey: .hotkey, fallback: .default)
+        onboarding = decodeSalvaged(OnboardingSettings.self, forKey: .onboarding, fallback: .existingUser)
     }
 
-    static func decodeValidated(from data: Data) throws -> AppSettings {
+    static func decodeValidated(from data: Data, logger: (any AppLogger)? = nil) throws -> AppSettings {
         let envelope = try JSONDecoder().decode(SettingsVersionEnvelope.self, from: data)
         switch envelope.schemaVersion {
         case currentSchemaVersion:
-            return try JSONDecoder().decode(AppSettings.self, from: data)
+            let decoder = JSONDecoder()
+            if let logger {
+                decoder.userInfo[.appLogger] = logger
+            }
+            return try decoder.decode(AppSettings.self, from: data)
         case 1:
             return try migrateV1(from: data)
         default:
@@ -100,7 +138,10 @@ struct AppSettings: Codable, Equatable, Sendable {
                 )
             ),
             launchAtLogin: .defaults,
-            menuBar: v1.menuBar
+            menuBar: v1.menuBar,
+            appearance: .default,
+            hotkey: .default,
+            onboarding: .existingUser
         )
     }
 }
@@ -190,4 +231,8 @@ struct MenuBarSettings: Codable, Equatable, Sendable {
 
 enum AppSettingsDecodeError: Error, Equatable {
     case unsupportedSchemaVersion(Int)
+}
+
+private extension CodingUserInfoKey {
+    static let appLogger = CodingUserInfoKey(rawValue: "com.whatthetoken.mac.appLogger")!
 }

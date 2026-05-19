@@ -13,6 +13,7 @@ enum CachedProviderID: String, Codable, Equatable, Sendable {
         }
     }
 
+    #if !WTT_WIDGET_EXTENSION
     static func from(tab: ProviderTab) -> CachedProviderID {
         switch tab {
         case .claude:
@@ -21,6 +22,7 @@ enum CachedProviderID: String, Codable, Equatable, Sendable {
             return .codex
         }
     }
+    #endif
 }
 
 struct SnapshotCache: Codable, Equatable, Sendable {
@@ -42,7 +44,20 @@ struct SnapshotCache: Codable, Equatable, Sendable {
 
     static func decodeValidated(from data: Data) throws -> SnapshotCache {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let string = try container.decode(String.self)
+            let fractional = ISO8601DateFormatter()
+            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = fractional.date(from: string) { return date }
+            let plain = ISO8601DateFormatter()
+            plain.formatOptions = [.withInternetDateTime]
+            if let date = plain.date(from: string) { return date }
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Invalid ISO8601 date: \(string)"
+            )
+        }
         let decoded = try decoder.decode(SnapshotCache.self, from: data)
         guard decoded.schemaVersion == currentSchemaVersion else {
             throw SnapshotCacheDecodeError.unsupportedSchemaVersion(decoded.schemaVersion)
@@ -100,6 +115,7 @@ struct SnapshotCache: Codable, Equatable, Sendable {
 struct SnapshotStalePolicy: Equatable, Sendable {
     let staleAfterMinutes: Int
 
+    #if !WTT_WIDGET_EXTENSION
     static func from(settings: AppSettings) -> SnapshotStalePolicy {
         guard settings.refresh.autoRefreshEnabled else {
             return SnapshotStalePolicy(staleAfterMinutes: 60)
@@ -107,6 +123,7 @@ struct SnapshotStalePolicy: Equatable, Sendable {
         let intervalMinutes = max(settings.refresh.intervalSeconds / 60, 1)
         return SnapshotStalePolicy(staleAfterMinutes: max(intervalMinutes * 2, 15))
     }
+    #endif
 }
 
 struct CachedProviderError: Codable, Equatable, Sendable {
@@ -140,7 +157,7 @@ extension UsageSnapshot {
 
         let ageSeconds = now.timeIntervalSince(updatedAt)
         if ageSeconds < 0 {
-            return copy(confidence: "stale", staleReason: "Last update timestamp is in the future.")
+            return copy(confidence: confidence, staleReason: "Last update timestamp is in the future.")
         }
 
         let ageMinutes = Int(ageSeconds / 60)

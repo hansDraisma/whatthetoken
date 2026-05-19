@@ -1,5 +1,26 @@
 import Foundation
 import Observation
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
+
+protocol WidgetTimelineReloading: Sendable {
+    @MainActor func reloadAllTimelines()
+}
+
+struct NoopWidgetTimelineReloader: WidgetTimelineReloading {
+    @MainActor func reloadAllTimelines() { }
+}
+
+#if canImport(WidgetKit)
+struct SystemWidgetTimelineReloader: WidgetTimelineReloading {
+    @MainActor func reloadAllTimelines() {
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+}
+#else
+typealias SystemWidgetTimelineReloader = NoopWidgetTimelineReloader
+#endif
 
 @MainActor
 @Observable
@@ -11,6 +32,7 @@ final class StatusViewModel {
     var codexConnectorState: CodexConnectorSetupState
     var codexConnectorStatusMessage: String
     var launchAtLoginStatusMessage: String?
+    var hotkeyRegistrationWarning: String?
     private var cache: SnapshotCache
     private var notificationState: NotificationState
     private let settingsStore: AppSettingsStore
@@ -18,6 +40,7 @@ final class StatusViewModel {
     private let notificationStateStore: NotificationStateStore
     private let notificationDelivery: NotificationDelivery
     private let launchAtLoginService: LaunchAtLoginServicing
+    private let widgetTimelineReloader: WidgetTimelineReloading
     private let now: @MainActor () -> Date
     private let claudeRefresher: ClaudeConnectorRefreshing?
     private let claudeVersionProvider: ClaudeVersionProviding?
@@ -30,6 +53,9 @@ final class StatusViewModel {
     private var lastBackgroundRefreshAtByProvider: [CachedProviderID: Date] = [:]
     private var unsavedNotificationState = false
     private var lastFailedNotificationStateSaveAt: Date?
+    private weak var menuBarController: MenuBarController?
+    private var hotkeyService: GlobalHotkeyService?
+    private var hotkeyTrigger: (() -> Void)?
     var onSettingsChanged: (@MainActor () -> Void)?
 
     var isAnyRefreshing: Bool {
@@ -103,6 +129,7 @@ final class StatusViewModel {
         notificationStateStore: NotificationStateStore = InMemoryNotificationStateStore(),
         notificationDelivery: NotificationDelivery = RecordingNotificationDelivery(permissionResult: .denied),
         launchAtLoginService: LaunchAtLoginServicing = InMemoryLaunchAtLoginService(),
+        widgetTimelineReloader: WidgetTimelineReloading = NoopWidgetTimelineReloader(),
         now: @escaping @MainActor () -> Date = { Date() },
         connectorState: ClaudeConnectorSetupState = .notConnected,
         connectorStatusMessage: String = "Claude Code is not connected",
@@ -122,6 +149,7 @@ final class StatusViewModel {
         self.notificationStateStore = notificationStateStore
         self.notificationDelivery = notificationDelivery
         self.launchAtLoginService = launchAtLoginService
+        self.widgetTimelineReloader = widgetTimelineReloader
         self.now = now
         self.connectorState = connectorState
         self.connectorStatusMessage = connectorStatusMessage
@@ -131,14 +159,25 @@ final class StatusViewModel {
     }
 
     func loadPersistedState() async {
-        settings = await settingsStore.load()
+        await finishLoadingPersistedState(settings: await settingsStore.load())
+    }
+
+    func loadPersistedStateThrowing() async throws {
+        let loadedSettings = try await settingsStore.loadValidated()
+        await finishLoadingPersistedState(settings: loadedSettings)
+    }
+
+    private func finishLoadingPersistedState(settings loadedSettings: AppSettings) async {
+        settings = loadedSettings
         cache = await cacheStore.load()
+        reloadWidgetIfCacheCanRenderTimeline()
         notificationState = await notificationStateStore.load()
         suppressCacheLoadNotifications = await notificationStateStore.didFallbackOnLoad
         applyCachedRefreshTimestamps()
         applyCachedSnapshots()
         applyConnectorStatesFromSettings()
         await evaluateNotifications(suppressDelivery: true)
+        await reconcileOnboardingFromSystemState()
         hasLoadedPersistedState = true
     }
 
@@ -218,6 +257,10 @@ final class StatusViewModel {
         return enabled ? .granted : await notificationDelivery.authorizationStatus()
     }
 
+    func notificationAuthorizationStatus() async -> NotificationAuthorizationStatus {
+        await notificationDelivery.authorizationStatus()
+    }
+
     @discardableResult
     func setLaunchAtLoginEnabled(_ enabled: Bool) async -> Bool {
         do {
@@ -240,6 +283,157 @@ final class StatusViewModel {
         return true
     }
 
+    func bindMenuBarController(_ controller: MenuBarController) {
+        menuBarController = controller
+    }
+
+    func bindHotkeyService(_ service: GlobalHotkeyService, onTrigger: @escaping () -> Void) {
+        hotkeyService = service
+        hotkeyTrigger = onTrigger
+    }
+
+    @discardableResult
+    func registerCurrentHotkey() async -> String? {
+        await setHotkey(settings.hotkey.combination)
+    }
+
+    func setShowInDock(_ value: Bool) async {
+        var nextSettings = settings
+        nextSettings.appearance.showInDock = value
+        await saveSettings(nextSettings)
+    }
+
+    @discardableResult
+    func setHotkey(_ combination: HotkeyCombination) async -> String? {
+        let failureMessage = "Could not register this hotkey - try a different combination."
+        let saveFailureMessage = "Could not save this hotkey - try again."
+        let rollbackRestoredMessage = "Could not save hotkey. Previous shortcut restored."
+        let rollbackFailedMessage = "Could not save the hotkey, and the previous shortcut could not be restored - there is currently no active hotkey."
+        guard let hotkeyService, let hotkeyTrigger else {
+            var nextSettings = settings
+            nextSettings.hotkey.combination = combination
+            guard await saveSettings(nextSettings) else {
+                hotkeyRegistrationWarning = saveFailureMessage
+                return saveFailureMessage
+            }
+            hotkeyRegistrationWarning = nil
+            return nil
+        }
+
+        let persistedCombination = settings.hotkey.combination
+        switch hotkeyService.register(combination: combination, onTrigger: hotkeyTrigger) {
+        case .registered:
+            guard persistedCombination != combination else {
+                hotkeyRegistrationWarning = nil
+                return nil
+            }
+
+            var nextSettings = settings
+            nextSettings.hotkey.combination = combination
+            guard await saveSettings(nextSettings) else {
+                let rollback = hotkeyService.register(combination: persistedCombination, onTrigger: hotkeyTrigger)
+                switch rollback {
+                case .registered:
+                    hotkeyRegistrationWarning = rollbackRestoredMessage
+                    return rollbackRestoredMessage
+                case .invalidCombination, .failed:
+                    hotkeyRegistrationWarning = rollbackFailedMessage
+                    return rollbackFailedMessage
+                }
+            }
+            hotkeyRegistrationWarning = nil
+            return nil
+        case .invalidCombination:
+            return "This combination needs at least one modifier."
+        case .failed:
+            if persistedCombination != combination {
+                let rollback = hotkeyService.register(combination: persistedCombination, onTrigger: hotkeyTrigger)
+                if rollback == .failed {
+                    hotkeyRegistrationWarning = "Could not register this hotkey, and the previous shortcut could not be restored - there is currently no active hotkey."
+                    return hotkeyRegistrationWarning
+                }
+            }
+            hotkeyRegistrationWarning = failureMessage
+            return failureMessage
+        }
+    }
+
+    func pulseMenuBarIcon() async {
+        menuBarController?.pulse()
+    }
+
+    func openPopoverProgrammatically() async {
+        menuBarController?.openPopover()
+    }
+
+    func dismissHotkeyRegistrationWarning() {
+        hotkeyRegistrationWarning = nil
+    }
+
+    func replayOnboarding() async {
+        var nextSettings = settings
+        var steps = OnboardingState.applyReplay(to: nextSettings.onboarding.steps)
+        if nextSettings.connectors.claudeCode.isEnabled || nextSettings.connectors.codex.isEnabled {
+            steps.connectProviders = .done
+        }
+        if nextSettings.launchAtLogin.isEnabled {
+            steps.launchAtLogin = .done
+        }
+        nextSettings.onboarding.steps = steps
+        nextSettings.onboarding.firstLaunchCompleted = false
+        await saveSettings(nextSettings)
+    }
+
+    func reconcileOnboardingFromSystemState() async {
+        var nextSettings = settings
+        let previousSteps = nextSettings.onboarding.steps
+        if previousSteps.launchAtLogin == .pending, nextSettings.launchAtLogin.isEnabled {
+            nextSettings.onboarding.steps.launchAtLogin = .done
+        }
+        if previousSteps.allowNotifications == .pending,
+           await notificationDelivery.authorizationStatus() == .granted {
+            nextSettings.onboarding.steps.allowNotifications = .done
+        }
+        if previousSteps.connectProviders == .pending,
+           nextSettings.connectors.claudeCode.isEnabled || nextSettings.connectors.codex.isEnabled {
+            nextSettings.onboarding.steps.connectProviders = .done
+        }
+        if nextSettings.onboarding.steps != settings.onboarding.steps {
+            await saveSettings(nextSettings)
+        }
+    }
+
+    func markOnboardingStep(_ step: OnboardingStep, as state: OnboardingStepState) async {
+        var nextSettings = settings
+        switch step {
+        case .connectProviders:
+            nextSettings.onboarding.steps.connectProviders = state
+        case .findMenuBar:
+            nextSettings.onboarding.steps.findMenuBar = state
+        case .addWidget:
+            nextSettings.onboarding.steps.addWidget = state
+        case .allowNotifications:
+            nextSettings.onboarding.steps.allowNotifications = state
+        case .setHotkey:
+            nextSettings.onboarding.steps.setHotkey = state
+        case .launchAtLogin:
+            nextSettings.onboarding.steps.launchAtLogin = state
+        }
+
+        if nextSettings.onboarding.steps.allFinal {
+            nextSettings.onboarding.firstLaunchCompleted = true
+        }
+
+        await saveSettings(nextSettings)
+    }
+
+    func skipAllOnboarding() async {
+        var nextSettings = settings
+        nextSettings.onboarding.steps = OnboardingState.applySkipAll(to: nextSettings.onboarding.steps)
+        nextSettings.onboarding.firstLaunchCompleted = true
+        await saveSettings(nextSettings)
+    }
+
     func disconnect(_ provider: CachedProviderID) async {
         var nextSettings = settings
         switch provider {
@@ -255,14 +449,14 @@ final class StatusViewModel {
         nextCache.removeProvider(provider)
         var nextNotificationState = notificationState
         nextNotificationState.records = nextNotificationState.records.filter { $0.value.key.provider != provider }
-        guard await cacheStore.save(nextCache) else { return }
+        guard await saveCacheAndReloadWidget(nextCache) else { return }
         guard await settingsStore.save(nextSettings) else {
-            _ = await cacheStore.save(cache)
+            _ = await saveCacheAndReloadWidget(cache)
             return
         }
         guard await notificationStateStore.save(nextNotificationState) else {
             _ = await settingsStore.save(settings)
-            _ = await cacheStore.save(cache)
+            _ = await saveCacheAndReloadWidget(cache)
             return
         }
 
@@ -327,7 +521,7 @@ final class StatusViewModel {
         if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
             replaceSnapshots(matching: CachedProviderID.claude.snapshotPredicate, with: [])
             cache.removeProvider(.claude)
-            _ = await cacheStore.save(cache)
+            _ = await saveCacheAndReloadWidget(cache)
             connectorState = .missingClaudeCli
             connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
             lastClaudeRefreshAt = now()
@@ -352,7 +546,7 @@ final class StatusViewModel {
             connectorStatusMessage = result.status.message
             lastClaudeRefreshAt = now()
             cache.replaceSnapshots(result.snapshots, for: .claude, at: lastClaudeRefreshAt!)
-            _ = await cacheStore.save(cache)
+            _ = await saveCacheAndReloadWidget(cache)
             if reason == .timerTick {
                 lastBackgroundRefreshAtByProvider[.claude] = lastClaudeRefreshAt
             }
@@ -367,7 +561,7 @@ final class StatusViewModel {
             connectorState = .networkError
             connectorStatusMessage = "Claude Code usage could not be refreshed"
             cache.recordFailure(for: .claude, code: .network, message: connectorStatusMessage, now: now())
-            _ = await cacheStore.save(cache)
+            _ = await saveCacheAndReloadWidget(cache)
             applyCachedSnapshots()
         }
     }
@@ -396,7 +590,7 @@ final class StatusViewModel {
             codexConnectorStatusMessage = result.status.message
             lastCodexRefreshAt = now()
             cache.replaceSnapshots(result.snapshots, for: .codex, at: lastCodexRefreshAt!)
-            _ = await cacheStore.save(cache)
+            _ = await saveCacheAndReloadWidget(cache)
             if reason == .timerTick {
                 lastBackgroundRefreshAtByProvider[.codex] = lastCodexRefreshAt
             }
@@ -411,7 +605,7 @@ final class StatusViewModel {
             codexConnectorState = .networkError
             codexConnectorStatusMessage = "Codex usage could not be refreshed"
             cache.recordFailure(for: .codex, code: .network, message: codexConnectorStatusMessage, now: now())
-            _ = await cacheStore.save(cache)
+            _ = await saveCacheAndReloadWidget(cache)
             applyCachedSnapshots()
         }
     }
@@ -508,7 +702,8 @@ final class StatusViewModel {
             cacheStore: cacheStore,
             notificationStateStore: notificationStateStore,
             notificationDelivery: notificationDelivery,
-            launchAtLoginService: SystemLaunchAtLoginService()
+            launchAtLoginService: SystemLaunchAtLoginService(),
+            widgetTimelineReloader: SystemWidgetTimelineReloader()
         )
     }
 
@@ -553,6 +748,20 @@ final class StatusViewModel {
         with replacement: [UsageSnapshot]
     ) {
         snapshots = snapshots.filter { !predicate($0) } + replacement
+    }
+
+    @discardableResult
+    private func saveCacheAndReloadWidget(_ cache: SnapshotCache) async -> Bool {
+        let saved = await cacheStore.save(cache)
+        if saved {
+            widgetTimelineReloader.reloadAllTimelines()
+        }
+        return saved
+    }
+
+    private func reloadWidgetIfCacheCanRenderTimeline() {
+        guard !cache.snapshots.isEmpty || !cache.lastErrorByProvider.isEmpty else { return }
+        widgetTimelineReloader.reloadAllTimelines()
     }
 
     private func applyCachedSnapshots() {

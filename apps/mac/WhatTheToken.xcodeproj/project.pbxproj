@@ -11,6 +11,8 @@
 		00000000000000000000001C = {isa = PBXBuildFile; fileRef = 00000000000000000000001B; };
 		00000000000000000000001D = {isa = PBXBuildFile; fileRef = 00000000000000000000001E; };
 		00000000000000000000001F = {isa = PBXBuildFile; fileRef = 000000000000000000000020; };
+		000000000000000000000029 = {isa = PBXBuildFile; fileRef = 000000000000000000000021; };
+		00000000000000000000002A = {isa = PBXBuildFile; fileRef = 000000000000000000000022; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		200000000000000000000001 = {isa = PBXBuildFile; fileRef = 100000000000000000000001; };
 		200000000000000000000002 = {isa = PBXBuildFile; fileRef = 100000000000000000000002; };
 		200000000000000000000003 = {isa = PBXBuildFile; fileRef = 100000000000000000000003; };
@@ -60,7 +62,6 @@
 		20000000000000000000002F = {isa = PBXBuildFile; fileRef = 10000000000000000000002F; };
 		200000000000000000000030 = {isa = PBXBuildFile; fileRef = 100000000000000000000030; };
 		200000000000000000000031 = {isa = PBXBuildFile; fileRef = 100000000000000000000031; };
-		200000000000000000000032 = {isa = PBXBuildFile; fileRef = 100000000000000000000032; };
 		200000000000000000000033 = {isa = PBXBuildFile; fileRef = 100000000000000000000033; };
 		200000000000000000000034 = {isa = PBXBuildFile; fileRef = 100000000000000000000034; };
 		200000000000000000000035 = {isa = PBXBuildFile; fileRef = 100000000000000000000035; };
@@ -68,7 +69,73 @@
 		200000000000000000000037 = {isa = PBXBuildFile; fileRef = 100000000000000000000037; };
 		200000000000000000000038 = {isa = PBXBuildFile; fileRef = 100000000000000000000038; };
 		200000000000000000000039 = {isa = PBXBuildFile; fileRef = 100000000000000000000039; };
+		20000000000000000000003A = {isa = PBXBuildFile; fileRef = 10000000000000000000003A; };
+		20000000000000000000003B = {isa = PBXBuildFile; fileRef = 10000000000000000000003B; };
+		20000000000000000000003C = {isa = PBXBuildFile; fileRef = 10000000000000000000003C; };
+		20000000000000000000003D = {isa = PBXBuildFile; fileRef = 10000000000000000000003D; };
+		20000000000000000000003E = {isa = PBXBuildFile; fileRef = 10000000000000000000003E; };
+		20000000000000000000003F = {isa = PBXBuildFile; fileRef = 10000000000000000000003F; };
+		200000000000000000000040 = {isa = PBXBuildFile; fileRef = 100000000000000000000040; };
+		200000000000000000000041 = {isa = PBXBuildFile; fileRef = 100000000000000000000041; };
+		200000000000000000000042 = {isa = PBXBuildFile; fileRef = 100000000000000000000042; };
+		200000000000000000000043 = {isa = PBXBuildFile; fileRef = 100000000000000000000043; };
+		200000000000000000000044 = {isa = PBXBuildFile; fileRef = 100000000000000000000044; };
+		200000000000000000000045 = {isa = PBXBuildFile; fileRef = 100000000000000000000045; };
+		200000000000000000000046 = {isa = PBXBuildFile; fileRef = 100000000000000000000046; };
+		200000000000000000000047 = {isa = PBXBuildFile; fileRef = 100000000000000000000047; };
+		200000000000000000000048 = {isa = PBXBuildFile; fileRef = 100000000000000000000048; };
+		200000000000000000000049 = {isa = PBXBuildFile; fileRef = 100000000000000000000049; };
+		200000000000000000000050 = {isa = PBXBuildFile; fileRef = 100000000000000000000050; };
+		200000000000000000000051 = {isa = PBXBuildFile; fileRef = 100000000000000000000051; };
+		200000000000000000000052 = {isa = PBXBuildFile; fileRef = 100000000000000000000052; };
+		200000000000000000000053 = {isa = PBXBuildFile; fileRef = 100000000000000000000053; };
+		200000000000000000000054 = {isa = PBXBuildFile; fileRef = 100000000000000000000054; };
+		200000000000000000000055 = {isa = PBXBuildFile; fileRef = 100000000000000000000055; };
+		200000000000000000000056 = {isa = PBXBuildFile; fileRef = 100000000000000000000056; };
+		200000000000000000000057 = {isa = PBXBuildFile; fileRef = 100000000000000000000057; };
+		200000000000000000000058 = {isa = PBXBuildFile; fileRef = 100000000000000000000058; };
+		200000000000000000000059 = {isa = PBXBuildFile; fileRef = 100000000000000000000059; };
+		20000000000000000000005A = {isa = PBXBuildFile; fileRef = 10000000000000000000005A; };
+		20000000000000000000005B = {isa = PBXBuildFile; fileRef = 10000000000000000000005B; };
+		20000000000000000000005C = {isa = PBXBuildFile; fileRef = 10000000000000000000005C; };
+		300000000000000000000001 = {isa = PBXBuildFile; fileRef = 000000000000000000000026; };
+		300000000000000000000002 = {isa = PBXBuildFile; fileRef = 000000000000000000000027; };
+		300000000000000000000003 = {isa = PBXBuildFile; fileRef = 000000000000000000000028; };
+		300000000000000000000004 = {isa = PBXBuildFile; fileRef = 10000000000000000000001A; };
+		300000000000000000000005 = {isa = PBXBuildFile; fileRef = 100000000000000000000040; };
+		300000000000000000000006 = {isa = PBXBuildFile; fileRef = 100000000000000000000016; };
+		300000000000000000000007 = {isa = PBXBuildFile; fileRef = 100000000000000000000014; };
+		300000000000000000000008 = {isa = PBXBuildFile; fileRef = 100000000000000000000015; };
+		300000000000000000000009 = {isa = PBXBuildFile; fileRef = 100000000000000000000045; };
+		30000000000000000000000A = {isa = PBXBuildFile; fileRef = 100000000000000000000044; };
+		30000000000000000000000B = {isa = PBXBuildFile; fileRef = 100000000000000000000046; };
+		30000000000000000000000C = {isa = PBXBuildFile; fileRef = 10000000000000000000001B; };
+		30000000000000000000000D = {isa = PBXBuildFile; fileRef = 100000000000000000000059; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		00000000000000000000002B = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000001;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000000000031;
+			remoteInfo = WhatTheTokenWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		00000000000000000000002D = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				00000000000000000000002A,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		000000000000000000000009 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhatTheToken.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -80,6 +147,13 @@
 		00000000000000000000001B = {isa = PBXFileReference; lastKnownFileType = text.json; path = Sources/WhatTheTokenMac/Resources/usage-snapshot.fixture.json; sourceTree = "<group>"; };
 		00000000000000000000001E = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Sources/WhatTheTokenMac/Assets.xcassets; sourceTree = "<group>"; };
 		000000000000000000000020 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Packaging/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		000000000000000000000021 = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		000000000000000000000022 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WhatTheTokenWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000023 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Widget/Info.plist; sourceTree = "<group>"; };
+		000000000000000000000024 = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Packaging/WhatTheTokenWidget.entitlements; sourceTree = "<group>"; };
+		000000000000000000000026 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Widget/WhatTheTokenWidget.swift; sourceTree = "<group>"; };
+		000000000000000000000027 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Widget/WidgetTimelineProvider.swift; sourceTree = "<group>"; };
+		000000000000000000000028 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Widget/WidgetSmallView.swift; sourceTree = "<group>"; };
 		100000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/AppModel.swift; sourceTree = "<group>"; };
 		100000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Claude/ClaudeConnectorService.swift; sourceTree = "<group>"; };
 		100000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Claude/ClaudeCredentialStore.swift; sourceTree = "<group>"; };
@@ -129,7 +203,6 @@
 		10000000000000000000002F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Settings/ConnectorActionTitle.swift; sourceTree = "<group>"; };
 		100000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Settings/ConnectorRowView.swift; sourceTree = "<group>"; };
 		100000000000000000000031 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Settings/ConnectorsView.swift; sourceTree = "<group>"; };
-		100000000000000000000032 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Settings/SettingsRootView.swift; sourceTree = "<group>"; };
 		100000000000000000000033 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/WhatTheTokenApp.swift; sourceTree = "<group>"; };
 		100000000000000000000034 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/XcodeSupport/XcodeBundleModule.swift; sourceTree = "<group>"; };
 		100000000000000000000035 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Notifications/NotificationDelivery.swift; sourceTree = "<group>"; };
@@ -137,6 +210,35 @@
 		100000000000000000000037 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Notifications/NotificationState.swift; sourceTree = "<group>"; };
 		100000000000000000000038 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/ViewModels/BackgroundRefreshController.swift; sourceTree = "<group>"; };
 		100000000000000000000039 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Popover/MenuBarStatusLabel.swift; sourceTree = "<group>"; };
+		10000000000000000000003A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Hotkey/HotkeyCombination.swift; sourceTree = "<group>"; };
+		10000000000000000000003B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/AppearanceSettings.swift; sourceTree = "<group>"; };
+		10000000000000000000003C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/HotkeySettings.swift; sourceTree = "<group>"; };
+		10000000000000000000003D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/OnboardingSettings.swift; sourceTree = "<group>"; };
+		10000000000000000000003E = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Hotkey/GlobalHotkeyService.swift; sourceTree = "<group>"; };
+		10000000000000000000003F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/ViewModels/OnboardingState.swift; sourceTree = "<group>"; };
+		100000000000000000000040 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/StalenessThreshold.swift; sourceTree = "<group>"; };
+		100000000000000000000041 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Animation/MenuBarIconPulseAnimator.swift; sourceTree = "<group>"; };
+		100000000000000000000042 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/MenuBar/MenuBarStatusItemImage.swift; sourceTree = "<group>"; };
+		100000000000000000000043 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/MenuBar/MenuBarController.swift; sourceTree = "<group>"; };
+		100000000000000000000044 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Widget/SnapshotEntryBuilder.swift; sourceTree = "<group>"; };
+		100000000000000000000045 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Widget/WidgetEntry.swift; sourceTree = "<group>"; };
+		100000000000000000000046 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/WidgetPreviewView.swift; sourceTree = "<group>"; };
+		100000000000000000000047 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/HotkeyRecorderField.swift; sourceTree = "<group>"; };
+		100000000000000000000048 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/BannerProviderCard.swift; sourceTree = "<group>"; };
+		100000000000000000000049 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/WidgetInstructionsView.swift; sourceTree = "<group>"; };
+		100000000000000000000050 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/GetStartedBanner.swift; sourceTree = "<group>"; };
+		100000000000000000000051 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/AboutTabView.swift; sourceTree = "<group>"; };
+		100000000000000000000052 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/ToolsTabView.swift; sourceTree = "<group>"; };
+		100000000000000000000053 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/StatusTabView.swift; sourceTree = "<group>"; };
+		100000000000000000000054 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Settings/NotificationAlertsView.swift; sourceTree = "<group>"; };
+		100000000000000000000055 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/NotificationsTabView.swift; sourceTree = "<group>"; };
+		100000000000000000000056 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/LaunchWindowRootView.swift; sourceTree = "<group>"; };
+		100000000000000000000057 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/MacAppDelegate.swift; sourceTree = "<group>"; };
+		100000000000000000000058 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/LaunchWindowController.swift; sourceTree = "<group>"; };
+		100000000000000000000059 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/AppGroupIdentifier.swift; sourceTree = "<group>"; };
+		10000000000000000000005A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/AppLogger.swift; sourceTree = "<group>"; };
+		10000000000000000000005B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/AppStartupRoutine.swift; sourceTree = "<group>"; };
+		10000000000000000000005C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/StatusTabCopy.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -148,6 +250,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		00000000000000000000002F = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				000000000000000000000029,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -156,6 +266,7 @@
 			children = (
 				000000000000000000000005,
 				000000000000000000000006,
+				000000000000000000000025,
 				000000000000000000000007,
 				000000000000000000000008,
 				000000000000000000000004,
@@ -166,6 +277,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000009,
+				000000000000000000000022,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -174,6 +286,7 @@
 			isa = PBXGroup;
 			children = (
 				100000000000000000000001,
+				100000000000000000000041,
 				100000000000000000000002,
 				100000000000000000000003,
 				100000000000000000000004,
@@ -192,20 +305,29 @@
 				100000000000000000000011,
 				100000000000000000000012,
 				100000000000000000000013,
+				100000000000000000000043,
+				100000000000000000000042,
 				100000000000000000000014,
 				100000000000000000000015,
 				100000000000000000000016,
+				10000000000000000000003A,
+				10000000000000000000003E,
 				100000000000000000000035,
 				100000000000000000000036,
 				100000000000000000000037,
 				100000000000000000000017,
+				10000000000000000000003B,
 				100000000000000000000018,
 				100000000000000000000019,
+				10000000000000000000003C,
+				10000000000000000000003D,
+				100000000000000000000040,
 				10000000000000000000001A,
 				10000000000000000000001B,
 				10000000000000000000001C,
 				100000000000000000000038,
 				10000000000000000000001D,
+				10000000000000000000003F,
 				10000000000000000000001E,
 				10000000000000000000001F,
 				100000000000000000000020,
@@ -216,8 +338,27 @@
 				100000000000000000000025,
 				100000000000000000000026,
 				100000000000000000000027,
+				100000000000000000000044,
 				100000000000000000000028,
+				100000000000000000000045,
 				100000000000000000000039,
+				100000000000000000000046,
+				100000000000000000000047,
+				100000000000000000000048,
+				100000000000000000000049,
+				100000000000000000000050,
+				100000000000000000000051,
+				100000000000000000000052,
+				100000000000000000000053,
+				100000000000000000000054,
+				100000000000000000000055,
+				100000000000000000000056,
+				100000000000000000000057,
+				100000000000000000000058,
+				100000000000000000000059,
+				10000000000000000000005A,
+				10000000000000000000005B,
+				10000000000000000000005C,
 				100000000000000000000029,
 				10000000000000000000002A,
 				10000000000000000000002B,
@@ -227,7 +368,6 @@
 				10000000000000000000002F,
 				100000000000000000000030,
 				100000000000000000000031,
-				100000000000000000000032,
 				100000000000000000000033,
 				100000000000000000000034,
 			);
@@ -251,6 +391,7 @@
 				000000000000000000000017,
 				000000000000000000000019,
 				00000000000000000000001A,
+				000000000000000000000024,
 				000000000000000000000020,
 			);
 			name = Packaging;
@@ -259,8 +400,20 @@
 		000000000000000000000008 = {
 			isa = PBXGroup;
 			children = (
+				000000000000000000000021,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		000000000000000000000025 = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000023,
+				000000000000000000000026,
+				000000000000000000000027,
+				000000000000000000000028,
+			);
+			name = Widget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -273,10 +426,12 @@
 				00000000000000000000000A,
 				00000000000000000000000C,
 				00000000000000000000000B,
+				00000000000000000000002D,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				00000000000000000000002C,
 			);
 			name = WhatTheToken;
 			packageProductDependencies = (
@@ -285,6 +440,23 @@
 			productName = WhatTheToken;
 			productReference = 000000000000000000000009;
 			productType = "com.apple.product-type.application";
+		};
+		000000000000000000000031 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 000000000000000000000032;
+			buildPhases = (
+				00000000000000000000002E,
+				00000000000000000000002F,
+				000000000000000000000030,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WhatTheTokenWidget;
+			productName = WhatTheTokenWidget;
+			productReference = 000000000000000000000022;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -296,6 +468,9 @@
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					000000000000000000000002 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					000000000000000000000031 = {
 						CreatedOnToolsVersion = 26.0;
 					};
 				};
@@ -317,6 +492,7 @@
 			projectRoot = "";
 			targets = (
 				000000000000000000000002,
+				000000000000000000000031,
 			);
 		};
 /* End PBXProject section */
@@ -332,6 +508,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		000000000000000000000030 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -340,6 +523,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				200000000000000000000001,
+				200000000000000000000041,
 				200000000000000000000002,
 				200000000000000000000003,
 				200000000000000000000004,
@@ -358,20 +542,29 @@
 				200000000000000000000011,
 				200000000000000000000012,
 				200000000000000000000013,
+				200000000000000000000043,
+				200000000000000000000042,
 				200000000000000000000014,
 				200000000000000000000015,
 				200000000000000000000016,
+				20000000000000000000003A,
+				20000000000000000000003E,
 				200000000000000000000035,
 				200000000000000000000036,
 				200000000000000000000037,
 				200000000000000000000017,
+				20000000000000000000003B,
 				200000000000000000000018,
 				200000000000000000000019,
+				20000000000000000000003C,
+				20000000000000000000003D,
+				200000000000000000000040,
 				20000000000000000000001A,
 				20000000000000000000001B,
 				20000000000000000000001C,
 				200000000000000000000038,
 				20000000000000000000001D,
+				20000000000000000000003F,
 				20000000000000000000001E,
 				20000000000000000000001F,
 				200000000000000000000020,
@@ -382,8 +575,27 @@
 				200000000000000000000025,
 				200000000000000000000026,
 				200000000000000000000027,
+				200000000000000000000044,
 				200000000000000000000028,
+				200000000000000000000045,
 				200000000000000000000039,
+				200000000000000000000046,
+				200000000000000000000047,
+				200000000000000000000048,
+				200000000000000000000049,
+				200000000000000000000050,
+				200000000000000000000051,
+				200000000000000000000052,
+				200000000000000000000053,
+				200000000000000000000054,
+				200000000000000000000055,
+				200000000000000000000056,
+				200000000000000000000057,
+				200000000000000000000058,
+				200000000000000000000059,
+				20000000000000000000005A,
+				20000000000000000000005B,
+				20000000000000000000005C,
 				200000000000000000000029,
 				20000000000000000000002A,
 				20000000000000000000002B,
@@ -393,13 +605,40 @@
 				20000000000000000000002F,
 				200000000000000000000030,
 				200000000000000000000031,
-				200000000000000000000032,
 				200000000000000000000033,
 				200000000000000000000034,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		00000000000000000000002E = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				300000000000000000000001,
+				300000000000000000000002,
+				300000000000000000000003,
+				300000000000000000000004,
+				300000000000000000000005,
+				300000000000000000000006,
+				300000000000000000000007,
+				300000000000000000000008,
+				300000000000000000000009,
+				30000000000000000000000A,
+				30000000000000000000000B,
+				30000000000000000000000C,
+				30000000000000000000000D,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		00000000000000000000002C = {
+			isa = PBXTargetDependency;
+			target = 000000000000000000000031;
+			targetProxy = 00000000000000000000002B;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		00000000000000000000000F = {
@@ -519,6 +758,52 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				GENERATE_INFOPLIST_FILE = NO;
+				PROVISIONING_PROFILE_SPECIFIER = "$(WTT_DEVELOPER_ID_APP_PROFILE_SPECIFIER)";
+			};
+			name = Release;
+		};
+		000000000000000000000033 = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 000000000000000000000016;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Packaging/WhatTheTokenWidget.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Widget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whatthetoken.mac.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG WTT_WIDGET_EXTENSION";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		000000000000000000000034 = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 000000000000000000000017;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Packaging/WhatTheTokenWidget.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Widget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.whatthetoken.mac.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "$(WTT_DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = WTT_WIDGET_EXTENSION;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -539,6 +824,15 @@
 			buildConfigurations = (
 				00000000000000000000000F,
 				000000000000000000000010,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		000000000000000000000032 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				000000000000000000000033,
+				000000000000000000000034,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

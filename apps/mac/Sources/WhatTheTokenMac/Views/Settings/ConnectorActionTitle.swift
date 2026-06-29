@@ -38,7 +38,7 @@ func claudeActionTitle(for state: ClaudeConnectorSetupState) -> String {
         return "Checking..."
     case .connected:
         return "Refresh Now"
-    case .networkError, .schemaChanged, .rateLimited:
+    case .networkError, .schemaChanged, .rateLimited, .sessionExpired:
         return "Retry"
     }
 }

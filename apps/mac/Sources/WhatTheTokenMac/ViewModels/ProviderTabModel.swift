@@ -19,6 +19,7 @@ struct ProviderTabModel: Equatable, Sendable {
         case missingCredentials
         case missingCLI
         case tokenInvalid
+        case sessionExpired
         case rateLimited
     }
 
@@ -84,6 +85,8 @@ extension ProviderTabModel {
             body = .disconnected(reason: .claude(.missingCLI))
         case .tokenInvalid:
             body = .disconnected(reason: .claude(.tokenInvalid))
+        case .sessionExpired:
+            body = .disconnected(reason: .claude(.sessionExpired))
         case .rateLimited:
             body = .disconnected(reason: .claude(.rateLimited))
         case .networkError:

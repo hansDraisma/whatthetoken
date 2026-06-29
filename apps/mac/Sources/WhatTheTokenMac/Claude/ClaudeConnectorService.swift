@@ -54,7 +54,18 @@ struct ClaudeConnectorService: Sendable {
             )
         }
 
-        let outcome = await fetchUsageOutcome(credential: credential)
+        var outcome = await fetchUsageOutcome(credential: credential)
+
+        // Token-rotation race: the CLI may have rewritten the keychain access
+        // token between our read and our request, so the token we sent is
+        // already revoked. Re-read once; if the token changed, retry the fetch
+        // a single time with the fresh token. We never refresh tokens ourselves.
+        if case let .failure(state) = outcome,
+           state == .tokenInvalid || state == .sessionExpired,
+           let rotated = try? credentialStore.readCredential(),
+           rotated.accessToken != credential.accessToken {
+            outcome = await fetchUsageOutcome(credential: rotated)
+        }
 
         switch outcome {
         case let .failure(state):

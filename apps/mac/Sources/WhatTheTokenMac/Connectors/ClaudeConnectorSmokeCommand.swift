@@ -122,7 +122,8 @@ private struct LiveClaudeConnectorSmokeRunner: ClaudeConnectorSmokeRunning {
                 claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: claudeVersion),
                 deviceId: "local_mac",
                 userAccountId: "local_user",
-                now: { ISO8601DateFormatter().string(from: Date()) }
+                now: { ISO8601DateFormatter().string(from: Date()) },
+                currentDate: { Date() }
             )
         ).run()
     }

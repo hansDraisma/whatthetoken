@@ -1,7 +1,12 @@
 import Foundation
 
+struct ClaudeStoredCredential: Equatable, Sendable {
+    let accessToken: String
+    let expiresAt: Date?
+}
+
 protocol ClaudeCredentialStore: Sendable {
-    func readAccessToken() throws -> String?
+    func readCredential() throws -> ClaudeStoredCredential?
 }
 
 protocol ClaudeCredentialCommandRunning: Sendable {
@@ -27,7 +32,7 @@ struct MacOSClaudeCredentialStore: ClaudeCredentialStore {
         self.commandRunner = commandRunner
     }
 
-    func readAccessToken() throws -> String? {
+    func readCredential() throws -> ClaudeStoredCredential? {
         let result: ClaudeCredentialCommandResult
         do {
             result = try commandRunner.readGenericPassword(serviceName: serviceName)
@@ -39,10 +44,10 @@ struct MacOSClaudeCredentialStore: ClaudeCredentialStore {
             return nil
         }
 
-        return try decodeAccessToken(from: result.standardOutput)
+        return try decodeCredential(from: result.standardOutput)
     }
 
-    private func decodeAccessToken(from data: Data) throws -> String? {
+    private func decodeCredential(from data: Data) throws -> ClaudeStoredCredential? {
         guard let text = String(data: data, encoding: .utf8) else {
             throw ClaudeCredentialStoreError.invalidUtf8
         }
@@ -53,7 +58,10 @@ struct MacOSClaudeCredentialStore: ClaudeCredentialStore {
 
         do {
             let credentials = try JSONDecoder().decode(ClaudeCredentials.self, from: jsonData)
-            return credentials.accessToken?.isEmpty == false ? credentials.accessToken : nil
+            guard let token = credentials.accessToken, !token.isEmpty else {
+                return nil
+            }
+            return ClaudeStoredCredential(accessToken: token, expiresAt: credentials.expiresAt)
         } catch {
             throw ClaudeCredentialStoreError.invalidCredentialJson
         }

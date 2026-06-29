@@ -29,6 +29,7 @@ struct ClaudeConnectorService: Sendable {
     let deviceId: String
     let userAccountId: String
     let now: @Sendable () -> String
+    let currentDate: @Sendable () -> Date
 
     func refresh() async throws -> ClaudeConnectorResult {
         if !settings.isEnabled {
@@ -42,7 +43,7 @@ struct ClaudeConnectorService: Sendable {
             )
         }
 
-        guard let accessToken = try credentialStore.readAccessToken() else {
+        guard let credential = try credentialStore.readCredential() else {
             return ClaudeConnectorResult(
                 snapshots: [],
                 status: ConnectorStatus(
@@ -53,49 +54,83 @@ struct ClaudeConnectorService: Sendable {
             )
         }
 
-        let response: ClaudeUsageResponse
-        do {
-            response = try await usageFetcher.fetchUsage(
-                accessToken: accessToken,
-                claudeVersion: claudeVersionProvider.claudeVersion
-            )
-        } catch let error as ClaudeUsageClientError {
+        var outcome = await fetchUsageOutcome(credential: credential)
+
+        // Token-rotation race: the CLI may have rewritten the keychain access
+        // token between our read and our request, so the token we sent is
+        // already revoked. Re-read once; if the token changed, retry the fetch
+        // a single time with the fresh token. We never refresh tokens ourselves.
+        if case let .failure(state) = outcome,
+           state == .tokenInvalid || state == .sessionExpired,
+           let rotated = try? credentialStore.readCredential(),
+           rotated.accessToken != credential.accessToken {
+            outcome = await fetchUsageOutcome(credential: rotated)
+        }
+
+        switch outcome {
+        case let .failure(state):
             return ClaudeConnectorResult(
                 snapshots: [],
                 status: ConnectorStatus(
                     product: "claude_code",
-                    source: source(state: sourceState(for: error)),
-                    message: message(for: error)
+                    source: source(state: state),
+                    message: message(for: state)
                 )
             )
-        } catch {
+        case let .success(response):
+            let connectedSource = source(state: .connected)
+            let snapshots = ClaudeUsageMapper.map(
+                response,
+                userAccountId: userAccountId,
+                deviceId: deviceId,
+                observedAt: now(),
+                source: connectedSource
+            )
+
             return ClaudeConnectorResult(
-                snapshots: [],
+                snapshots: snapshots,
                 status: ConnectorStatus(
                     product: "claude_code",
-                    source: source(state: .networkError),
-                    message: "Claude Code usage could not be refreshed"
+                    source: connectedSource,
+                    message: "Claude Code connected"
                 )
             )
         }
+    }
 
-        let connectedSource = source(state: .connected)
-        let snapshots = ClaudeUsageMapper.map(
-            response,
-            userAccountId: userAccountId,
-            deviceId: deviceId,
-            observedAt: now(),
-            source: connectedSource
-        )
+    private enum FetchOutcome {
+        case success(ClaudeUsageResponse)
+        case failure(ConnectorSourceState)
+    }
 
-        return ClaudeConnectorResult(
-            snapshots: snapshots,
-            status: ConnectorStatus(
-                product: "claude_code",
-                source: connectedSource,
-                message: "Claude Code connected"
+    private func fetchUsageOutcome(credential: ClaudeStoredCredential) async -> FetchOutcome {
+        do {
+            let response = try await usageFetcher.fetchUsage(
+                accessToken: credential.accessToken,
+                claudeVersion: claudeVersionProvider.claudeVersion
             )
-        )
+            return .success(response)
+        } catch let error as ClaudeUsageClientError {
+            switch error {
+            case .tokenInvalid:
+                return .failure(tokenFailureState(credential: credential))
+            case .rateLimited:
+                return .failure(.rateLimited)
+            case .networkError:
+                return .failure(.networkError)
+            case .schemaChanged:
+                return .failure(.schemaChanged)
+            }
+        } catch {
+            return .failure(.networkError)
+        }
+    }
+
+    private func tokenFailureState(credential: ClaudeStoredCredential) -> ConnectorSourceState {
+        if let expiresAt = credential.expiresAt, expiresAt <= currentDate() {
+            return .sessionExpired
+        }
+        return .tokenInvalid
     }
 
     private func source(state: ConnectorSourceState) -> ConnectorSource {
@@ -108,29 +143,18 @@ struct ClaudeConnectorService: Sendable {
         )
     }
 
-    private func sourceState(for error: ClaudeUsageClientError) -> ConnectorSourceState {
-        switch error {
-        case .tokenInvalid:
-            return .tokenInvalid
-        case .rateLimited:
-            return .rateLimited
-        case .networkError:
-            return .networkError
-        case .schemaChanged:
-            return .schemaChanged
-        }
-    }
-
-    private func message(for error: ClaudeUsageClientError) -> String {
-        switch error {
+    private func message(for state: ConnectorSourceState) -> String {
+        switch state {
         case .tokenInvalid:
             return "Claude Code credentials are invalid"
+        case .sessionExpired:
+            return "Claude Code session expired"
         case .rateLimited:
             return "Claude usage is rate limited"
-        case .networkError:
-            return "Claude Code usage could not be refreshed"
         case .schemaChanged:
             return "Claude usage response changed"
+        case .connected, .notConnected, .missingCredentials, .permissionDenied, .networkError, .stale:
+            return "Claude Code usage could not be refreshed"
         }
     }
 }

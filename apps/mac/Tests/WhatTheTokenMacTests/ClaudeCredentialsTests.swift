@@ -26,10 +26,54 @@ import Testing
 
 @Test func syntheticTokenIsRedactedForDescriptions() {
     let credentials = ClaudeCredentials(
-        claudeAiOauth: ClaudeOAuthCredential(accessToken: "synthetic-access-token")
+        claudeAiOauth: ClaudeOAuthCredential(accessToken: "synthetic-access-token", expiresAt: nil)
     )
 
     #expect(String(describing: credentials) == "ClaudeCredentials(accessToken: redacted)")
+}
+
+@Test func decodesExpiresAtMillisAsDate() throws {
+    let json = """
+    {
+      "claudeAiOauth": {
+        "accessToken": "synthetic-access-token",
+        "expiresAt": 1782707138578
+      }
+    }
+    """.data(using: .utf8)!
+
+    let credentials = try JSONDecoder().decode(ClaudeCredentials.self, from: json)
+
+    #expect(credentials.accessToken == "synthetic-access-token")
+    #expect(credentials.expiresAt == Date(timeIntervalSince1970: 1782707138.578))
+}
+
+@Test func missingExpiresAtYieldsNilDate() throws {
+    let json = """
+    { "claudeAiOauth": { "accessToken": "synthetic-access-token" } }
+    """.data(using: .utf8)!
+
+    let credentials = try JSONDecoder().decode(ClaudeCredentials.self, from: json)
+
+    #expect(credentials.expiresAt == nil)
+}
+
+@Test func unexpectedExpiresAtTypeStillDecodesAccessToken() throws {
+    // expiresAt is non-essential: an upstream format change must not break
+    // extraction of the essential access token.
+    let json = """
+    {
+      "claudeAiOauth": {
+        "accessToken": "synthetic-access-token",
+        "expiresAt": "2026-06-29T07:05:38Z"
+      }
+    }
+    """.data(using: .utf8)!
+
+    let credentials = try JSONDecoder().decode(ClaudeCredentials.self, from: json)
+
+    #expect(credentials.accessToken == "synthetic-access-token")
+    #expect(credentials.expiresAt == nil)
 }
 
 @Test func macOSCredentialStoreReadsAccessTokenFromSecurityOutput() throws {
@@ -45,10 +89,30 @@ import Testing
     )
     let store = MacOSClaudeCredentialStore(commandRunner: runner)
 
-    let accessToken = try store.readAccessToken()
+    let credential = try store.readCredential()
 
-    #expect(accessToken == "synthetic-access-token")
+    #expect(credential?.accessToken == "synthetic-access-token")
     #expect(runner.lastServiceName == "Claude Code-credentials")
+}
+
+@Test func macOSCredentialStoreReadsExpiryFromSecurityOutput() throws {
+    let json = """
+    {
+      "claudeAiOauth": {
+        "accessToken": "synthetic-access-token",
+        "expiresAt": 1782707138578
+      }
+    }
+    """.data(using: .utf8)!
+    let runner = StubClaudeCredentialCommandRunner(
+        result: .success(ClaudeCredentialCommandResult(terminationStatus: 0, standardOutput: json))
+    )
+    let store = MacOSClaudeCredentialStore(commandRunner: runner)
+
+    let credential = try store.readCredential()
+
+    #expect(credential?.accessToken == "synthetic-access-token")
+    #expect(credential?.expiresAt == Date(timeIntervalSince1970: 1782707138.578))
 }
 
 @Test func macOSCredentialStoreReturnsNilWhenSecurityItemIsMissing() throws {
@@ -57,9 +121,9 @@ import Testing
     )
     let store = MacOSClaudeCredentialStore(commandRunner: runner)
 
-    let accessToken = try store.readAccessToken()
+    let credential = try store.readCredential()
 
-    #expect(accessToken == nil)
+    #expect(credential == nil)
 }
 
 @Test func macOSCredentialStoreMapsRunnerFailuresToCommandFailed() throws {
@@ -67,7 +131,7 @@ import Testing
     let store = MacOSClaudeCredentialStore(commandRunner: runner)
 
     #expect(throws: ClaudeCredentialStoreError.commandFailed) {
-        _ = try store.readAccessToken()
+        _ = try store.readCredential()
     }
 }
 

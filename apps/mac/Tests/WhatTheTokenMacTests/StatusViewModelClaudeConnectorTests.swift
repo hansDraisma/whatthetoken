@@ -90,10 +90,29 @@ import Testing
     #expect(ClaudeConnectorSetupCopy.title(for: .missingCredentials) == "Claude Code credentials were not found")
     #expect(ClaudeConnectorSetupCopy.title(for: .missingClaudeCli) == "Claude Code CLI was not found")
     #expect(ClaudeConnectorSetupCopy.title(for: .tokenInvalid) == "Claude Code credentials are invalid")
+    #expect(ClaudeConnectorSetupCopy.title(for: .sessionExpired) == "Claude Code session expired")
     #expect(ClaudeConnectorSetupCopy.title(for: .rateLimited) == "Claude usage is rate limited")
     #expect(ClaudeConnectorSetupCopy.title(for: .networkError) == "Claude Code usage could not be refreshed")
     #expect(ClaudeConnectorSetupCopy.title(for: .schemaChanged) == "Claude usage response changed")
     #expect(ClaudeConnectorSetupCopy.trustMessage == "Reads Claude Code credentials locally only after you connect.")
+}
+
+@Test func sessionExpiredActionTitleIsRetry() {
+    #expect(claudeActionTitle(for: .sessionExpired) == "Retry")
+}
+
+@MainActor
+@Test func sessionExpiredResultSurfacesSessionExpiredState() async {
+    let refresher = CountingClaudeConnectorRefresher(result: .success(.sessionExpired()))
+    let viewModel = StatusViewModel(claudeRefresher: refresher)
+
+    await viewModel.connectClaudeCode()
+
+    #expect(viewModel.connectorState == .sessionExpired)
+    #expect(viewModel.connectorStatusMessage == "Claude Code session expired")
+
+    let tabModel = ProviderTabModel.from(viewModel: viewModel, tab: .claude)
+    #expect(tabModel.body == .disconnected(reason: .claude(.sessionExpired)))
 }
 
 @MainActor
@@ -232,6 +251,18 @@ private extension ClaudeConnectorResult {
                 product: "claude_code",
                 source: source,
                 message: "Claude Code credentials were not found"
+            )
+        )
+    }
+
+    static func sessionExpired() -> ClaudeConnectorResult {
+        let source = ConnectorSource.claude(state: .sessionExpired)
+        return ClaudeConnectorResult(
+            snapshots: [],
+            status: ConnectorStatus(
+                product: "claude_code",
+                source: source,
+                message: "Claude Code session expired"
             )
         )
     }

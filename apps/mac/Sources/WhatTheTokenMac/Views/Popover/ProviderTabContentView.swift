@@ -102,6 +102,8 @@ struct ProviderTabContentView: View {
                 return "Claude Code CLI was not found"
             case .tokenInvalid:
                 return "Claude Code credentials are invalid"
+            case .sessionExpired:
+                return "Claude Code session expired"
             case .rateLimited:
                 return "Claude usage is rate limited"
             }
@@ -121,6 +123,9 @@ struct ProviderTabContentView: View {
     }
 
     private func detail(for reason: ProviderTabModel.DisconnectedReason) -> String {
+        if case .claude(.sessionExpired) = reason {
+            return "Open Claude Code to refresh your session, then retry."
+        }
         switch model.tab {
         case .claude:
             return "Connect Claude Code in Settings to see remaining usage."

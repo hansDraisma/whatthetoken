@@ -113,7 +113,9 @@ import Testing
 
     #expect(result.snapshots.isEmpty)
     #expect(result.status.source.state == .tokenInvalid)
-    #expect(credentialStore.readCount == 1)
+    // A 401 triggers one extra keychain re-read to detect token rotation; the
+    // token is unchanged here, so no retry fetch is made.
+    #expect(credentialStore.readCount == 2)
     #expect(usageFetcher.fetchCount == 1)
 }
 

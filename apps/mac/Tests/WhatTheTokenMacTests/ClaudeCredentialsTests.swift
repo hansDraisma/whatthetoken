@@ -71,10 +71,30 @@ import Testing
     )
     let store = MacOSClaudeCredentialStore(commandRunner: runner)
 
-    let accessToken = try store.readAccessToken()
+    let credential = try store.readCredential()
 
-    #expect(accessToken == "synthetic-access-token")
+    #expect(credential?.accessToken == "synthetic-access-token")
     #expect(runner.lastServiceName == "Claude Code-credentials")
+}
+
+@Test func macOSCredentialStoreReadsExpiryFromSecurityOutput() throws {
+    let json = """
+    {
+      "claudeAiOauth": {
+        "accessToken": "synthetic-access-token",
+        "expiresAt": 1782707138578
+      }
+    }
+    """.data(using: .utf8)!
+    let runner = StubClaudeCredentialCommandRunner(
+        result: .success(ClaudeCredentialCommandResult(terminationStatus: 0, standardOutput: json))
+    )
+    let store = MacOSClaudeCredentialStore(commandRunner: runner)
+
+    let credential = try store.readCredential()
+
+    #expect(credential?.accessToken == "synthetic-access-token")
+    #expect(credential?.expiresAt == Date(timeIntervalSince1970: 1782707138.578))
 }
 
 @Test func macOSCredentialStoreReturnsNilWhenSecurityItemIsMissing() throws {
@@ -83,9 +103,9 @@ import Testing
     )
     let store = MacOSClaudeCredentialStore(commandRunner: runner)
 
-    let accessToken = try store.readAccessToken()
+    let credential = try store.readCredential()
 
-    #expect(accessToken == nil)
+    #expect(credential == nil)
 }
 
 @Test func macOSCredentialStoreMapsRunnerFailuresToCommandFailed() throws {
@@ -93,7 +113,7 @@ import Testing
     let store = MacOSClaudeCredentialStore(commandRunner: runner)
 
     #expect(throws: ClaudeCredentialStoreError.commandFailed) {
-        _ = try store.readAccessToken()
+        _ = try store.readCredential()
     }
 }
 

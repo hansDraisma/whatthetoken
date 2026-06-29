@@ -156,15 +156,15 @@ private func refreshWithFetcherError(_ error: ClaudeUsageClientError) async thro
 
 private final class StubClaudeCredentialStore: ClaudeCredentialStore, @unchecked Sendable {
     private(set) var readCount = 0
-    var accessToken: String?
+    var credential: ClaudeStoredCredential?
 
-    init(accessToken: String?) {
-        self.accessToken = accessToken
+    init(accessToken: String?, expiresAt: Date? = nil) {
+        self.credential = accessToken.map { ClaudeStoredCredential(accessToken: $0, expiresAt: expiresAt) }
     }
 
-    func readAccessToken() throws -> String? {
+    func readCredential() throws -> ClaudeStoredCredential? {
         readCount += 1
-        return accessToken
+        return credential
     }
 }
 

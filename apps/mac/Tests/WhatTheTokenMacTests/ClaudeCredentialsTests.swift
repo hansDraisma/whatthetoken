@@ -26,10 +26,36 @@ import Testing
 
 @Test func syntheticTokenIsRedactedForDescriptions() {
     let credentials = ClaudeCredentials(
-        claudeAiOauth: ClaudeOAuthCredential(accessToken: "synthetic-access-token")
+        claudeAiOauth: ClaudeOAuthCredential(accessToken: "synthetic-access-token", expiresAt: nil)
     )
 
     #expect(String(describing: credentials) == "ClaudeCredentials(accessToken: redacted)")
+}
+
+@Test func decodesExpiresAtMillisAsDate() throws {
+    let json = """
+    {
+      "claudeAiOauth": {
+        "accessToken": "synthetic-access-token",
+        "expiresAt": 1782707138578
+      }
+    }
+    """.data(using: .utf8)!
+
+    let credentials = try JSONDecoder().decode(ClaudeCredentials.self, from: json)
+
+    #expect(credentials.accessToken == "synthetic-access-token")
+    #expect(credentials.expiresAt == Date(timeIntervalSince1970: 1782707138.578))
+}
+
+@Test func missingExpiresAtYieldsNilDate() throws {
+    let json = """
+    { "claudeAiOauth": { "accessToken": "synthetic-access-token" } }
+    """.data(using: .utf8)!
+
+    let credentials = try JSONDecoder().decode(ClaudeCredentials.self, from: json)
+
+    #expect(credentials.expiresAt == nil)
 }
 
 @Test func macOSCredentialStoreReadsAccessTokenFromSecurityOutput() throws {

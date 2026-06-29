@@ -42,7 +42,7 @@ struct ClaudeConnectorService: Sendable {
             )
         }
 
-        guard let accessToken = try credentialStore.readAccessToken() else {
+        guard let credential = try credentialStore.readCredential() else {
             return ClaudeConnectorResult(
                 snapshots: [],
                 status: ConnectorStatus(
@@ -56,7 +56,7 @@ struct ClaudeConnectorService: Sendable {
         let response: ClaudeUsageResponse
         do {
             response = try await usageFetcher.fetchUsage(
-                accessToken: accessToken,
+                accessToken: credential.accessToken,
                 claudeVersion: claudeVersionProvider.claudeVersion
             )
         } catch let error as ClaudeUsageClientError {

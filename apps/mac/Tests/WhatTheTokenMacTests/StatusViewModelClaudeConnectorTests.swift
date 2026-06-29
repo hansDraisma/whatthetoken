@@ -102,6 +102,20 @@ import Testing
 }
 
 @MainActor
+@Test func sessionExpiredResultSurfacesSessionExpiredState() async {
+    let refresher = CountingClaudeConnectorRefresher(result: .success(.sessionExpired()))
+    let viewModel = StatusViewModel(claudeRefresher: refresher)
+
+    await viewModel.connectClaudeCode()
+
+    #expect(viewModel.connectorState == .sessionExpired)
+    #expect(viewModel.connectorStatusMessage == "Claude Code session expired")
+
+    let tabModel = ProviderTabModel.from(viewModel: viewModel, tab: .claude)
+    #expect(tabModel.body == .disconnected(reason: .claude(.sessionExpired)))
+}
+
+@MainActor
 @Test func connectClaudeCodeFailsBeforeCredentialReadWhenCliVersionIsUnknown() async {
     let refresher = CountingClaudeConnectorRefresher(result: .success(.connected()))
     let viewModel = StatusViewModel(
@@ -237,6 +251,18 @@ private extension ClaudeConnectorResult {
                 product: "claude_code",
                 source: source,
                 message: "Claude Code credentials were not found"
+            )
+        )
+    }
+
+    static func sessionExpired() -> ClaudeConnectorResult {
+        let source = ConnectorSource.claude(state: .sessionExpired)
+        return ClaudeConnectorResult(
+            snapshots: [],
+            status: ConnectorStatus(
+                product: "claude_code",
+                source: source,
+                message: "Claude Code session expired"
             )
         )
     }

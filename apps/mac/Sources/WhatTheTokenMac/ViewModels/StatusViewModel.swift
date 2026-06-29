@@ -688,7 +688,8 @@ final class StatusViewModel {
                 claudeVersionProvider: versionProvider,
                 deviceId: "local_mac",
                 userAccountId: "local_user",
-                now: { ISO8601DateFormatter().string(from: Date()) }
+                now: { ISO8601DateFormatter().string(from: Date()) },
+                currentDate: { Date() }
             ),
             claudeVersionProvider: versionProvider,
             codexRefresher: CodexConnectorService(

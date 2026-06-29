@@ -19,7 +19,8 @@ import Testing
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
         deviceId: "device_mac_01",
         userAccountId: "local_user",
-        now: { "2026-05-04T10:00:00.000Z" }
+        now: { "2026-05-04T10:00:00.000Z" },
+        currentDate: { Date(timeIntervalSince1970: 2000) }
     )
 
     let result = try await service.refresh()
@@ -46,7 +47,8 @@ import Testing
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
         deviceId: "device_mac_01",
         userAccountId: "local_user",
-        now: { "2026-05-04T10:00:00.000Z" }
+        now: { "2026-05-04T10:00:00.000Z" },
+        currentDate: { Date(timeIntervalSince1970: 2000) }
     )
 
     let result = try await service.refresh()
@@ -74,7 +76,8 @@ import Testing
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
         deviceId: "device_mac_01",
         userAccountId: "local_user",
-        now: { "2026-05-04T10:00:00.000Z" }
+        now: { "2026-05-04T10:00:00.000Z" },
+        currentDate: { Date(timeIntervalSince1970: 2000) }
     )
 
     let result = try await service.refresh()
@@ -102,7 +105,8 @@ import Testing
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
         deviceId: "device_mac_01",
         userAccountId: "local_user",
-        now: { "2026-05-04T10:00:00.000Z" }
+        now: { "2026-05-04T10:00:00.000Z" },
+        currentDate: { Date(timeIntervalSince1970: 2000) }
     )
 
     let result = try await service.refresh()
@@ -111,6 +115,54 @@ import Testing
     #expect(result.status.source.state == .tokenInvalid)
     #expect(credentialStore.readCount == 1)
     #expect(usageFetcher.fetchCount == 1)
+}
+
+@Test func tokenInvalidWithExpiredCredentialReturnsSessionExpired() async throws {
+    let credentialStore = StubClaudeCredentialStore(
+        accessToken: "synthetic-access-token",
+        expiresAt: Date(timeIntervalSince1970: 1000)
+    )
+    let usageFetcher = StubClaudeUsageFetcher(error: ClaudeUsageClientError.tokenInvalid)
+
+    let service = ClaudeConnectorService(
+        settings: ClaudeConnectorSettings(isEnabled: true),
+        credentialStore: credentialStore,
+        usageFetcher: usageFetcher,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
+        deviceId: "device_mac_01",
+        userAccountId: "local_user",
+        now: { "2026-05-04T10:00:00.000Z" },
+        currentDate: { Date(timeIntervalSince1970: 2000) }
+    )
+
+    let result = try await service.refresh()
+
+    #expect(result.status.source.state == .sessionExpired)
+    #expect(result.status.message == "Claude Code session expired")
+}
+
+@Test func tokenInvalidWithUnexpiredCredentialReturnsTokenInvalid() async throws {
+    let credentialStore = StubClaudeCredentialStore(
+        accessToken: "synthetic-access-token",
+        expiresAt: Date(timeIntervalSince1970: 9999)
+    )
+    let usageFetcher = StubClaudeUsageFetcher(error: ClaudeUsageClientError.tokenInvalid)
+
+    let service = ClaudeConnectorService(
+        settings: ClaudeConnectorSettings(isEnabled: true),
+        credentialStore: credentialStore,
+        usageFetcher: usageFetcher,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
+        deviceId: "device_mac_01",
+        userAccountId: "local_user",
+        now: { "2026-05-04T10:00:00.000Z" },
+        currentDate: { Date(timeIntervalSince1970: 2000) }
+    )
+
+    let result = try await service.refresh()
+
+    #expect(result.status.source.state == .tokenInvalid)
+    #expect(result.status.message == "Claude Code credentials are invalid")
 }
 
 @Test func rateLimitedErrorReturnsRateLimitedStatus() async throws {
@@ -148,7 +200,8 @@ private func refreshWithFetcherError(_ error: ClaudeUsageClientError) async thro
         claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "2.2.0-test"),
         deviceId: "device_mac_01",
         userAccountId: "local_user",
-        now: { "2026-05-04T10:00:00.000Z" }
+        now: { "2026-05-04T10:00:00.000Z" },
+        currentDate: { Date(timeIntervalSince1970: 2000) }
     )
 
     return try await service.refresh()

@@ -688,7 +688,8 @@ final class StatusViewModel {
                 claudeVersionProvider: versionProvider,
                 deviceId: "local_mac",
                 userAccountId: "local_user",
-                now: { ISO8601DateFormatter().string(from: Date()) }
+                now: { ISO8601DateFormatter().string(from: Date()) },
+                currentDate: { Date() }
             ),
             claudeVersionProvider: versionProvider,
             codexRefresher: CodexConnectorService(
@@ -715,6 +716,8 @@ final class StatusViewModel {
             return .missingCredentials
         case .tokenInvalid, .permissionDenied:
             return .tokenInvalid
+        case .sessionExpired:
+            return .sessionExpired
         case .rateLimited:
             return .rateLimited
         case .schemaChanged:
@@ -736,7 +739,7 @@ final class StatusViewModel {
             return .permissionDenied
         case .schemaChanged:
             return .schemaChanged
-        case .networkError, .rateLimited:
+        case .networkError, .rateLimited, .sessionExpired:
             return .networkError
         case .notConnected, .stale:
             return .notConnected
@@ -913,6 +916,7 @@ enum ClaudeConnectorSetupState: Equatable, Sendable {
     case missingCredentials
     case missingClaudeCli
     case tokenInvalid
+    case sessionExpired
     case rateLimited
     case networkError
     case schemaChanged
@@ -935,6 +939,8 @@ enum ClaudeConnectorSetupCopy {
             return "Claude Code CLI was not found"
         case .tokenInvalid:
             return "Claude Code credentials are invalid"
+        case .sessionExpired:
+            return "Claude Code session expired"
         case .rateLimited:
             return "Claude usage is rate limited"
         case .networkError:

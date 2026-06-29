@@ -97,8 +97,6 @@ struct ConnectorsView: View {
                 )
                 .disabled(!viewModel.settings.refresh.autoRefreshEnabled)
             }
-
-            NotificationAlertsView(viewModel: viewModel)
         }
         .formStyle(.grouped)
         .alert(disconnectAlertTitle, isPresented: disconnectConfirmationPresented) {

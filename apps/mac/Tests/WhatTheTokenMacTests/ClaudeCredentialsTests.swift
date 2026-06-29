@@ -58,6 +58,24 @@ import Testing
     #expect(credentials.expiresAt == nil)
 }
 
+@Test func unexpectedExpiresAtTypeStillDecodesAccessToken() throws {
+    // expiresAt is non-essential: an upstream format change must not break
+    // extraction of the essential access token.
+    let json = """
+    {
+      "claudeAiOauth": {
+        "accessToken": "synthetic-access-token",
+        "expiresAt": "2026-06-29T07:05:38Z"
+      }
+    }
+    """.data(using: .utf8)!
+
+    let credentials = try JSONDecoder().decode(ClaudeCredentials.self, from: json)
+
+    #expect(credentials.accessToken == "synthetic-access-token")
+    #expect(credentials.expiresAt == nil)
+}
+
 @Test func macOSCredentialStoreReadsAccessTokenFromSecurityOutput() throws {
     let json = """
     {

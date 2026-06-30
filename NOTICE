@@ -1,0 +1,28 @@
+WhatTheToken
+Copyright 2026 Hans Draisma
+
+This product is licensed under the Apache License, Version 2.0 (the "License");
+see the LICENSE file. You may not use this product except in compliance with
+the License.
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+The distributed macOS application bundles third-party software. Their copyright
+notices and license terms are reproduced in THIRD_PARTY_NOTICES.md (notably the
+Sparkle update framework, MIT-licensed with additional permissive components).
+
+--------------------------------------------------------------------------------
+Trademarks
+--------------------------------------------------------------------------------
+
+WhatTheToken is an independent, community project. It is not affiliated with,
+endorsed by, sponsored by, or in any way officially connected to Anthropic,
+OpenAI, or any other provider it monitors.
+
+"Claude", "Claude Code", and "Anthropic" are trademarks of Anthropic, PBC.
+"Codex", "ChatGPT", and "OpenAI" are trademarks of OpenAI, Inc. All other
+product names, logos, and brands are the property of their respective owners.
+These names are used only for identification and descriptive purposes
+(nominative fair use) and do not imply any affiliation or endorsement.

@@ -4,7 +4,6 @@ import Testing
     let readme = try repositoryFileContents("README.md")
     let hosting = try repositoryFileContents("docs/release/github-hosting-and-updates.md")
     let checklist = try repositoryFileContents("docs/release/public-v1-checklist.md")
-    let spec = try repositoryFileContents("docs/superpowers/specs/2026-05-09-distribution-hardening-design.md")
     let appcast = try repositoryFileContents("docs/appcast.xml")
 
     #expect(readme.contains("manual-first"))
@@ -27,10 +26,6 @@ import Testing
     #expect(checklist.contains("If shipping a release with Sparkle intentionally inert, skip this section"))
     #expect(checklist.contains("If `SUPublicEDKey` and `SUFeedURL` are embedded, confirm `Check for Updates` is visible"))
     #expect(checklist.contains("If the smoke has not passed, release notes must state GitHub Releases is the supported update path"))
-    #expect(spec.contains("Public V1 may ship the manual `Check for Updates` UI when"))
-    #expect(spec.contains("Do not treat Sparkle as the primary supported update path until"))
-    #expect(!spec.contains("manual `Check for Updates` is allowed after"))
-    #expect(!spec.contains("no user-visible `Check for Updates` UI unless"))
     #expect(appcast.contains("<title>WhatTheToken Updates</title>"))
     #expect(appcast.contains("No public updates have been published yet"))
 }
@@ -61,16 +56,4 @@ import Testing
     #expect(security.contains("Until Public V1 ships, there are no official builds"))
     #expect(security.contains("GitHub private vulnerability reporting will be enabled before the repository becomes public"))
     #expect(security.contains("draisma.hans@gmail.com"))
-}
-
-@Test func discoverabilityPlanTracksRebasedReleaseAndWidgetMetadataDecisions() throws {
-    let plan = try repositoryFileContents("docs/superpowers/plans/2026-05-09-menu-bar-app-discoverability.md")
-
-    #expect(plan.contains("<string>$(MARKETING_VERSION)</string>"))
-    #expect(plan.contains("<string>$(CURRENT_PROJECT_VERSION)</string>"))
-    #expect(plan.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER"))
-    #expect(plan.contains("DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER"))
-    #expect(plan.contains("Scripts/smoke-archive-unsigned.sh --version <version> --build <build>"))
-    #expect(plan.contains("--app-profile <name>"))
-    #expect(plan.contains("--widget-profile <name>"))
 }

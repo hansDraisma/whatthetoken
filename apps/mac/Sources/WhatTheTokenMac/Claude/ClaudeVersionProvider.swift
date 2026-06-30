@@ -41,15 +41,18 @@ struct ClaudeVersionExecutableResolver: ClaudeVersionExecutableResolving {
     }
 
     private func candidatePaths() -> [String] {
+        // Prefer known install locations over the inherited $PATH so a poisoned
+        // PATH entry cannot preempt the real binary (the main app is not sandboxed).
+        let knownLocations = [
+            homeDirectory.appendingPathComponent(".local/bin/claude").path,
+            "/opt/homebrew/bin/claude",
+            "/usr/local/bin/claude"
+        ]
         let pathCandidates = environment["PATH", default: ""]
             .split(separator: ":")
             .map { "\($0)/claude" }
 
-        return Array(NSOrderedSet(array: pathCandidates + [
-            homeDirectory.appendingPathComponent(".local/bin/claude").path,
-            "/opt/homebrew/bin/claude",
-            "/usr/local/bin/claude"
-        ])) as? [String] ?? []
+        return Array(NSOrderedSet(array: knownLocations + pathCandidates)) as? [String] ?? []
     }
 }
 

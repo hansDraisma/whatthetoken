@@ -43,7 +43,11 @@ Local notifications warn before quota runs out. The master toggle is off by defa
 
 ## License
 
-WhatTheToken uses Apache-2.0. Copyright 2026 Hans Draisma unless otherwise noted.
+WhatTheToken uses Apache-2.0. Copyright 2026 Hans Draisma unless otherwise noted. See `LICENSE` and `NOTICE`; third-party components bundled in the app are attributed in `THIRD_PARTY_NOTICES.md`.
+
+## Trademarks
+
+WhatTheToken is an independent, community project and is not affiliated with, endorsed by, or sponsored by Anthropic or OpenAI. "Claude", "Claude Code", and "Anthropic" are trademarks of Anthropic, PBC; "Codex", "ChatGPT", and "OpenAI" are trademarks of OpenAI, Inc. All product names and brands are the property of their respective owners and are used only for identification (nominative fair use). See `NOTICE`.
 
 ## Local Development
 

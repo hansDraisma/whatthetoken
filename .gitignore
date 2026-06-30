@@ -9,3 +9,22 @@ coverage/
 DerivedData/
 *.xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Internal agent design docs (kept local-only, not published)
+docs/superpowers/
+.conductor/
+
+# Secrets / credentials (guardrail — never commit)
+.env
+.env.*
+*.pem
+*.p12
+*.cer
+*.p8
+*.key
+*.mobileprovision
+
+# Release artifacts (distributed via GitHub Releases, never committed)
+*.dmg
+*.xcarchive
+*.log

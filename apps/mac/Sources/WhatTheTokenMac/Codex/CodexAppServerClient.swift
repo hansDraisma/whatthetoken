@@ -69,15 +69,18 @@ struct CodexAppServerExecutableResolver: CodexAppServerExecutableResolving {
     }
 
     private func candidatePaths() -> [String] {
+        // Prefer known install locations over the inherited $PATH so a poisoned
+        // PATH entry cannot preempt the real binary (the main app is not sandboxed).
+        let knownLocations = [
+            homeDirectory.appendingPathComponent(".local/bin/codex").path,
+            "/opt/homebrew/bin/codex",
+            "/usr/local/bin/codex"
+        ]
         let pathCandidates = environment["PATH", default: ""]
             .split(separator: ":")
             .map { "\($0)/codex" }
 
-        return Array(NSOrderedSet(array: pathCandidates + [
-            homeDirectory.appendingPathComponent(".local/bin/codex").path,
-            "/opt/homebrew/bin/codex",
-            "/usr/local/bin/codex"
-        ])) as? [String] ?? []
+        return Array(NSOrderedSet(array: knownLocations + pathCandidates)) as? [String] ?? []
     }
 }
 

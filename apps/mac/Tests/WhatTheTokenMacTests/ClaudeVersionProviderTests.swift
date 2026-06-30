@@ -42,6 +42,21 @@ import Testing
     #expect(executableURL.path == "/Users/example/.local/bin/claude")
 }
 
+@Test func executableResolverPrefersKnownLocationOverPath() throws {
+    // Hardening: a poisoned $PATH entry must not preempt a real install location.
+    let resolver = ClaudeVersionExecutableResolver(
+        environment: ["PATH": "/tmp/evil:/usr/bin"],
+        homeDirectory: URL(fileURLWithPath: "/Users/example"),
+        fileExists: { path in
+            path == "/tmp/evil/claude" || path == "/opt/homebrew/bin/claude"
+        }
+    )
+
+    let executableURL = try #require(resolver.executableURL())
+
+    #expect(executableURL.path == "/opt/homebrew/bin/claude")
+}
+
 private struct StubClaudeVersionCommandRunner: ClaudeVersionCommandRunning {
     let result: Result<ClaudeVersionCommandResult, Error>
 

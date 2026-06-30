@@ -106,6 +106,21 @@ import Testing
     #expect(executableURL.path == "/opt/homebrew/bin/codex")
 }
 
+@Test func codexExecutableResolverPrefersKnownLocationOverPath() throws {
+    // Hardening: a poisoned $PATH entry must not preempt a real install location.
+    let resolver = CodexAppServerExecutableResolver(
+        environment: ["PATH": "/tmp/evil:/usr/bin"],
+        homeDirectory: URL(fileURLWithPath: "/Users/example"),
+        fileExists: { path in
+            path == "/tmp/evil/codex" || path == "/opt/homebrew/bin/codex"
+        }
+    )
+
+    let executableURL = try #require(resolver.executableURL())
+
+    #expect(executableURL.path == "/opt/homebrew/bin/codex")
+}
+
 private struct SyntheticTransportError: Error {}
 
 private final class RecordingCodexTransport: CodexAppServerTransport, @unchecked Sendable {

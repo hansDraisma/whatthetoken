@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # JavaScript/TypeScript workspace (pnpm) at the repo root
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Swift Package Manager dependencies for the macOS app (e.g. Sparkle)
+  - package-ecosystem: "swift"
+    directory: "/apps/mac"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # GitHub Actions (keeps the SHA-pinned actions current)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

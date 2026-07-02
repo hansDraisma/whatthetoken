@@ -4,7 +4,7 @@ Open, local-first AI quota status for developers using multiple coding agents.
 
 ## Status
 
-WhatTheToken is pre-public. The repository should remain private until Public V1: the first signed and notarized free DMG with Claude Code and Codex support.
+WhatTheToken is in active development ahead of Public V1: the first signed and notarized free DMG with Claude Code and Codex support. Expect rough edges until then.
 
 ## What It Answers
 
@@ -98,7 +98,6 @@ Official release steps are documented in `docs/release/public-v1-checklist.md`.
 ## Roadmap
 
 - Canonical roadmap: `docs/roadmap/development-roadmap.md`
-- Open-source strategy and business model: `docs/roadmap/open-source-strategy-and-business-model.md`
 - Privacy boundary: `docs/architecture/privacy-boundaries.md`
 - Data contract: `docs/architecture/data-contract.md`
 

@@ -28,3 +28,6 @@ docs/superpowers/
 *.dmg
 *.xcarchive
 *.log
+
+# Private strategy doc (kept local-only, not published)
+docs/roadmap/open-source-strategy-and-business-model.md

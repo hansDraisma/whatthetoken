@@ -4,7 +4,7 @@ Date: 2026-05-05
 
 Status: canonical execution roadmap.
 
-This document is the source of truth for step-by-step product development. Strategy, licensing, business model, and market assumptions live in `docs/roadmap/open-source-strategy-and-business-model.md`. Earlier planning documents are historical context unless they point back here.
+This document is the source of truth for step-by-step product development. Earlier planning documents are historical context unless they point back here.
 
 ## Product Direction
 
@@ -69,7 +69,6 @@ Not yet in the repo:
 
 ## Canonical Documents
 
-- Strategy and business model: `docs/roadmap/open-source-strategy-and-business-model.md`
 - Execution roadmap: `docs/roadmap/development-roadmap.md`
 - Privacy boundary: `docs/architecture/privacy-boundaries.md`
 - Data contract: `docs/architecture/data-contract.md`

@@ -5,7 +5,6 @@ Date: 2026-05-04
 Status: historical context.
 
 The current canonical execution roadmap is `docs/roadmap/development-roadmap.md`.
-The current open-source strategy and business model is `docs/roadmap/open-source-strategy-and-business-model.md`.
 
 Use this document for original V1 framing only. Do not use its older phase assumptions as the current implementation order.
 
@@ -322,4 +321,3 @@ Current differentiators:
 See:
 
 - `docs/roadmap/development-roadmap.md`
-- `docs/roadmap/open-source-strategy-and-business-model.md`

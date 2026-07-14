@@ -1,8 +1,8 @@
-# Agent Operating Rules
+# Operating Rules
 
 Date: 2026-05-04
 
-These rules apply to Codex, Claude, and any future Conductor-managed agents working on WhatTheToken.
+These rules apply to all contributors working on WhatTheToken, including AI coding agents.
 
 ## Core Product Rules
 
@@ -22,7 +22,7 @@ These rules apply to Codex, Claude, and any future Conductor-managed agents work
 - Run the focused test.
 - Run the relevant package checks.
 - Commit small, coherent changes.
-- Respect foundation-task barriers before parallel work. For Phase 1, the root workspace scaffold must be available as the base before starting core, Mac, documentation, or research worktrees.
+- Respect foundation-task barriers before starting parallel work.
 - Use the pinned package manager. If `package.json` declares `packageManager: pnpm@10.0.0`, `pnpm --version` must print exactly `10.0.0` before running `pnpm install`; use Corepack to resolve mismatches.
 - Review lockfile changes deliberately. `pnpm-lock.yaml` is an owned artifact, not incidental install noise.
 

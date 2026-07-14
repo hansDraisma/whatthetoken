@@ -17,11 +17,11 @@ Determine whether WhatTheToken can observe useful Claude Code subscription or us
 
 ## Findings
 
-- Claude Code is installed at `/Users/hansdraisma/.local/bin/claude`.
+- Claude Code is installed at `~/.local/bin/claude`.
 - Version: `2.1.126 (Claude Code)`.
 - Relevant visible commands/options include `auth`, `doctor`, `setup-token`, `--max-budget-usd`, `--model`, `--output-format`, and `--print`.
 - The top-level help does not expose a dedicated usage or quota status command.
-- The Keychain item `Claude Code-credentials` exists for account `hansdraisma`. Only Keychain metadata was printed; secret values were not requested.
+- The Keychain item `Claude Code-credentials` exists for the current macOS user account. Only Keychain metadata was printed; secret values were not requested.
 - Candidate local metadata files by path only:
   - `~/.claude/policy-limits.json`
   - `~/.claude/settings.json`
@@ -50,8 +50,6 @@ Needs manual user permission and redaction review.
 The next safe step is a narrow metadata inspection that reads only top-level keys from `~/.claude/policy-limits.json` and any documented Claude Code status output, while explicitly avoiding Keychain secret values, history, sessions, projects, paste cache, shell snapshots, and session environment files.
 
 ## Implementation Follow-Up
-
-The Claude Code local connector plan is documented in `docs/superpowers/plans/2026-05-04-local-connector-trust.md`.
 
 Implementation must keep the Claude Code OAuth token local to the Mac connector process. Tests use synthetic credentials and fixture responses only. Synced and displayed data is limited to sanitized `UsageSnapshot` records with connector source metadata.
 

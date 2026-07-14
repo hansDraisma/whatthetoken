@@ -76,7 +76,7 @@ Not yet in the repo:
 - Local-first ADR: `docs/adr/0001-local-first-minimal-data-ingestion.md`
 - Confidence/provenance ADR: `docs/adr/0002-confidence-labels-and-provenance.md`
 
-Each stage is an individual development slice. Before implementation starts for a stage, write a focused design in `docs/superpowers/specs/` and an implementation plan in `docs/superpowers/plans/` unless the stage is purely editorial. If a stage proves too large for one plan, split it into smaller stage-scoped plans without changing the canonical stage order.
+Each stage is an individual development slice. Before implementation starts for a stage, write a focused design and an implementation plan unless the stage is purely editorial. If a stage proves too large for one plan, split it into smaller stage-scoped plans without changing the canonical stage order.
 
 ## Architecture Direction
 
@@ -127,10 +127,6 @@ Hosted sync, team dashboards, and managed reliability are later tracks. They may
 ## Development Roadmap
 
 ### Stage 0: Pre-Public Foundation
-
-Stage spec: `docs/superpowers/specs/2026-05-05-stage-0-pre-public-foundation-design.md`
-
-Implementation plan: `docs/superpowers/plans/2026-05-05-stage-0-pre-public-foundation.md`
 
 Goal: make the project safe to publish later and understandable to contributors before wider distribution.
 

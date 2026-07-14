@@ -43,4 +43,4 @@ Only reconsider sandboxing after Public V1 if:
 - launch-at-login behavior remains stable,
 - fresh-account install smoke passes from the notarized DMG.
 
-If sandboxing is enabled later, add only the narrow entitlements proven by this matrix and update `docs/superpowers/specs/2026-05-09-distribution-hardening-design.md`.
+If sandboxing is enabled later, add only the narrow entitlements proven by this matrix and record the decision in this document and `docs/release/public-v1-checklist.md`.

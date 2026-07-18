@@ -95,18 +95,25 @@ struct StatusRowDisplayModel: Equatable, Sendable {
                 return "Current session"
             case "seven_day":
                 return "Weekly · all models"
-            case "seven_day_opus":
-                return "Weekly · Opus"
-            case "seven_day_sonnet":
-                return "Weekly · Sonnet"
             case "monthly_extra_usage":
                 return "Extra usage credits"
             default:
-                break
+                if snapshot.windowKey.hasPrefix("seven_day_")
+                    || snapshot.windowKey.hasPrefix("weekly_") {
+                    let prefix = snapshot.windowKey.hasPrefix("seven_day_")
+                        ? "seven_day_"
+                        : "weekly_"
+                    let modelKey = snapshot.windowKey.dropFirst(prefix.count)
+                    return "Weekly · \(title(from: String(modelKey)))"
+                }
             }
         }
 
-        return snapshot.windowKey
+        return title(from: snapshot.windowKey)
+    }
+
+    private static func title(from key: String) -> String {
+        key
             .split(separator: "_")
             .map { $0.prefix(1).uppercased() + $0.dropFirst() }
             .joined(separator: " ")

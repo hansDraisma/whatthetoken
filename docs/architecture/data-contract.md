@@ -160,12 +160,13 @@ Subscription utilization windows use:
 - `remaining`: `max(100 - used, 0)`
 - `confidence`: `verified`
 
-Supported window keys:
+Window keys are provider-defined and discovered dynamically from top-level objects with a numeric `utilization` field. Current examples include:
 
 - `five_hour`
 - `seven_day`
-- `seven_day_opus`
-- `seven_day_sonnet`
+- `seven_day_fable`
+
+Future model-specific windows must flow through without requiring a compiled key list. `five_hour` sorts first, aggregate `seven_day` second, and additional windows sort by provider key.
 
 Enabled extra usage credits use:
 

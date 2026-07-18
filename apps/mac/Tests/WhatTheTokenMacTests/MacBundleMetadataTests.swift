@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import WhatTheTokenMac
 
 @Test func packagingInfoPlistDeclaresAgentOnlyApp() throws {
     let plist = try packagingInfoPlist()
@@ -17,6 +18,24 @@ import Testing
     #expect(plist["CFBundleShortVersionString"] as? String == "$(MARKETING_VERSION)")
     #expect(plist["CFBundleVersion"] as? String == "$(CURRENT_PROJECT_VERSION)")
     #expect(plist["LSApplicationCategoryType"] as? String == "public.app-category.developer-tools")
+}
+
+@Test func packagingInfoPlistAcceptsBuildTimeSentryDSN() throws {
+    let plist = try packagingInfoPlist()
+
+    #expect(plist["SentryDSN"] as? String == "$(SENTRY_DSN)")
+}
+
+@Test func sentryConfigurationRejectsMissingAndUnexpandedDSNs() {
+    #expect(SentryMonitoring.configuredDSN(infoDictionary: [:], environment: [:]) == nil)
+    #expect(SentryMonitoring.configuredDSN(
+        infoDictionary: ["SentryDSN": "$(SENTRY_DSN)"],
+        environment: [:]
+    ) == nil)
+    #expect(SentryMonitoring.configuredDSN(
+        infoDictionary: ["SentryDSN": "https://public@example.ingest.sentry.io/1"],
+        environment: [:]
+    ) == "https://public@example.ingest.sentry.io/1")
 }
 
 @Test func sparkleDefaultsRemainManualAndSilentForPublicV1() throws {

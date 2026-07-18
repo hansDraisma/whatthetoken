@@ -69,6 +69,8 @@ Every usage number must show whether it is `verified`, `observed`, `estimated`, 
 
 Diagnostics must be redacted and inspectable by the user before sharing. Diagnostics must not include credentials, tokens, prompts, responses, raw provider payloads, or sensitive local paths.
 
+When an official build is configured with a Sentry DSN, the app sends a narrowly scoped error only when the Claude usage response can no longer be safely parsed. That error contains the app version, a failure category, and sorted provider field names. It does not contain the provider response body, usage values, reset timestamps, credentials, headers, account identifiers, or local paths. Automatic Sentry crash, session, performance, network, hang, swizzling, and breadcrumb collection is disabled. Builds without a configured DSN send no Sentry events.
+
 ## Telemetry
 
 Product telemetry is off by default for Public V1. Any future telemetry must be opt-in and must not include forbidden sensitive data.

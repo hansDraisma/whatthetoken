@@ -89,6 +89,22 @@ private func rowDisplaySnapshot(
     #expect(row.heroTintsRed == false)
 }
 
+@Test func claudeModelWindowUsesDynamicWeeklyLabel() {
+    let fable = StatusRowDisplayModel(
+        snapshot: rowDisplaySnapshot(windowKey: "seven_day_fable"),
+        sectionDefault: nil,
+        now: rowDisplayFixedNow
+    )
+    let futureModel = StatusRowDisplayModel(
+        snapshot: rowDisplaySnapshot(windowKey: "weekly_future_model"),
+        sectionDefault: nil,
+        now: rowDisplayFixedNow
+    )
+
+    #expect(fable.name == "Weekly · Fable")
+    #expect(futureModel.name == "Weekly · Future Model")
+}
+
 @Test func criticalUtilizationKeepsNumberHeroButTintsRed() {
     let row = StatusRowDisplayModel(
         snapshot: rowDisplaySnapshot(

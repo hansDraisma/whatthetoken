@@ -21,6 +21,7 @@ Related runbooks:
 - Confirm `DEVELOPER_ID_SIGNING_IDENTITY` is the exact Developer ID Application identity, including team suffix.
 - Confirm `DEVELOPER_ID_APP_PROFILE_SPECIFIER` is set to an installed Developer ID provisioning profile for `com.whatthetoken.mac`.
 - Confirm `DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER` is set to an installed Developer ID provisioning profile for `com.whatthetoken.mac.widget`.
+- Confirm `SENTRY_DSN` is set to the public HTTPS DSN for the schema-drift project; the release script embeds it in the app.
 - Confirm the Developer ID Application certificate does not expire within the next 30 days.
 - Confirm `NOTARY_KEYCHAIN_PROFILE` exists in Keychain for `xcrun notarytool`.
 - Confirm Gatekeeper assessments are enabled:

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		000000000000000000000015 = {isa = PBXBuildFile; productRef = 000000000000000000000014; };
+		400000000000000000000001 = {isa = PBXBuildFile; productRef = 400000000000000000000003; };
 		00000000000000000000001C = {isa = PBXBuildFile; fileRef = 00000000000000000000001B; };
 		00000000000000000000001D = {isa = PBXBuildFile; fileRef = 00000000000000000000001E; };
 		00000000000000000000001F = {isa = PBXBuildFile; fileRef = 000000000000000000000020; };
@@ -247,6 +248,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				000000000000000000000015,
+				400000000000000000000001,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -436,6 +438,7 @@
 			name = WhatTheToken;
 			packageProductDependencies = (
 				000000000000000000000014,
+				400000000000000000000003,
 			);
 			productName = WhatTheToken;
 			productReference = 000000000000000000000009;
@@ -486,6 +489,7 @@
 			mainGroup = 000000000000000000000003;
 			packageReferences = (
 				000000000000000000000013,
+				400000000000000000000002,
 			);
 			productRefGroup = 000000000000000000000004;
 			projectDirPath = "";
@@ -848,6 +852,14 @@
 				minimumVersion = 2.0.0;
 			};
 		};
+		400000000000000000000002 = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.22.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -855,6 +867,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 000000000000000000000013;
 			productName = Sparkle;
+		};
+		400000000000000000000003 = {
+			isa = XCSwiftPackageProductDependency;
+			package = 400000000000000000000002;
+			productName = Sentry;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

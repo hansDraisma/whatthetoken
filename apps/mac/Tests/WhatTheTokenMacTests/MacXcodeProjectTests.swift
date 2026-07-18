@@ -12,7 +12,7 @@ private struct AppIconContents: Decodable {
     let images: [Image]
 }
 
-@Test func xcodeProjectDefinesReleaseTargetAndSparklePackage() throws {
+@Test func xcodeProjectDefinesReleaseTargetAndRuntimePackages() throws {
     let project = try macFileContents("WhatTheToken.xcodeproj/project.pbxproj")
 
     #expect(project.contains("name = WhatTheToken;"))
@@ -20,6 +20,8 @@ private struct AppIconContents: Decodable {
     #expect(project.contains("XcodeBundleModule.swift"))
     #expect(project.contains("https://github.com/sparkle-project/Sparkle"))
     #expect(project.contains("productName = Sparkle;"))
+    #expect(project.contains("https://github.com/getsentry/sentry-cocoa"))
+    #expect(project.contains("productName = Sentry;"))
     #expect(project.contains("Packaging/WhatTheToken-Release.xcconfig"))
     #expect(project.contains("Packaging/WhatTheToken-Debug.xcconfig"))
 }
@@ -69,6 +71,13 @@ private struct AppIconContents: Decodable {
     #expect(resolved.contains("\"location\" : \"https://github.com/sparkle-project/Sparkle\""))
     #expect(resolved.contains("\"revision\" : "))
     #expect(resolved.contains("\"version\" : "))
+}
+
+@Test func xcodePackageResolutionPinsSentryForReleaseReproducibility() throws {
+    let resolved = try macFileContents("WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
+
+    #expect(resolved.contains("\"identity\" : \"sentry-cocoa\""))
+    #expect(resolved.contains("\"location\" : \"https://github.com/getsentry/sentry-cocoa\""))
 }
 
 @Test func xcodeProjectRegistersAppIconAssetCatalogAsResource() throws {

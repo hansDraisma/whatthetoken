@@ -25,6 +25,29 @@ import Testing
     #expect(response.extraUsage?.usedCredits == 422.0)
 }
 
+@Test func decodesClaudeModelWindowsWithoutACompiledKeyList() throws {
+    let json = """
+    {
+      "five_hour": { "utilization": 35.0, "resets_at": "2026-07-18T10:00:00Z" },
+      "seven_day": { "utilization": 44.0, "resets_at": "2026-07-22T17:00:00Z" },
+      "seven_day_fable": { "utilization": 57.0, "resets_at": "2026-07-22T17:00:00Z" },
+      "seven_day_future_model": { "utilization": 12.0, "resets_at": null },
+      "metadata": { "plan": "max" }
+    }
+    """.data(using: .utf8)!
+
+    let response = try JSONDecoder().decode(ClaudeUsageResponse.self, from: json)
+
+    #expect(response.windows.keys.sorted() == [
+        "five_hour",
+        "seven_day",
+        "seven_day_fable",
+        "seven_day_future_model"
+    ])
+    #expect(response.windows["seven_day_fable"]?.utilization == 57)
+    #expect(response.malformedUsageKeys.isEmpty)
+}
+
 @Test func mapsFiveHourClaudeUsageToSanitizedSnapshot() throws {
     let response = ClaudeUsageResponse(
         fiveHour: ClaudeWindowUsage(utilization: 42.5, resetsAt: "2026-05-04T15:00:00Z"),
@@ -93,6 +116,40 @@ import Testing
     #expect(snapshots[0].remaining == 20)
     #expect(snapshots[1].used == 35)
     #expect(snapshots[1].remaining == 65)
+}
+
+@Test func mapsFableAndFutureClaudeWindowsInStableOrder() {
+    let response = ClaudeUsageResponse(
+        windows: [
+            "seven_day_zebra": ClaudeWindowUsage(utilization: 20, resetsAt: nil),
+            "seven_day_fable": ClaudeWindowUsage(utilization: 57, resetsAt: "2026-07-22T17:00:00Z"),
+            "seven_day": ClaudeWindowUsage(utilization: 44, resetsAt: "2026-07-22T17:00:00Z"),
+            "five_hour": ClaudeWindowUsage(utilization: 35, resetsAt: "2026-07-18T10:00:00Z")
+        ]
+    )
+    let source = ConnectorSource(
+        connector: "mac_connector",
+        state: .connected,
+        label: "Mac connector",
+        parserVersion: "claude-code-oauth-usage-v2",
+        deviceId: "device_mac_01"
+    )
+
+    let snapshots = ClaudeUsageMapper.map(
+        response,
+        userAccountId: "local_user",
+        deviceId: "device_mac_01",
+        observedAt: "2026-07-18T08:00:00.000Z",
+        source: source
+    )
+
+    #expect(snapshots.map(\.windowKey) == [
+        "five_hour",
+        "seven_day",
+        "seven_day_fable",
+        "seven_day_zebra"
+    ])
+    #expect(snapshots[2].remaining == 43)
 }
 
 @Test func mapsEnabledClaudeExtraUsageCreditsToSanitizedSnapshot() throws {

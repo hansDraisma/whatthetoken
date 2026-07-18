@@ -9,9 +9,15 @@ let package = Package(
     products: [
         .executable(name: "WhatTheTokenMac", targets: ["WhatTheTokenMac"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/getsentry/sentry-cocoa", from: "9.22.0")
+    ],
     targets: [
         .executableTarget(
             name: "WhatTheTokenMac",
+            dependencies: [
+                .product(name: "Sentry", package: "sentry-cocoa")
+            ],
             exclude: [
                 "Assets.xcassets"
             ],

@@ -138,7 +138,7 @@ struct ClaudeConnectorService: Sendable {
             connector: "mac_connector",
             state: state,
             label: "Mac connector",
-            parserVersion: "claude-code-oauth-usage-v1",
+            parserVersion: "claude-code-oauth-usage-v2",
             deviceId: deviceId
         )
     }

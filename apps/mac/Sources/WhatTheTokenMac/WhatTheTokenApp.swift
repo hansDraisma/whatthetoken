@@ -1,6 +1,61 @@
 import SwiftUI
 import AppKit
 
+#if canImport(Sentry)
+import Sentry
+#endif
+
+enum SentryMonitoring {
+    static func configuredDSN(
+        infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:],
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String? {
+        let candidate = environment["SENTRY_DSN"]
+            ?? infoDictionary["SentryDSN"] as? String
+        guard let dsn = candidate?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !dsn.isEmpty,
+              !dsn.contains("$("),
+              URL(string: dsn)?.scheme == "https" else {
+            return nil
+        }
+        return dsn
+    }
+
+    @MainActor
+    static func start(dsn: String? = configuredDSN()) {
+        #if canImport(Sentry)
+        guard let dsn else { return }
+
+        SentrySDK.start { options in
+            options.dsn = dsn
+            options.sendDefaultPii = false
+
+            // This integration is intentionally limited to explicit, sanitized
+            // schema-drift errors from the Claude usage parser.
+            options.enableCrashHandler = false
+            options.enableAutoSessionTracking = false
+            options.enableWatchdogTerminationTracking = false
+            options.enableNetworkBreadcrumbs = false
+            options.enableAutoBreadcrumbTracking = false
+            options.enableAutoPerformanceTracing = false
+            options.enableNetworkTracking = false
+            options.enableFileIOTracing = false
+            options.enableCoreDataTracing = false
+            options.enableAppHangTracking = false
+            options.enableSwizzling = false
+            options.enableLogs = false
+            options.maxBreadcrumbs = 0
+            options.tracesSampleRate = 0
+            #if DEBUG
+            options.environment = "development"
+            #else
+            options.environment = "production"
+            #endif
+        }
+        #endif
+    }
+}
+
 enum AppLaunchRouter {
     static func route<LaunchApp>(
         arguments: [String],
@@ -32,6 +87,7 @@ struct WhatTheTokenApp: App {
     @NSApplicationDelegateAdaptor(MacAppDelegateAdaptor.self) private var delegateAdaptor
 
     init() {
+        SentryMonitoring.start()
         let app = Self.makeAppForLaunch(
             arguments: CommandLine.arguments,
             makeLiveApp: { AppModel.live() },

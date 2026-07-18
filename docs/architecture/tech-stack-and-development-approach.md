@@ -21,7 +21,7 @@ V1 starts with Claude Code and Codex because both now have explicit local connec
 | Backend later | Supabase Postgres/Auth/Realtime | Fastest path to multi-device sync with relational data and RLS |
 | Browser extension later | WXT | Modern TypeScript-first Chrome extension framework |
 | Payments later | Stripe | Standard SaaS billing |
-| Error reporting later | Sentry | Useful once beta users exist, with strict sensitive-data filtering |
+| Schema-drift reporting | Sentry Cocoa | Manual, redacted Claude parser errors only; automatic SDK collection is disabled |
 
 ## Development Approach
 
@@ -105,8 +105,9 @@ The connector is responsible for:
 - reading the Claude Code Keychain credential locally only after opt-in
 - using the OAuth token in memory to request Anthropic usage
 - passing a detected or injected Claude Code version into the usage request
-- mapping `five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`, and enabled `extra_usage` credit data into sanitized snapshots
+- dynamically mapping every top-level utilization window (including `five_hour`, `seven_day`, and model windows such as `seven_day_fable`) plus enabled `extra_usage` credit data into sanitized snapshots
 - returning structured connector states for missing credentials, invalid tokens, rate limits, network errors, and schema changes
+- reporting total or partial schema drift to Sentry using field names and a failure category only, never the response body or usage values
 
 ## Claude Connector Product Opt-In
 

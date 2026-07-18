@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(Sentry)
+import Sentry
+#endif
+
 protocol ClaudeURLLoading: Sendable {
     func data(for request: URLRequest) async throws -> (Data, URLResponse)
 }
@@ -11,6 +15,53 @@ enum ClaudeUsageClientError: Error, Equatable {
     case rateLimited
     case networkError
     case schemaChanged
+}
+
+struct ClaudeUsageSchemaIncident: Equatable, Sendable {
+    enum Reason: String, Equatable, Sendable {
+        case responseDecodingFailed = "response_decoding_failed"
+        case noUsageSignals = "no_usage_signals"
+        case malformedUsageFields = "malformed_usage_fields"
+    }
+
+    let reason: Reason
+    let topLevelKeys: [String]
+    let affectedKeys: [String]
+}
+
+protocol ClaudeUsageSchemaReporting: Sendable {
+    func report(_ incident: ClaudeUsageSchemaIncident)
+}
+
+struct SentryClaudeUsageSchemaReporter: ClaudeUsageSchemaReporting {
+    func report(_ incident: ClaudeUsageSchemaIncident) {
+        #if canImport(Sentry)
+        guard SentrySDK.isEnabled else { return }
+
+        let error = NSError(
+            domain: "com.whatthetoken.claude-usage-schema",
+            code: errorCode(for: incident.reason),
+            userInfo: [
+                NSLocalizedDescriptionKey: "Claude usage response schema changed",
+                "reason": incident.reason.rawValue,
+                "top_level_keys": incident.topLevelKeys.joined(separator: ","),
+                "affected_keys": incident.affectedKeys.joined(separator: ",")
+            ]
+        )
+        SentrySDK.capture(error: error)
+        #endif
+    }
+
+    private func errorCode(for reason: ClaudeUsageSchemaIncident.Reason) -> Int {
+        switch reason {
+        case .responseDecodingFailed:
+            return 1
+        case .noUsageSignals:
+            return 2
+        case .malformedUsageFields:
+            return 3
+        }
+    }
 }
 
 enum ClaudeUsageRequestFactory {
@@ -28,9 +79,14 @@ enum ClaudeUsageRequestFactory {
 
 struct ClaudeUsageClient: ClaudeUsageFetching, Sendable {
     private let loader: ClaudeURLLoading
+    private let schemaReporter: ClaudeUsageSchemaReporting
 
-    init(loader: ClaudeURLLoading = URLSession.shared) {
+    init(
+        loader: ClaudeURLLoading = URLSession.shared,
+        schemaReporter: ClaudeUsageSchemaReporting = SentryClaudeUsageSchemaReporter()
+    ) {
         self.loader = loader
+        self.schemaReporter = schemaReporter
     }
 
     func fetchUsage(accessToken: String, claudeVersion: String) async throws -> ClaudeUsageResponse {
@@ -53,15 +109,37 @@ struct ClaudeUsageClient: ClaudeUsageFetching, Sendable {
 
         switch httpResponse.statusCode {
         case 200..<300:
+            let topLevelKeys = Self.topLevelKeys(in: data)
             do {
                 let usageResponse = try JSONDecoder().decode(ClaudeUsageResponse.self, from: data)
+                if !usageResponse.malformedUsageKeys.isEmpty {
+                    schemaReporter.report(ClaudeUsageSchemaIncident(
+                        reason: .malformedUsageFields,
+                        topLevelKeys: topLevelKeys,
+                        affectedKeys: usageResponse.malformedUsageKeys
+                            .map(Self.sanitizedSchemaKey)
+                            .sorted()
+                    ))
+                }
                 guard usageResponse.hasAnyUsageSignal else {
+                    if usageResponse.malformedUsageKeys.isEmpty {
+                        schemaReporter.report(ClaudeUsageSchemaIncident(
+                            reason: .noUsageSignals,
+                            topLevelKeys: topLevelKeys,
+                            affectedKeys: []
+                        ))
+                    }
                     throw ClaudeUsageClientError.schemaChanged
                 }
                 return usageResponse
             } catch let error as ClaudeUsageClientError {
                 throw error
             } catch {
+                schemaReporter.report(ClaudeUsageSchemaIncident(
+                    reason: .responseDecodingFailed,
+                    topLevelKeys: topLevelKeys,
+                    affectedKeys: []
+                ))
                 throw ClaudeUsageClientError.schemaChanged
             }
         case 401, 403:
@@ -72,14 +150,28 @@ struct ClaudeUsageClient: ClaudeUsageFetching, Sendable {
             throw ClaudeUsageClientError.networkError
         }
     }
+
+    private static func topLevelKeys(in data: Data) -> [String] {
+        guard let object = try? JSONSerialization.jsonObject(with: data),
+              let dictionary = object as? [String: Any] else {
+            return []
+        }
+        return Set(dictionary.keys.map(sanitizedSchemaKey)).sorted()
+    }
+
+    private static func sanitizedSchemaKey(_ key: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
+        guard !key.isEmpty,
+              key.utf8.count <= 64,
+              key.unicodeScalars.allSatisfy(allowed.contains) else {
+            return "<redacted>"
+        }
+        return key
+    }
 }
 
 private extension ClaudeUsageResponse {
     var hasAnyUsageSignal: Bool {
-        fiveHour != nil
-            || sevenDay != nil
-            || sevenDayOpus != nil
-            || sevenDaySonnet != nil
-            || extraUsage != nil
+        !windows.isEmpty || extraUsage != nil
     }
 }

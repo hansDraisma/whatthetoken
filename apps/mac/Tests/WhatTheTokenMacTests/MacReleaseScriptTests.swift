@@ -93,6 +93,8 @@ import Testing
                 "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER",
                 "WTT_DEVELOPER_ID_APP_PROFILE_SPECIFIER",
                 "WTT_DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER",
+                "SENTRY_DSN",
+                "SENTRY_DSN must be set to an https Sentry DSN",
                 "provisioningProfiles",
                 "plutil -replace 'provisioningProfiles.com.whatthetoken.mac' -string",
                 "plutil -replace 'provisioningProfiles.com.whatthetoken.mac.widget' -string",
@@ -314,6 +316,22 @@ import Testing
     #expect(!result.output.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER is required"))
 }
 
+@Test func releaseArchiveRequiresSentryDSNBeforeRunningXcodebuild() throws {
+    let result = try runMacReleaseScript(
+        "archive-release.sh",
+        arguments: ["--version", "0.1.0", "--build", "1", "--team-id", "3U98C8T3DT"],
+        environmentOverrides: ["SENTRY_DSN": nil],
+        baseEnvironment: ProcessInfo.processInfo.environment.merging([
+            "DEVELOPER_ID_APP_PROFILE_SPECIFIER": "Installed App Profile",
+            "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER": "Installed Widget Profile"
+        ]) { _, new in new }
+    )
+
+    #expect(result.exitCode != 0)
+    #expect(result.output.contains("SENTRY_DSN must be set to an https Sentry DSN"))
+    #expect(!result.output.contains("xcodebuild"))
+}
+
 @Test func releaseArchiveDryRunUsesEnvVarNamesInsteadOfAngleBracketPlaceholders() throws {
     let script = try macFileContents("Scripts/archive-release.sh")
 
@@ -328,6 +346,7 @@ import Testing
     #expect(script.contains(#"DRY_RUN_TEAM_ID="${TEAM_ID:-DEVELOPER_ID_TEAM_ID}""#))
     #expect(script.contains(#"DRY_RUN_APP_PROFILE="${APP_PROFILE_SPECIFIER:-DEVELOPER_ID_APP_PROFILE_SPECIFIER}""#))
     #expect(script.contains(#"DRY_RUN_WIDGET_PROFILE="${WIDGET_PROFILE_SPECIFIER:-DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER}""#))
+    #expect(script.contains(#"ARCHIVE_SENTRY_DSN="SENTRY_DSN""#))
 }
 
 @Test func releaseInputValidatorOwnsSharedReleaseMetadataRules() throws {

@@ -15,6 +15,7 @@ BUILD=""
 TEAM_ID="${DEVELOPER_ID_TEAM_ID:-}"
 APP_PROFILE_SPECIFIER="${DEVELOPER_ID_APP_PROFILE_SPECIFIER:-}"
 WIDGET_PROFILE_SPECIFIER="${DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER:-}"
+SENTRY_DSN_VALUE="${SENTRY_DSN:-}"
 
 . "$ROOT_DIR/Scripts/release-inputs.sh"
 
@@ -106,6 +107,11 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
     [[ "$MISSING_PROFILE" -eq 1 ]] && exit 65
 fi
 
+if [[ "$DRY_RUN" -eq 0 && "$SENTRY_DSN_VALUE" != https://* ]]; then
+    printf 'SENTRY_DSN must be set to an https Sentry DSN for a real release archive.\n' >&2
+    exit 65
+fi
+
 if [[ "$DRY_RUN" -eq 0 ]]; then
     assert_release_matches_xcconfig "$VERSION" "$BUILD" "$CONFIG"
 fi
@@ -147,6 +153,12 @@ else
     quote_command plutil -lint "$EXPORT_OPTIONS_RESOLVED"
 fi
 
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    ARCHIVE_SENTRY_DSN="SENTRY_DSN"
+else
+    ARCHIVE_SENTRY_DSN="$SENTRY_DSN_VALUE"
+fi
+
 archive_command=(
     xcodebuild
     -project "$PROJECT"
@@ -155,6 +167,7 @@ archive_command=(
     -archivePath "$ARCHIVE_PATH"
     MARKETING_VERSION="$VERSION"
     CURRENT_PROJECT_VERSION="$BUILD"
+    SENTRY_DSN="$ARCHIVE_SENTRY_DSN"
     WTT_DEVELOPER_ID_APP_PROFILE_SPECIFIER="${APP_PROFILE_SPECIFIER:-DEVELOPER_ID_APP_PROFILE_SPECIFIER}"
     WTT_DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER="${WIDGET_PROFILE_SPECIFIER:-DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER}"
 )

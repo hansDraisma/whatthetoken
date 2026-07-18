@@ -8,51 +8,18 @@ enum ClaudeUsageMapper {
         observedAt: String,
         source: ConnectorSource
     ) -> [UsageSnapshot] {
-        var snapshots: [UsageSnapshot] = []
-
-        if let fiveHour = response.fiveHour {
-            snapshots.append(makeUtilizationSnapshot(
-                id: "snap_anthropic_claude_code_five_hour_\(deviceId)",
-                windowKey: "five_hour",
-                usage: fiveHour,
-                userAccountId: userAccountId,
-                observedAt: observedAt,
-                source: source
-            ))
-        }
-
-        if let sevenDay = response.sevenDay {
-            snapshots.append(makeUtilizationSnapshot(
-                id: "snap_anthropic_claude_code_seven_day_\(deviceId)",
-                windowKey: "seven_day",
-                usage: sevenDay,
-                userAccountId: userAccountId,
-                observedAt: observedAt,
-                source: source
-            ))
-        }
-
-        if let sevenDayOpus = response.sevenDayOpus {
-            snapshots.append(makeUtilizationSnapshot(
-                id: "snap_anthropic_claude_code_seven_day_opus_\(deviceId)",
-                windowKey: "seven_day_opus",
-                usage: sevenDayOpus,
-                userAccountId: userAccountId,
-                observedAt: observedAt,
-                source: source
-            ))
-        }
-
-        if let sevenDaySonnet = response.sevenDaySonnet {
-            snapshots.append(makeUtilizationSnapshot(
-                id: "snap_anthropic_claude_code_seven_day_sonnet_\(deviceId)",
-                windowKey: "seven_day_sonnet",
-                usage: sevenDaySonnet,
-                userAccountId: userAccountId,
-                observedAt: observedAt,
-                source: source
-            ))
-        }
+        var snapshots = response.windows
+            .sorted { windowOrder($0.key) < windowOrder($1.key) }
+            .map { windowKey, usage in
+                makeUtilizationSnapshot(
+                    id: "snap_anthropic_claude_code_\(windowKey)_\(deviceId)",
+                    windowKey: windowKey,
+                    usage: usage,
+                    userAccountId: userAccountId,
+                    observedAt: observedAt,
+                    source: source
+                )
+            }
 
         if let extraUsage = response.extraUsage,
            let extraUsageSnapshot = makeExtraUsageSnapshot(
@@ -66,6 +33,17 @@ enum ClaudeUsageMapper {
         }
 
         return snapshots
+    }
+
+    private static func windowOrder(_ key: String) -> String {
+        switch key {
+        case "five_hour":
+            return "0"
+        case "seven_day":
+            return "1"
+        default:
+            return "2_\(key)"
+        }
     }
 
     private static func makeUtilizationSnapshot(

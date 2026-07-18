@@ -26,6 +26,8 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>SentryDSN</key>
+	<string>$(SENTRY_DSN)</string>
 	<key>SUFeedURL</key>
 	<string>https://hansdraisma.github.io/whatthetoken/appcast.xml</string>
 	<key>SUAutomaticallyUpdate</key>

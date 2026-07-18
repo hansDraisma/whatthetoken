@@ -109,6 +109,7 @@ Disconnect is the privacy boundary for local retention. Disconnecting a provider
 - Prefer parsing local quota/status files or direct local client signals over inspecting authenticated browser traffic.
 - If a source can contain forbidden data, parse only the minimal fields needed and discard the raw source immediately.
 - Do not log raw provider responses or local file contents.
+- Claude schema-drift reports may include only the failure category and sorted top-level/affected field names. They must never include the response body, usage values, reset timestamps, credentials, headers, account identifiers, or local paths. Sentry automatic crash, session, performance, network, hang, swizzling, and breadcrumb collection must remain disabled for this integration.
 - The notifications subsystem may use `os_log` (subsystem `app.whatthetoken.mac`, category `notifications`) for save/load/delivery failures. Error descriptions must be interpolated as `privacy: .private` so local file paths surfaced by Cocoa errors are not exposed in `log show` or `sysdiagnose`. Sanitized identifiers such as notification intent IDs may be `privacy: .public`.
 - Treat parser failures as health states with confidence/freshness impact, not as a reason to collect broader data.
 - Label numbers with confidence, freshness, and undercount risk close to where users see the number.

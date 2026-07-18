@@ -74,7 +74,10 @@ struct CodexAppServerExecutableResolver: CodexAppServerExecutableResolving {
         let knownLocations = [
             homeDirectory.appendingPathComponent(".local/bin/codex").path,
             "/opt/homebrew/bin/codex",
-            "/usr/local/bin/codex"
+            "/usr/local/bin/codex",
+            "/Applications/Codex.app/Contents/Resources/codex",
+            homeDirectory.appendingPathComponent("Applications/Codex.app/Contents/Resources/codex").path,
+            homeDirectory.appendingPathComponent("Library/Application Support/com.conductor.app/bin/codex").path
         ]
         let pathCandidates = environment["PATH", default: ""]
             .split(separator: ":")

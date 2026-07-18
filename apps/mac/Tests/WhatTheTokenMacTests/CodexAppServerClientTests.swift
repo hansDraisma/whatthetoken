@@ -106,6 +106,34 @@ import Testing
     #expect(executableURL.path == "/opt/homebrew/bin/codex")
 }
 
+@Test func codexExecutableResolverFindsCodexAppWhenPathIsRestricted() throws {
+    let resolver = CodexAppServerExecutableResolver(
+        environment: ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"],
+        homeDirectory: URL(fileURLWithPath: "/Users/example"),
+        fileExists: { path in
+            path == "/Applications/Codex.app/Contents/Resources/codex"
+        }
+    )
+
+    let executableURL = try #require(resolver.executableURL())
+
+    #expect(executableURL.path == "/Applications/Codex.app/Contents/Resources/codex")
+}
+
+@Test func codexExecutableResolverFindsConductorCodexWhenPathIsRestricted() throws {
+    let resolver = CodexAppServerExecutableResolver(
+        environment: ["PATH": "/usr/bin:/bin:/usr/sbin:/sbin"],
+        homeDirectory: URL(fileURLWithPath: "/Users/example"),
+        fileExists: { path in
+            path == "/Users/example/Library/Application Support/com.conductor.app/bin/codex"
+        }
+    )
+
+    let executableURL = try #require(resolver.executableURL())
+
+    #expect(executableURL.path == "/Users/example/Library/Application Support/com.conductor.app/bin/codex")
+}
+
 @Test func codexExecutableResolverPrefersKnownLocationOverPath() throws {
     // Hardening: a poisoned $PATH entry must not preempt a real install location.
     let resolver = CodexAppServerExecutableResolver(

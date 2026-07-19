@@ -365,7 +365,7 @@ private func sensitiveKeyMatches(
 }
 
 @MainActor
-@Test func loadPersistedStateMarksAlreadyConnectedProviderOnboardingDone() async {
+@Test func loadPersistedStateKeepsConnectedProviderOnboardingPendingForExplicitContinue() async {
     var settings = AppSettings.defaults
     settings.connectors.claudeCode.isEnabled = true
     settings.onboarding.steps.connectProviders = .pending
@@ -376,7 +376,7 @@ private func sensitiveKeyMatches(
 
     await vm.loadPersistedState()
 
-    #expect(vm.settings.onboarding.steps.connectProviders == .done)
+    #expect(vm.settings.onboarding.steps.connectProviders == .pending)
 }
 
 @MainActor
@@ -1212,14 +1212,14 @@ final class FlakyNotificationStateStore: NotificationStateStore, @unchecked Send
 }
 
 @MainActor
-@Test func replayOnboardingMarksAlreadyConnectedProvidersDone() async {
+@Test func replayOnboardingKeepsConnectedProvidersPendingForExplicitContinue() async {
     var settings = AppSettings.defaults
     settings.connectors.claudeCode.isEnabled = true
     let viewModel = StatusViewModel(settings: settings)
 
     await viewModel.replayOnboarding()
 
-    #expect(viewModel.settings.onboarding.steps.connectProviders == .done)
+    #expect(viewModel.settings.onboarding.steps.connectProviders == .pending)
 }
 
 @MainActor

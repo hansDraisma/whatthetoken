@@ -376,9 +376,6 @@ final class StatusViewModel {
     func replayOnboarding() async {
         var nextSettings = settings
         var steps = OnboardingState.applyReplay(to: nextSettings.onboarding.steps)
-        if nextSettings.connectors.claudeCode.isEnabled || nextSettings.connectors.codex.isEnabled {
-            steps.connectProviders = .done
-        }
         if nextSettings.launchAtLogin.isEnabled {
             steps.launchAtLogin = .done
         }
@@ -405,10 +402,6 @@ final class StatusViewModel {
                 // even though WhatTheToken alerts could still be switched off.
                 nextSettings.onboarding.steps.allowNotifications = .pending
             }
-        }
-        if previousSteps.connectProviders == .pending,
-           nextSettings.connectors.claudeCode.isEnabled || nextSettings.connectors.codex.isEnabled {
-            nextSettings.onboarding.steps.connectProviders = .done
         }
         if nextSettings.onboarding.steps != settings.onboarding.steps {
             await saveSettings(nextSettings)

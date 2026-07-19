@@ -61,6 +61,8 @@ Run `apps/mac/Scripts/publish-release.sh` locally from a clean, up-to-date priva
 5. updates the public repository's root `appcast.xml`, and
 6. downloads the public DMG and checksum to verify them.
 
+Before archiving, run `apps/mac/Scripts/release-preflight.sh --version <version> --build <build>`. It checks all local signing/profile/notarization inputs and public GitHub endpoints without printing credential values.
+
 Apple Developer ID, notarization, Sparkle private-key, and monitoring credentials remain on the release machine. The public repository receives only the DMG, checksum, signed appcast, customer documentation, and sanitized release notes. Public release publication is deliberately local and maintainer-approved; it is not an unattended workflow.
 
 If publication is interrupted after the draft is created or the release is published, rerun the same command with `--resume`. Resume mode uploads only an asset missing from a still-mutable draft, downloads all hosted assets, compares them byte-for-byte with the locally verified DMG and checksum, and then safely completes release/appcast publication. It never replaces an existing release asset.

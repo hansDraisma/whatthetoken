@@ -40,6 +40,12 @@ swift test
 cd ../..
 ```
 
+Run the full non-secret release preflight before building. It verifies clean-source provenance, version metadata, Developer ID certificate lifetime, app/widget profiles, notarization access, the Sparkle keypair, GitHub authentication, immutable releases, and the public appcast without printing credentials:
+
+```bash
+apps/mac/Scripts/release-preflight.sh --version 0.1.0 --build 1
+```
+
 Review release commands without credentials, then exercise the unsigned archive:
 
 ```bash

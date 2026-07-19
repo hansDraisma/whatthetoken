@@ -58,4 +58,5 @@ jobs:
           ruby -rjson -e 'JSON.parse(File.read(ARGV.fetch(0)))' apps/mac/Package.resolved
           ruby -rjson -e 'JSON.parse(File.read(ARGV.fetch(0)))' apps/mac/WhatTheToken.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           test -f apps/mac/Sources/WhatTheTokenMac/Assets.xcassets/AppIcon.appiconset/Contents.json
+          apps/mac/Scripts/release-preflight.sh --version 0.1.0 --build 1 --dry-run
           apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode dry-run

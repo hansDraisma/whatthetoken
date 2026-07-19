@@ -204,6 +204,30 @@ import Testing
             ]
         ),
         (
+            "release-preflight.sh",
+            [
+                "git status --porcelain",
+                "git branch --show-current",
+                "git rev-parse origin/main",
+                "DEVELOPER_ID_TEAM_ID",
+                "DEVELOPER_ID_SIGNING_IDENTITY",
+                "DEVELOPER_ID_APP_PROFILE_SPECIFIER",
+                "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER",
+                "SENTRY_DSN",
+                "NOTARY_KEYCHAIN_PROFILE",
+                "security find-identity",
+                "openssl x509 -checkend 2592000",
+                "security cms -D -i",
+                "com.whatthetoken.mac.widget",
+                "xcrun notarytool history",
+                "https://sparkle-project.org",
+                "immutable-releases",
+                "PUBLIC_APPCAST_URL",
+                "xmllint --noout",
+                "Release preflight passed"
+            ]
+        ),
+        (
             "smoke-archive-unsigned.sh",
             [
                 "xcodebuild",
@@ -471,6 +495,20 @@ import Testing
     #expect(result.output.contains("gh release create"))
     #expect(result.output.contains("gh release edit"))
     #expect(result.output.contains("No release, tag, asset, or appcast was published."))
+}
+
+@Test func releasePreflightDryRunListsCredentialAndHostingChecksWithoutReadingSecrets() throws {
+    let result = try runMacReleaseScript(
+        "release-preflight.sh",
+        arguments: ["--version", "0.1.0", "--build", "1", "--dry-run"]
+    )
+
+    #expect(result.exitCode == 0)
+    #expect(result.output.contains("Developer ID identity, certificate lifetime, and app/widget profiles"))
+    #expect(result.output.contains("SENTRY_DSN without printing it"))
+    #expect(result.output.contains("notarytool Keychain profile and Sparkle private key"))
+    #expect(result.output.contains("public repository, immutable releases, Pages, and appcast"))
+    #expect(result.output.contains("No credentials, profiles, tags, or artifacts were changed."))
 }
 
 private struct ScriptResult {

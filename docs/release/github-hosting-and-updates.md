@@ -67,6 +67,8 @@ Apple Developer ID, notarization, Sparkle private-key, and monitoring credential
 
 If publication is interrupted after the draft is created or the release is published, rerun the same command with `--resume`. Resume mode uploads only an asset missing from a still-mutable draft, downloads all hosted assets, compares them byte-for-byte with the locally verified DMG and checksum, and then safely completes release/appcast publication. It never replaces an existing release asset.
 
+After publication, use `apps/mac/Scripts/install-published-release.sh` first in verification-only mode and then with `--install`. It re-downloads the immutable public assets, verifies the checksum, notarization, Gatekeeper assessment, signatures, version/build, and update feed, and preserves the previously installed app as a timestamped backup.
+
 ## Public V1 Update Posture
 
 Public V1 is manual-first:

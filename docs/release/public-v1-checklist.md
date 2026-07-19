@@ -146,6 +146,13 @@ curl -fL https://hansdraisma.github.io/whatthetoken-releases/appcast.xml
 - If the smoke has not passed, release notes must state GitHub Releases is the supported update path and must not market Sparkle as the primary update path.
 - Confirm private vulnerability reporting and safe public issue forms are enabled.
 
+Verify the exact public assets and install the customer build on the release Mac. Existing `/Applications/WhatTheToken.app` is moved to a timestamped, recoverable backup before the verified app is installed:
+
+```bash
+apps/mac/Scripts/install-published-release.sh --version 0.1.0 --build 1
+apps/mac/Scripts/install-published-release.sh --version 0.1.0 --build 1 --install
+```
+
 If shipping a release with Sparkle intentionally inert, skip the update smoke and hide the in-app action. If `SUPublicEDKey` and `SUFeedURL` are embedded, confirm `Check for Updates` is visible and manual-only.
 
 ## Credential-Gated Boundary

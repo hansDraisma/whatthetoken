@@ -228,6 +228,29 @@ import Testing
             ]
         ),
         (
+            "install-published-release.sh",
+            [
+                "hansDraisma/whatthetoken-releases",
+                "https://hansdraisma.github.io/whatthetoken-releases/appcast.xml",
+                "curl -fL --retry 3",
+                "shasum -a 256 -c",
+                "verify-release-artifacts.sh",
+                "codesign --verify",
+                "xcrun stapler validate",
+                "spctl --assess --type install",
+                "hdiutil attach",
+                "CFBundleShortVersionString",
+                "CFBundleVersion",
+                "SUFeedURL",
+                "--install",
+                "STAGED_APP=\"/Applications/.WhatTheToken.installing.$$.app\"",
+                "install-backups",
+                "pkill -TERM -x WhatTheTokenMac",
+                "the previous app was restored when available",
+                "open \"$INSTALL_PATH\""
+            ]
+        ),
+        (
             "smoke-archive-unsigned.sh",
             [
                 "xcodebuild",
@@ -509,6 +532,24 @@ import Testing
     #expect(result.output.contains("notarytool Keychain profile and Sparkle private key"))
     #expect(result.output.contains("public repository, immutable releases, Pages, and appcast"))
     #expect(result.output.contains("No credentials, profiles, tags, or artifacts were changed."))
+}
+
+@Test func publishedInstallerDryRunSeparatesVerificationFromExplicitInstallation() throws {
+    let verifyResult = try runMacReleaseScript(
+        "install-published-release.sh",
+        arguments: ["--version", "0.1.0", "--build", "1", "--dry-run"]
+    )
+    let installResult = try runMacReleaseScript(
+        "install-published-release.sh",
+        arguments: ["--version", "0.1.0", "--build", "1", "--install", "--dry-run"]
+    )
+
+    #expect(verifyResult.exitCode == 0)
+    #expect(verifyResult.output.contains("verify-release-artifacts.sh"))
+    #expect(!verifyResult.output.contains("recoverable release backup"))
+    #expect(installResult.exitCode == 0)
+    #expect(installResult.output.contains("recoverable release backup"))
+    #expect(installResult.output.contains("No artifact was downloaded, installed, replaced, or launched."))
 }
 
 private struct ScriptResult {

@@ -78,7 +78,10 @@ case "$MODE" in
         DMG_PATH="$ROOT_DIR/.build/dmg/WhatTheToken-$VERSION.dmg"
 
         step "1/6 Verify release provenance"
-        "$ROOT_DIR/Scripts/verify-release-provenance.sh" --version "$VERSION" --build "$BUILD"
+        "$ROOT_DIR/Scripts/verify-release-provenance.sh" \
+            --version "$VERSION" \
+            --build "$BUILD" \
+            --allow-untagged-candidate
 
         step "2/6 Archive and export"
         "$ROOT_DIR/Scripts/archive-release.sh" --version "$VERSION" --build "$BUILD"

@@ -67,6 +67,8 @@ export RELEASE_WITHOUT_SENTRY=1
 apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode signed
 ```
 
+The signed rehearsal verifies clean `main` provenance but intentionally permits the release tag to be absent. The publication path does not: it requires the signed tag created after the local candidate smoke below.
+
 Required outputs:
 
 - `apps/mac/.build/archive/WhatTheToken.xcarchive`

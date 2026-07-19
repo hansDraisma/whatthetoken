@@ -3,10 +3,16 @@ import Testing
 @testable import WhatTheTokenMac
 
 @Suite struct StatusTabStepBodyPolicyTests {
-    @Test func providerStepCompletesOnlyWhenProviderBecomesConnectedWhilePending() {
-        #expect(StatusTabStepBodyPolicy.shouldMarkConnectProvidersDone(anyProviderConnected: true, currentState: .pending) == true)
-        #expect(StatusTabStepBodyPolicy.shouldMarkConnectProvidersDone(anyProviderConnected: false, currentState: .pending) == false)
-        #expect(StatusTabStepBodyPolicy.shouldMarkConnectProvidersDone(anyProviderConnected: true, currentState: .skipped) == false)
+    @Test func providerStepCanContinueOnlyAfterAtLeastOneProviderConnects() {
+        #expect(StatusTabStepBodyPolicy.canContinueConnectingProviders(anyProviderConnected: true))
+        #expect(!StatusTabStepBodyPolicy.canContinueConnectingProviders(anyProviderConnected: false))
+    }
+
+    @Test func providerConnectionDoesNotAutomaticallyAdvanceOnboarding() throws {
+        let source = try launchSourceContents("StatusTabView.swift")
+
+        #expect(source.contains("Button(StatusTabCopy.continueTitle)"))
+        #expect(!source.contains(".onChange(of: anyProviderConnected)"))
     }
 
     @Test func notificationStepCompletesOnlyWhenNotificationsWereEnabled() {
@@ -35,5 +41,15 @@ import Testing
     @Test func launchAtLoginStepCompletesOnlyOnSuccess() {
         #expect(StatusTabStepBodyPolicy.shouldMarkLaunchAtLoginDone(success: true) == true)
         #expect(StatusTabStepBodyPolicy.shouldMarkLaunchAtLoginDone(success: false) == false)
+    }
+
+    private func launchSourceContents(_ name: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/WhatTheTokenMac/Views/Launch/\(name)")
+        return try String(contentsOf: url, encoding: .utf8)
     }
 }

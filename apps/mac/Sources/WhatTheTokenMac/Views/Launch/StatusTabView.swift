@@ -8,11 +8,8 @@ enum StatusTabBannerVisibility {
 }
 
 enum StatusTabStepBodyPolicy {
-    static func shouldMarkConnectProvidersDone(
-        anyProviderConnected: Bool,
-        currentState: OnboardingStepState
-    ) -> Bool {
-        anyProviderConnected && currentState == .pending
+    static func canContinueConnectingProviders(anyProviderConnected: Bool) -> Bool {
+        anyProviderConnected
     }
 
     static func shouldMarkNotificationsDone(result: NotificationSettingsUpdateResult) -> Bool {
@@ -147,6 +144,8 @@ struct StatusTabView: View {
 
     private var connectProvidersBody: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Text(StatusTabCopy.connectProvidersInstruction)
+                .font(.caption)
             BannerProviderCard(
                 title: StatusTabCopy.claudeProviderTitle,
                 subtitle: StatusTabCopy.claudeProviderSubtitle,
@@ -167,14 +166,12 @@ struct StatusTabView: View {
                     Task { await viewModel.markOnboardingStep(.connectProviders, as: .skipped) }
                 }
                 .buttonStyle(.link)
-            }
-        }
-        .onChange(of: anyProviderConnected) { _, newValue in
-            if StatusTabStepBodyPolicy.shouldMarkConnectProvidersDone(
-                anyProviderConnected: newValue,
-                currentState: viewModel.settings.onboarding.steps.connectProviders
-            ) {
-                Task { await viewModel.markOnboardingStep(.connectProviders, as: .done) }
+                Button(StatusTabCopy.continueTitle) {
+                    Task { await viewModel.markOnboardingStep(.connectProviders, as: .done) }
+                }
+                .disabled(!StatusTabStepBodyPolicy.canContinueConnectingProviders(
+                    anyProviderConnected: anyProviderConnected
+                ))
             }
         }
     }

@@ -68,7 +68,12 @@ import Testing
         #expect(source.contains("MacChromeActions.openLaunchWindow("))
         #expect(source.contains("dismissPopover:"))
         #expect(source.contains("openWindow:"))
-        #expect(source.contains("app?.launchWindowController.open()"))
+        #expect(source.contains("MacAppRuntime.shared.app?.launchWindowController.open()"))
+        #expect(!source.contains("private weak var app: AppModel?"))
+        #expect(source.contains("func applicationWillFinishLaunching("))
+        #expect(source.contains("MacAppRuntime.shared.installOpenApplicationEventHandler()"))
+        #expect(source.contains("keyAELaunchedAsLogInItem"))
+        #expect(source.contains("keyAELaunchedAsServiceItem"))
     }
 
     @Test func defaultDismissPopoverUsesExplicitMenuBarPopoverIdentifier() throws {

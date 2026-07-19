@@ -6,14 +6,12 @@ enum AppStartupRoutine {
         loadPersistedState: () async throws -> Void,
         logger: AppLogger,
         registerHotkey: () async -> Void,
-        startRefresh: () -> Void,
-        autoOpenLaunchWindow: () -> Void
+        startRefresh: () -> Void
     ) async {
         do {
             try await loadPersistedState()
             await registerHotkey()
             startRefresh()
-            autoOpenLaunchWindow()
         } catch {
             logger.error("Failed to load persisted state: \(error.localizedDescription)")
         }

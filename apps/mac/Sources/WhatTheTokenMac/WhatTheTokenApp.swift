@@ -80,6 +80,63 @@ enum AppLaunchRouter {
     }
 }
 
+@MainActor
+final class MacAppRuntime: NSObject {
+    static let shared = MacAppRuntime()
+
+    private(set) var app: AppModel?
+
+    private override init() {
+        super.init()
+    }
+
+    func bind(app: AppModel?) {
+        self.app = app
+    }
+
+    func openLaunchWindow() {
+        app?.launchWindowController.open()
+    }
+
+    func installOpenApplicationEventHandler() {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleOpenApplication(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kCoreEventClass),
+            andEventID: AEEventID(kAEOpenApplication)
+        )
+    }
+
+    @objc private func handleOpenApplication(
+        _ event: NSAppleEventDescriptor,
+        withReplyEvent replyEvent: NSAppleEventDescriptor
+    ) {
+        let shouldOpen = AppLaunchPresentation.shouldOpenWindow(
+            launchedAsLoginItem: event.paramDescriptor(
+                forKeyword: AEKeyword(keyAELaunchedAsLogInItem)
+            ) != nil,
+            launchedAsServiceItem: event.paramDescriptor(
+                forKeyword: AEKeyword(keyAELaunchedAsServiceItem)
+            ) != nil
+        )
+        guard shouldOpen else { return }
+        openLaunchWindow()
+    }
+
+    @objc private func openLaunchWindow(_ sender: Any?) {
+        openLaunchWindow()
+    }
+
+    func installSettingsMenuAction() {
+        guard let appMenu = NSApplication.shared.mainMenu?.items.first?.submenu,
+              let settingsItem = appMenu.items.first(where: { $0.keyEquivalent == "," }) else {
+            return
+        }
+        settingsItem.target = self
+        settingsItem.action = #selector(openLaunchWindow(_:))
+    }
+}
+
 @main
 struct WhatTheTokenApp: App {
     private let app: AppModel?
@@ -96,6 +153,7 @@ struct WhatTheTokenApp: App {
             configureInteractiveLaunch: { MacAppLauncher.configureLaunch() }
         )
         self.app = app
+        MacAppRuntime.shared.bind(app: app)
         delegateAdaptor.bind(app: app)
     }
 
@@ -147,8 +205,8 @@ struct WhatTheTokenApp: App {
                 CommandGroup(replacing: .appSettings) {
                     Button("Settings...") {
                         MacChromeActions.openLaunchWindow(
-                            dismissPopover: { app?.menuBarController.closePopover() },
-                            openWindow: { app?.launchWindowController.open() }
+                            dismissPopover: { MacAppRuntime.shared.app?.menuBarController.closePopover() },
+                            openWindow: { MacAppRuntime.shared.app?.launchWindowController.open() }
                         )
                     }
                     .keyboardShortcut(",", modifiers: .command)
@@ -160,24 +218,51 @@ struct WhatTheTokenApp: App {
 
 @MainActor
 final class MacAppDelegateAdaptor: NSObject, NSApplicationDelegate {
-    private weak var app: AppModel?
     private var delegate: MacAppDelegate?
 
     func bind(app: AppModel?) {
-        self.app = app
-        if let app {
-            delegate = MacAppDelegate(actions: AppModelDelegateActions(app: app))
-        } else {
-            delegate = nil
-        }
+        MacAppRuntime.shared.bind(app: app)
+        delegate = app.map { MacAppDelegate(actions: AppModelDelegateActions(app: $0)) }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         delegate?.applicationShouldHandleReopen(hasVisibleWindows: flag) ?? true
     }
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // SwiftUI owns the default handler for its scene lifecycle. Replace it
+        // only after SwiftUI has installed the delegate adaptor so the initial
+        // open-application event reaches the AppKit-owned launch window.
+        MacAppRuntime.shared.installOpenApplicationEventHandler()
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Reinstall after AppKit finishes launch in case scene setup refreshed
+        // its handler between the will-finish and did-finish callbacks.
+        MacAppRuntime.shared.installOpenApplicationEventHandler()
+
+        // SwiftUI finishes assembling its menu after this callback. Rewire the
+        // Settings item on the next turn so it opens the AppKit-owned window.
+        DispatchQueue.main.async {
+            MacAppRuntime.shared.installSettingsMenuAction()
+        }
+    }
+
+    func applicationDidUpdate(_ notification: Notification) {
+        MacAppRuntime.shared.installSettingsMenuAction()
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         delegate?.applicationShouldTerminateAfterLastWindowClosed() ?? false
+    }
+}
+
+enum AppLaunchPresentation {
+    static func shouldOpenWindow(
+        launchedAsLoginItem: Bool = false,
+        launchedAsServiceItem: Bool = false
+    ) -> Bool {
+        !launchedAsLoginItem && !launchedAsServiceItem
     }
 }
 

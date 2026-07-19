@@ -81,8 +81,7 @@ import Testing
             },
             logger: logger,
             registerHotkey: { Issue.record("registerHotkey should not run after load failure") },
-            startRefresh: { Issue.record("startRefresh should not run after load failure") },
-            autoOpenLaunchWindow: { Issue.record("autoOpenLaunchWindow should not run after load failure") }
+            startRefresh: { Issue.record("startRefresh should not run after load failure") }
         )
 
         #expect(loadStarted)
@@ -102,11 +101,10 @@ import Testing
                 await Task.yield()
                 events.append("register:end")
             },
-            startRefresh: { events.append("refresh") },
-            autoOpenLaunchWindow: { events.append("open") }
+            startRefresh: { events.append("refresh") }
         )
 
-        #expect(events == ["load", "register:start", "register:end", "refresh", "open"])
+        #expect(events == ["load", "register:start", "register:end", "refresh"])
     }
 
     @MainActor
@@ -129,11 +127,10 @@ import Testing
             },
             logger: logger,
             registerHotkey: { events.append("register") },
-            startRefresh: { events.append("refresh") },
-            autoOpenLaunchWindow: { events.append("open") }
+            startRefresh: { events.append("refresh") }
         )
 
-        #expect(events == ["load", "register", "refresh", "open"])
+        #expect(events == ["load", "register", "refresh"])
         #expect(logger.messages.isEmpty)
     }
 
@@ -142,6 +139,7 @@ import Testing
         let statusViewModel = try sourceContents("ViewModels/StatusViewModel.swift")
 
         #expect(appModel.contains("try await viewModel.loadPersistedStateThrowing()"))
+        #expect(!appModel.contains("autoOpenLaunchWindow"))
         #expect(statusViewModel.contains("func loadPersistedStateThrowing() async throws"))
     }
 

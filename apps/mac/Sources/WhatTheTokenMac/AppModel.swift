@@ -35,13 +35,7 @@ final class AppModel {
                 loadPersistedState: { try await viewModel.loadPersistedStateThrowing() },
                 logger: OSLogAppLogger(category: "AppModel.live"),
                 registerHotkey: { await viewModel.registerCurrentHotkey() },
-                startRefresh: { backgroundRefreshController.start() },
-                autoOpenLaunchWindow: {
-                    FirstLaunchAutoOpenSignaler.signalIfNeeded(
-                        settings: viewModel.settings,
-                        open: { launchWindowController.open() }
-                    )
-                }
+                startRefresh: { backgroundRefreshController.start() }
             )
         }
     }

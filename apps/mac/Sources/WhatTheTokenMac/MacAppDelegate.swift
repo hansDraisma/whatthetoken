@@ -46,14 +46,3 @@ extension MacAppDelegate: NSApplicationDelegate {
     }
 }
 #endif
-
-@MainActor
-enum FirstLaunchAutoOpenSignaler {
-    static func signalIfNeeded(
-        settings: AppSettings,
-        open: () -> Void
-    ) {
-        guard settings.onboarding.firstLaunchCompleted == false else { return }
-        open()
-    }
-}

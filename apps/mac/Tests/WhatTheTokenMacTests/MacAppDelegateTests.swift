@@ -43,6 +43,15 @@ import Testing
         #expect(result == false)
     }
 
+    @Test func defaultLaunchOpensTheRealWindow() {
+        #expect(AppLaunchPresentation.shouldOpenWindow())
+    }
+
+    @Test func nonDefaultLaunchStaysQuietForBackgroundStarts() {
+        #expect(!AppLaunchPresentation.shouldOpenWindow(launchedAsLoginItem: true))
+        #expect(!AppLaunchPresentation.shouldOpenWindow(launchedAsServiceItem: true))
+    }
+
     @MainActor
     @Test func reopenWithVisibleLaunchWindowBringsItForward() {
         let actions = SpyDelegateActions(hasVisibleLaunchWindow: true)
@@ -65,27 +74,6 @@ import Testing
         #expect(actions.calls == ["openLaunchWindow"])
     }
 
-    @MainActor
-    @Test func signalsLaunchWindowWhenFirstLaunchNotCompleted() {
-        var opened = false
-        var settings = AppSettings.defaults
-        settings.onboarding.firstLaunchCompleted = false
-
-        FirstLaunchAutoOpenSignaler.signalIfNeeded(settings: settings, open: { opened = true })
-
-        #expect(opened == true)
-    }
-
-    @MainActor
-    @Test func doesNotSignalLaunchWindowOnSubsequentLaunch() {
-        var opened = false
-        var settings = AppSettings.defaults
-        settings.onboarding.firstLaunchCompleted = true
-
-        FirstLaunchAutoOpenSignaler.signalIfNeeded(settings: settings, open: { opened = true })
-
-        #expect(opened == false)
-    }
 }
 
 @MainActor

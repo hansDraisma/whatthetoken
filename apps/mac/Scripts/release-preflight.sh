@@ -5,15 +5,16 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$ROOT_DIR/../.." && pwd)"
 CONFIG="$ROOT_DIR/Packaging/WhatTheToken.xcconfig"
 INFO_PLIST="$ROOT_DIR/Packaging/Info.plist"
+APP_ENTITLEMENTS="$ROOT_DIR/Packaging/WhatTheToken.entitlements"
+WIDGET_ENTITLEMENTS="$ROOT_DIR/Packaging/WhatTheTokenWidget.entitlements"
 VERSION=""
 BUILD=""
 DRY_RUN=0
 TEAM_ID="${DEVELOPER_ID_TEAM_ID:-}"
 SIGNING_IDENTITY="${DEVELOPER_ID_SIGNING_IDENTITY:-}"
-APP_PROFILE_SPECIFIER="${DEVELOPER_ID_APP_PROFILE_SPECIFIER:-}"
-WIDGET_PROFILE_SPECIFIER="${DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER:-}"
 NOTARY_PROFILE="${NOTARY_KEYCHAIN_PROFILE:-}"
 SENTRY_DSN_VALUE="${SENTRY_DSN:-}"
+RELEASE_WITHOUT_SENTRY_VALUE="${RELEASE_WITHOUT_SENTRY:-0}"
 PUBLIC_RELEASE_REPOSITORY="${PUBLIC_RELEASE_REPOSITORY:-hansDraisma/whatthetoken-releases}"
 PUBLIC_APPCAST_URL="${PUBLIC_APPCAST_URL:-https://hansdraisma.github.io/whatthetoken-releases/appcast.xml}"
 EXPECTED_SPARKLE_KEY="rwQnge6z/GQvR9NwGuQFBpN44ZcaUBzixfISv77Z2hg="
@@ -71,15 +72,15 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     printf '%s\n' \
         'Would verify clean main source and origin/main provenance.' \
         'Would verify version/build metadata and pinned dependencies.' \
-        'Would verify Developer ID identity, certificate lifetime, and app/widget profiles.' \
-        'Would verify SENTRY_DSN without printing it.' \
+        'Would verify Developer ID identity, certificate lifetime, and Team-ID app group entitlements.' \
+        'Would verify SENTRY_DSN or an explicit telemetry-free release mode without printing secrets.' \
         'Would verify the notarytool Keychain profile and Sparkle private key.' \
         'Would verify the public repository, immutable releases, Pages, and appcast.' \
-        'Dry run only. No credentials, profiles, tags, or artifacts were changed.'
+        'Dry run only. No credentials, tags, or artifacts were changed.'
     exit 0
 fi
 
-for command_name in git gh curl xmllint security openssl xcrun find grep; do
+for command_name in git gh curl xmllint security openssl xcrun grep; do
     if command -v "$command_name" >/dev/null 2>&1; then
         ok "command available: $command_name"
     else
@@ -121,20 +122,16 @@ if [[ -n "$SIGNING_IDENTITY" ]]; then
 else
     missing 'DEVELOPER_ID_SIGNING_IDENTITY'
 fi
-if [[ -n "$APP_PROFILE_SPECIFIER" ]]; then
-    ok 'DEVELOPER_ID_APP_PROFILE_SPECIFIER is configured'
-else
-    missing 'DEVELOPER_ID_APP_PROFILE_SPECIFIER'
-fi
-if [[ -n "$WIDGET_PROFILE_SPECIFIER" ]]; then
-    ok 'DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER is configured'
-else
-    missing 'DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER'
-fi
-if [[ "$SENTRY_DSN_VALUE" == https://* ]]; then
+if [[ "$RELEASE_WITHOUT_SENTRY_VALUE" != "0" && "$RELEASE_WITHOUT_SENTRY_VALUE" != "1" ]]; then
+    missing 'RELEASE_WITHOUT_SENTRY must be 0 or 1'
+elif [[ "$SENTRY_DSN_VALUE" == https://* && "$RELEASE_WITHOUT_SENTRY_VALUE" != "1" ]]; then
     ok 'SENTRY_DSN is a configured HTTPS DSN'
+elif [[ -z "$SENTRY_DSN_VALUE" && "$RELEASE_WITHOUT_SENTRY_VALUE" == "1" ]]; then
+    ok 'explicit telemetry-free release mode is configured'
+elif [[ -n "$SENTRY_DSN_VALUE" && "$RELEASE_WITHOUT_SENTRY_VALUE" == "1" ]]; then
+    missing 'choose SENTRY_DSN or RELEASE_WITHOUT_SENTRY=1, not both'
 else
-    missing 'SENTRY_DSN must be a public HTTPS DSN'
+    missing 'set a public HTTPS SENTRY_DSN or RELEASE_WITHOUT_SENTRY=1'
 fi
 if [[ -n "$NOTARY_PROFILE" ]]; then
     ok 'NOTARY_KEYCHAIN_PROFILE is configured'
@@ -156,54 +153,14 @@ if [[ -n "$SIGNING_IDENTITY" ]]; then
     fi
 fi
 
-PROFILE_PLIST="$(mktemp "${TMPDIR:-/tmp}/whatthetoken-profile.XXXXXX.plist")"
-cleanup() {
-    rm -f "$PROFILE_PLIST"
-}
-trap cleanup EXIT
-
-profile_is_installed() {
-    local expected_name="$1"
-    local expected_bundle="$2"
-    local profile_path
-    local profile_name
-    local profile_team
-    local profile_app_id
-
-    while IFS= read -r profile_path; do
-        security cms -D -i "$profile_path" > "$PROFILE_PLIST" 2>/dev/null || continue
-        profile_name="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST" 2>/dev/null || true)"
-        profile_team="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PROFILE_PLIST" 2>/dev/null || true)"
-        profile_app_id="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$PROFILE_PLIST" 2>/dev/null || true)"
-        if [[ "$profile_name" == "$expected_name" \
-            && "$profile_team" == "$TEAM_ID" \
-            && "$profile_app_id" == "$TEAM_ID.$expected_bundle" ]]; then
-            return 0
-        fi
-    done < <(
-        for profile_directory in \
-            "$HOME/Library/MobileDevice/Provisioning Profiles" \
-            "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
-            [[ -d "$profile_directory" ]] || continue
-            find "$profile_directory" -maxdepth 1 -type f \
-                \( -name '*.provisionprofile' -o -name '*.mobileprovision' \) -print
-        done
-    )
-    return 1
-}
-
-if [[ -n "$TEAM_ID" && -n "$APP_PROFILE_SPECIFIER" ]]; then
-    if profile_is_installed "$APP_PROFILE_SPECIFIER" 'com.whatthetoken.mac'; then
-        ok 'app Developer ID profile matches team and bundle ID'
+if [[ -n "$TEAM_ID" ]]; then
+    EXPECTED_APP_GROUP="$TEAM_ID.com.whatthetoken.mac"
+    APP_GROUP="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$APP_ENTITLEMENTS" 2>/dev/null || true)"
+    WIDGET_APP_GROUP="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$WIDGET_ENTITLEMENTS" 2>/dev/null || true)"
+    if [[ "$APP_GROUP" == "$EXPECTED_APP_GROUP" && "$WIDGET_APP_GROUP" == "$EXPECTED_APP_GROUP" ]]; then
+        ok 'app and widget use the profileless Team-ID macOS app group'
     else
-        missing 'installed app Developer ID profile matching team and com.whatthetoken.mac'
-    fi
-fi
-if [[ -n "$TEAM_ID" && -n "$WIDGET_PROFILE_SPECIFIER" ]]; then
-    if profile_is_installed "$WIDGET_PROFILE_SPECIFIER" 'com.whatthetoken.mac.widget'; then
-        ok 'widget Developer ID profile matches team and bundle ID'
-    else
-        missing 'installed widget Developer ID profile matching team and com.whatthetoken.mac.widget'
+        missing "app and widget App Group must be $EXPECTED_APP_GROUP"
     fi
 fi
 

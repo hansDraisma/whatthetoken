@@ -55,8 +55,9 @@ import Testing
 @Test func releaseArtifactVerificationDoesNotDeepVerifyOuterAppPath() throws {
     let script = try macFileContents("Scripts/verify-release-artifacts.sh")
 
-    #expect(!script.contains("run_command codesign --verify --deep --strict --verbose=2 \"$APP_PATH\""))
-    #expect(script.contains("run_command codesign --verify --strict --verbose=2 \"$APP_PATH\""))
+    #expect(!script.contains("codesign --verify --deep --strict --verbose=2 \"$app_path\""))
+    #expect(script.contains("codesign --verify --strict --verbose=2 \"$app_path\""))
+    #expect(script.contains("codesign --verify --deep --strict --verbose=2 \"$COPY_DIR/WhatTheToken.app\""))
 }
 
 @Test func releaseArtifactDryRunPipelinesArePrintedAsShellCommands() throws {
@@ -89,16 +90,13 @@ import Testing
                 "rm -rf \"$ARCHIVE_PATH\"",
                 "rm -rf \"$EXPORT_DIR\"",
                 "DEVELOPER_ID_TEAM_ID",
-                "DEVELOPER_ID_APP_PROFILE_SPECIFIER",
-                "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER",
-                "WTT_DEVELOPER_ID_APP_PROFILE_SPECIFIER",
-                "WTT_DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER",
                 "SENTRY_DSN",
-                "SENTRY_DSN must be set to an https Sentry DSN",
+                "RELEASE_WITHOUT_SENTRY",
+                "explicit telemetry-free release",
+                "EXPECTED_APP_GROUP",
+                "App and widget App Group must match the signing team",
                 "provisioningProfiles",
-                "plutil -replace 'provisioningProfiles.com.whatthetoken.mac' -string",
-                "plutil -replace 'provisioningProfiles.com.whatthetoken.mac.widget' -string",
-                "com.whatthetoken.mac.widget",
+                "Delete :provisioningProfiles",
                 "-verify_arch"
             ]
         ),
@@ -154,15 +152,19 @@ import Testing
                 "PrivacyInfo.xcprivacy",
                 "Timestamp=",
                 "Contents/PlugIns/WhatTheTokenWidget.appex",
-                "test -d \"$APP_PATH/Contents/PlugIns/WhatTheTokenWidget.appex\"",
+                "test -d \"$widget_path\"",
+                "verify_profileless_app_bundle \"$COPY_DIR/WhatTheToken.app\"",
                 "codesign --verify --strict",
                 "com.whatthetoken.mac.widget",
                 "WIDGET_TEAM=",
                 "APP_TEAM=",
                 "widget TeamIdentifier",
                 "codesign -d --entitlements",
-                "group.com.whatthetoken.mac",
+                "EXPECTED_APP_GROUP=\"$EXPECTED_TEAM_ID.com.whatthetoken.mac\"",
+                "Developer ID team",
                 "App Group entitlement",
+                "com.apple.security.app-sandbox",
+                "profileless Team-ID app group",
                 "cd \"$(dirname \"$DMG_PATH\")\" && shasum -a 256 \"$(basename \"$DMG_PATH\")\""
             ]
         ),
@@ -211,14 +213,13 @@ import Testing
                 "git rev-parse origin/main",
                 "DEVELOPER_ID_TEAM_ID",
                 "DEVELOPER_ID_SIGNING_IDENTITY",
-                "DEVELOPER_ID_APP_PROFILE_SPECIFIER",
-                "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER",
                 "SENTRY_DSN",
+                "RELEASE_WITHOUT_SENTRY",
                 "NOTARY_KEYCHAIN_PROFILE",
                 "security find-identity",
                 "openssl x509 -checkend 2592000",
-                "security cms -D -i",
-                "com.whatthetoken.mac.widget",
+                "EXPECTED_APP_GROUP",
+                "profileless Team-ID macOS app group",
                 "xcrun notarytool history",
                 "https://sparkle-project.org",
                 "immutable-releases",
@@ -336,81 +337,43 @@ import Testing
     }
 }
 
-@Test func releaseArchiveRequiresDistinctProvisioningProfilesForAppAndWidget() throws {
+@Test func releaseArchiveRequiresExplicitMonitoringChoiceBeforeRunningXcodebuild() throws {
     let result = try runMacReleaseScript(
         "archive-release.sh",
         arguments: ["--version", "0.1.0", "--build", "1", "--team-id", "3U98C8T3DT"],
-        environmentOverrides: [
-            "DEVELOPER_ID_APP_PROFILE_SPECIFIER": nil,
-            "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER": nil
-        ],
-        baseEnvironment: ProcessInfo.processInfo.environment.merging([
-            "DEVELOPER_ID_APP_PROFILE_SPECIFIER": "Installed App Profile",
-            "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER": "Installed Widget Profile"
-        ]) { _, new in new }
+        environmentOverrides: ["SENTRY_DSN": nil, "RELEASE_WITHOUT_SENTRY": nil]
     )
 
     #expect(result.exitCode != 0)
-    #expect(result.output.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER is required"))
-    #expect(result.output.contains("DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER is required"))
+    #expect(result.output.contains("SENTRY_DSN to an https DSN or RELEASE_WITHOUT_SENTRY=1"))
     #expect(!result.output.contains("xcodebuild"))
 }
 
-@Test func releaseArchiveReportsOnlyTheMissingProfileVariable() throws {
+@Test func releaseArchiveRejectsConflictingMonitoringChoices() throws {
     let result = try runMacReleaseScript(
         "archive-release.sh",
         arguments: ["--version", "0.1.0", "--build", "1", "--team-id", "3U98C8T3DT"],
         environmentOverrides: [
-            "DEVELOPER_ID_APP_PROFILE_SPECIFIER": nil
-        ],
-        baseEnvironment: ProcessInfo.processInfo.environment.merging([
-            "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER": "Installed Widget Profile"
-        ]) { _, new in new }
+            "SENTRY_DSN": "https://public@example.ingest.sentry.io/1",
+            "RELEASE_WITHOUT_SENTRY": "1"
+        ]
     )
 
     #expect(result.exitCode != 0)
-    #expect(result.output.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER is required"))
-    #expect(!result.output.contains("DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER is required"))
-}
-
-@Test func releaseArchiveReportsOnlyWidgetSpecifierMissing() throws {
-    let result = try runMacReleaseScript(
-        "archive-release.sh",
-        arguments: ["--version", "0.1.0", "--build", "1", "--team-id", "3U98C8T3DT"],
-        environmentOverrides: [
-            "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER": nil
-        ],
-        baseEnvironment: ProcessInfo.processInfo.environment.merging([
-            "DEVELOPER_ID_APP_PROFILE_SPECIFIER": "Installed App Profile"
-        ]) { _, new in new }
-    )
-
-    #expect(result.exitCode != 0)
-    #expect(result.output.contains("DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER is required"))
-    #expect(!result.output.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER is required"))
-}
-
-@Test func releaseArchiveRequiresSentryDSNBeforeRunningXcodebuild() throws {
-    let result = try runMacReleaseScript(
-        "archive-release.sh",
-        arguments: ["--version", "0.1.0", "--build", "1", "--team-id", "3U98C8T3DT"],
-        environmentOverrides: ["SENTRY_DSN": nil],
-        baseEnvironment: ProcessInfo.processInfo.environment.merging([
-            "DEVELOPER_ID_APP_PROFILE_SPECIFIER": "Installed App Profile",
-            "DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER": "Installed Widget Profile"
-        ]) { _, new in new }
-    )
-
-    #expect(result.exitCode != 0)
-    #expect(result.output.contains("SENTRY_DSN must be set to an https Sentry DSN"))
+    #expect(result.output.contains("Choose SENTRY_DSN or RELEASE_WITHOUT_SENTRY=1, not both"))
     #expect(!result.output.contains("xcodebuild"))
 }
 
-@Test func releaseArchiveDryRunUsesEnvVarNamesInsteadOfAngleBracketPlaceholders() throws {
-    let script = try macFileContents("Scripts/archive-release.sh")
+@Test func releaseArchiveRejectsSigningTeamThatDoesNotMatchAppGroup() throws {
+    let result = try runMacReleaseScript(
+        "archive-release.sh",
+        arguments: ["--version", "0.1.0", "--build", "1", "--team-id", "OTHERTEAM1"],
+        environmentOverrides: ["SENTRY_DSN": nil, "RELEASE_WITHOUT_SENTRY": "1"]
+    )
 
-    #expect(!script.contains("<DEVELOPER_ID_APP_PROFILE_SPECIFIER>"))
-    #expect(!script.contains("<DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER>"))
+    #expect(result.exitCode != 0)
+    #expect(result.output.contains("App and widget App Group must match the signing team"))
+    #expect(!result.output.contains("xcodebuild"))
 }
 
 @Test func releaseArchiveDryRunAvoidsEscapedDollarPlaceholders() throws {
@@ -418,8 +381,8 @@ import Testing
 
     #expect(!script.contains(#"\${DEVELOPER_ID_"#))
     #expect(script.contains(#"DRY_RUN_TEAM_ID="${TEAM_ID:-DEVELOPER_ID_TEAM_ID}""#))
-    #expect(script.contains(#"DRY_RUN_APP_PROFILE="${APP_PROFILE_SPECIFIER:-DEVELOPER_ID_APP_PROFILE_SPECIFIER}""#))
-    #expect(script.contains(#"DRY_RUN_WIDGET_PROFILE="${WIDGET_PROFILE_SPECIFIER:-DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER}""#))
+    #expect(!script.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER"))
+    #expect(!script.contains("DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER"))
     #expect(script.contains(#"ARCHIVE_SENTRY_DSN="SENTRY_DSN""#))
 }
 
@@ -527,11 +490,11 @@ import Testing
     )
 
     #expect(result.exitCode == 0)
-    #expect(result.output.contains("Developer ID identity, certificate lifetime, and app/widget profiles"))
-    #expect(result.output.contains("SENTRY_DSN without printing it"))
+    #expect(result.output.contains("Developer ID identity, certificate lifetime, and Team-ID app group entitlements"))
+    #expect(result.output.contains("SENTRY_DSN or an explicit telemetry-free release mode"))
     #expect(result.output.contains("notarytool Keychain profile and Sparkle private key"))
     #expect(result.output.contains("public repository, immutable releases, Pages, and appcast"))
-    #expect(result.output.contains("No credentials, profiles, tags, or artifacts were changed."))
+    #expect(result.output.contains("No credentials, tags, or artifacts were changed."))
 }
 
 @Test func publishedInstallerDryRunSeparatesVerificationFromExplicitInstallation() throws {

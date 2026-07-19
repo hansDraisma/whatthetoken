@@ -7,20 +7,21 @@ SCHEME="WhatTheToken"
 CONFIGURATION="Release"
 CONFIG="$ROOT_DIR/Packaging/WhatTheToken.xcconfig"
 EXPORT_OPTIONS="$ROOT_DIR/Packaging/ExportOptions.DeveloperID.plist"
+APP_ENTITLEMENTS="$ROOT_DIR/Packaging/WhatTheToken.entitlements"
+WIDGET_ENTITLEMENTS="$ROOT_DIR/Packaging/WhatTheTokenWidget.entitlements"
 ARCHIVE_PATH="$ROOT_DIR/.build/archive/WhatTheToken.xcarchive"
 EXPORT_DIR="$ROOT_DIR/.build/export"
 DRY_RUN=0
 VERSION=""
 BUILD=""
 TEAM_ID="${DEVELOPER_ID_TEAM_ID:-}"
-APP_PROFILE_SPECIFIER="${DEVELOPER_ID_APP_PROFILE_SPECIFIER:-}"
-WIDGET_PROFILE_SPECIFIER="${DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER:-}"
 SENTRY_DSN_VALUE="${SENTRY_DSN:-}"
+RELEASE_WITHOUT_SENTRY_VALUE="${RELEASE_WITHOUT_SENTRY:-0}"
 
 . "$ROOT_DIR/Scripts/release-inputs.sh"
 
 usage() {
-    printf 'Usage: %s --version <version> --build <build> [--team-id <id>] [--app-profile <name>] [--widget-profile <name>] [--archive-path <path>] [--export-dir <path>] [--dry-run]\n' "$0"
+    printf 'Usage: %s --version <version> --build <build> [--team-id <id>] [--archive-path <path>] [--export-dir <path>] [--dry-run]\n' "$0"
 }
 
 quote_command() {
@@ -48,14 +49,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --team-id)
             TEAM_ID="${2:-}"
-            shift 2
-            ;;
-        --app-profile)
-            APP_PROFILE_SPECIFIER="${2:-}"
-            shift 2
-            ;;
-        --widget-profile)
-            WIDGET_PROFILE_SPECIFIER="${2:-}"
             shift 2
             ;;
         --archive-path)
@@ -95,21 +88,32 @@ if [[ "$DRY_RUN" -eq 0 && -z "$TEAM_ID" ]]; then
 fi
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
-    MISSING_PROFILE=0
-    if [[ -z "$APP_PROFILE_SPECIFIER" ]]; then
-        printf 'DEVELOPER_ID_APP_PROFILE_SPECIFIER is required for a real release archive.\n' >&2
-        MISSING_PROFILE=1
+    if [[ "$RELEASE_WITHOUT_SENTRY_VALUE" != "0" && "$RELEASE_WITHOUT_SENTRY_VALUE" != "1" ]]; then
+        printf 'RELEASE_WITHOUT_SENTRY must be 0 or 1.\n' >&2
+        exit 65
     fi
-    if [[ -z "$WIDGET_PROFILE_SPECIFIER" ]]; then
-        printf 'DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER is required for a real release archive.\n' >&2
-        MISSING_PROFILE=1
+    if [[ -n "$SENTRY_DSN_VALUE" && "$SENTRY_DSN_VALUE" != https://* ]]; then
+        printf 'SENTRY_DSN must be an https Sentry DSN when configured.\n' >&2
+        exit 65
     fi
-    [[ "$MISSING_PROFILE" -eq 1 ]] && exit 65
+    if [[ -n "$SENTRY_DSN_VALUE" && "$RELEASE_WITHOUT_SENTRY_VALUE" == "1" ]]; then
+        printf 'Choose SENTRY_DSN or RELEASE_WITHOUT_SENTRY=1, not both.\n' >&2
+        exit 65
+    fi
+    if [[ -z "$SENTRY_DSN_VALUE" && "$RELEASE_WITHOUT_SENTRY_VALUE" != "1" ]]; then
+        printf 'Set SENTRY_DSN to an https DSN or RELEASE_WITHOUT_SENTRY=1 for an explicit telemetry-free release.\n' >&2
+        exit 65
+    fi
 fi
 
-if [[ "$DRY_RUN" -eq 0 && "$SENTRY_DSN_VALUE" != https://* ]]; then
-    printf 'SENTRY_DSN must be set to an https Sentry DSN for a real release archive.\n' >&2
-    exit 65
+if [[ "$DRY_RUN" -eq 0 ]]; then
+    EXPECTED_APP_GROUP="$TEAM_ID.com.whatthetoken.mac"
+    APP_GROUP="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$APP_ENTITLEMENTS" 2>/dev/null || true)"
+    WIDGET_APP_GROUP="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$WIDGET_ENTITLEMENTS" 2>/dev/null || true)"
+    if [[ "$APP_GROUP" != "$EXPECTED_APP_GROUP" || "$WIDGET_APP_GROUP" != "$EXPECTED_APP_GROUP" ]]; then
+        printf 'App and widget App Group must match the signing team: %s\n' "$EXPECTED_APP_GROUP" >&2
+        exit 65
+    fi
 fi
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
@@ -131,14 +135,9 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
         /usr/libexec/PlistBuddy -c 'Delete :provisioningProfiles' "$EXPORT_OPTIONS_RESOLVED"
     fi
     /usr/libexec/PlistBuddy -c "Add :teamID string $TEAM_ID" "$EXPORT_OPTIONS_RESOLVED"
-    /usr/libexec/PlistBuddy -c 'Add :provisioningProfiles dict' "$EXPORT_OPTIONS_RESOLVED"
-    plutil -replace 'provisioningProfiles.com.whatthetoken.mac' -string "$APP_PROFILE_SPECIFIER" "$EXPORT_OPTIONS_RESOLVED"
-    plutil -replace 'provisioningProfiles.com.whatthetoken.mac.widget' -string "$WIDGET_PROFILE_SPECIFIER" "$EXPORT_OPTIONS_RESOLVED"
     plutil -lint "$EXPORT_OPTIONS_RESOLVED" >/dev/null
 else
     DRY_RUN_TEAM_ID="${TEAM_ID:-DEVELOPER_ID_TEAM_ID}"
-    DRY_RUN_APP_PROFILE="${APP_PROFILE_SPECIFIER:-DEVELOPER_ID_APP_PROFILE_SPECIFIER}"
-    DRY_RUN_WIDGET_PROFILE="${WIDGET_PROFILE_SPECIFIER:-DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER}"
     quote_command rm -rf "$ARCHIVE_PATH"
     quote_command rm -rf "$EXPORT_DIR"
     quote_command mkdir -p "$(dirname "$EXPORT_OPTIONS_RESOLVED")" "$(dirname "$ARCHIVE_PATH")" "$EXPORT_DIR"
@@ -147,9 +146,7 @@ else
     quote_command /usr/libexec/PlistBuddy -c "Print :teamID" "$EXPORT_OPTIONS_RESOLVED"
     quote_command /usr/libexec/PlistBuddy -c "Add :teamID string $DRY_RUN_TEAM_ID" "$EXPORT_OPTIONS_RESOLVED"
     quote_command /usr/libexec/PlistBuddy -c "Print :provisioningProfiles" "$EXPORT_OPTIONS_RESOLVED"
-    quote_command /usr/libexec/PlistBuddy -c "Add :provisioningProfiles dict" "$EXPORT_OPTIONS_RESOLVED"
-    quote_command plutil -replace 'provisioningProfiles.com.whatthetoken.mac' -string "$DRY_RUN_APP_PROFILE" "$EXPORT_OPTIONS_RESOLVED"
-    quote_command plutil -replace 'provisioningProfiles.com.whatthetoken.mac.widget' -string "$DRY_RUN_WIDGET_PROFILE" "$EXPORT_OPTIONS_RESOLVED"
+    quote_command /usr/libexec/PlistBuddy -c "Delete :provisioningProfiles" "$EXPORT_OPTIONS_RESOLVED"
     quote_command plutil -lint "$EXPORT_OPTIONS_RESOLVED"
 fi
 
@@ -168,8 +165,6 @@ archive_command=(
     MARKETING_VERSION="$VERSION"
     CURRENT_PROJECT_VERSION="$BUILD"
     SENTRY_DSN="$ARCHIVE_SENTRY_DSN"
-    WTT_DEVELOPER_ID_APP_PROFILE_SPECIFIER="${APP_PROFILE_SPECIFIER:-DEVELOPER_ID_APP_PROFILE_SPECIFIER}"
-    WTT_DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER="${WIDGET_PROFILE_SPECIFIER:-DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER}"
 )
 
 if [[ -n "$TEAM_ID" ]]; then

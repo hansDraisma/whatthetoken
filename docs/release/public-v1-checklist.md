@@ -17,9 +17,8 @@ Related runbooks:
 - Confirm `Package.resolved` is committed.
 - Confirm the Developer ID Application certificate has at least 30 days remaining.
 - Set `DEVELOPER_ID_TEAM_ID` and the exact `DEVELOPER_ID_SIGNING_IDENTITY`.
-- Set `DEVELOPER_ID_APP_PROFILE_SPECIFIER` to an installed Developer ID provisioning profile for `com.whatthetoken.mac`.
-- Set `DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER` to an installed Developer ID provisioning profile for `com.whatthetoken.mac.widget`.
-- Set `SENTRY_DSN` to the public HTTPS DSN for sanitized schema-drift monitoring.
+- Confirm both entitlements use `3U98C8T3DT.com.whatthetoken.mac`. Apple supports Team-ID-prefixed macOS app groups without provisioning profiles, while `group.`-prefixed identifiers require profiles. See [Accessing app group containers](https://developer.apple.com/documentation/xcode/accessing-app-group-containers).
+- Set `SENTRY_DSN` to the public HTTPS DSN for sanitized schema-drift monitoring, or set `RELEASE_WITHOUT_SENTRY=1` to make an explicit telemetry-free release. Never set both.
 - Confirm `NOTARY_KEYCHAIN_PROFILE` exists in Keychain for `xcrun notarytool`.
 - Confirm Sparkle EdDSA private material is in the maintainer Keychain and an offline backup, never the repo, CI, hosting, or scratch storage.
 - Confirm Gatekeeper is enabled with `spctl --status`.
@@ -40,7 +39,7 @@ swift test
 cd ../..
 ```
 
-Run the full non-secret release preflight before building. It verifies clean-source provenance, version metadata, Developer ID certificate lifetime, app/widget profiles, notarization access, the Sparkle keypair, GitHub authentication, immutable releases, and the public appcast without printing credentials:
+Run the full non-secret release preflight before building. It verifies clean-source provenance, version metadata, Developer ID certificate lifetime, Team-ID app group entitlements, the explicit Sentry/telemetry-free choice, notarization access, the Sparkle keypair, GitHub authentication, immutable releases, and the public appcast without printing credentials:
 
 ```bash
 apps/mac/Scripts/release-preflight.sh --version 0.1.0 --build 1
@@ -60,10 +59,11 @@ The unsigned smoke is never a public artifact.
 ```bash
 : "${DEVELOPER_ID_TEAM_ID:?Set DEVELOPER_ID_TEAM_ID}"
 : "${DEVELOPER_ID_SIGNING_IDENTITY:?Set DEVELOPER_ID_SIGNING_IDENTITY}"
-: "${DEVELOPER_ID_APP_PROFILE_SPECIFIER:?Set DEVELOPER_ID_APP_PROFILE_SPECIFIER}"
-: "${DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER:?Set DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER}"
-: "${SENTRY_DSN:?Set SENTRY_DSN}"
 : "${NOTARY_KEYCHAIN_PROFILE:?Set NOTARY_KEYCHAIN_PROFILE}"
+# Public V1 ships telemetry-free. For a future monitored release, unset this
+# flag and set SENTRY_DSN to the public HTTPS project DSN instead.
+unset SENTRY_DSN
+export RELEASE_WITHOUT_SENTRY=1
 apps/mac/Scripts/rehearse-release.sh --version 0.1.0 --build 1 --mode signed
 ```
 
@@ -157,4 +157,4 @@ If shipping a release with Sparkle intentionally inert, skip the update smoke an
 
 ## Credential-Gated Boundary
 
-The repository can verify metadata, script shape, dry-runs, and unsigned Swift builds. A real public release requires maintainer-controlled Developer ID profiles and certificate, notarization credentials, Sentry DSN, Sparkle EdDSA signing, public release publication, and an installed-artifact smoke. Never weaken these gates to publish an ad-hoc build.
+The repository can verify metadata, script shape, dry-runs, and unsigned Swift builds. A real public release requires the maintainer-controlled Developer ID certificate, notarization credentials, an explicit Sentry or telemetry-free choice, Sparkle EdDSA signing, public release publication, and an installed-artifact smoke. Never weaken these gates to publish an ad-hoc build.

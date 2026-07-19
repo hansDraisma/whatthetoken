@@ -8,7 +8,7 @@ import Testing
         let plist = try plistDict(at: url)
 
         let groups = plist["com.apple.security.application-groups"] as? [String]
-        #expect(groups == ["group.com.whatthetoken.mac"])
+        #expect(groups == ["3U98C8T3DT.com.whatthetoken.mac"])
     }
 
     @Test func widgetDeclaresSandboxAndAppGroupOnly() throws {
@@ -16,7 +16,7 @@ import Testing
         let plist = try plistDict(at: url)
 
         let groups = plist["com.apple.security.application-groups"] as? [String]
-        #expect(groups == ["group.com.whatthetoken.mac"])
+        #expect(groups == ["3U98C8T3DT.com.whatthetoken.mac"])
 
         let sandbox = plist["com.apple.security.app-sandbox"] as? Bool
         #expect(sandbox == true)
@@ -36,8 +36,8 @@ import Testing
             encoding: .utf8
         )
 
-        #expect(!appModel.contains("\"group.com.whatthetoken.mac\""))
-        #expect(!store.contains("\"group.com.whatthetoken.mac\""))
+        #expect(!appModel.contains("\"3U98C8T3DT.com.whatthetoken.mac\""))
+        #expect(!store.contains("\"3U98C8T3DT.com.whatthetoken.mac\""))
         #expect(appModel.contains("AppGroupIdentifier.shared"))
         #expect(store.contains("AppGroupIdentifier.shared"))
     }

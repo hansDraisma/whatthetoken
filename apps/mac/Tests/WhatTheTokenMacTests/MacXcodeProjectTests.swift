@@ -160,17 +160,12 @@ private struct AppIconContents: Decodable {
     #expect(!widgetSection.contains("@executable_path/../../../../Frameworks"))
 }
 
-@Test func releaseBuildConfigurationsUseTargetSpecificProvisioningProfileSpecifiers() throws {
+@Test func releaseBuildConfigurationsDoNotRequireProvisioningProfiles() throws {
     let project = try macFileContents("WhatTheToken.xcodeproj/project.pbxproj")
 
-    #expect(projectMatches(
-        project,
-        #"(?s)000000000000000000000012 = \{.*?PROVISIONING_PROFILE_SPECIFIER = "\$\(WTT_DEVELOPER_ID_APP_PROFILE_SPECIFIER\)";"#
-    ))
-    #expect(projectMatches(
-        project,
-        #"(?s)000000000000000000000034 = \{.*?PROVISIONING_PROFILE_SPECIFIER = "\$\(WTT_DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER\)";"#
-    ))
+    #expect(!project.contains("PROVISIONING_PROFILE_SPECIFIER"))
+    #expect(!project.contains("WTT_DEVELOPER_ID_APP_PROFILE_SPECIFIER"))
+    #expect(!project.contains("WTT_DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER"))
 }
 
 @Test func ciVerifiesResolvedReleaseHardenedRuntimeBuildSetting() throws {

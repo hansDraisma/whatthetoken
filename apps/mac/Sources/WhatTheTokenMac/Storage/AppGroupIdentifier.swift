@@ -1,5 +1,7 @@
 import Foundation
 
 enum AppGroupIdentifier {
-    static let shared = "group.com.whatthetoken.mac"
+    // Team-ID-prefixed macOS groups are validated by the code signature and
+    // do not require a portal-managed provisioning profile.
+    static let shared = "3U98C8T3DT.com.whatthetoken.mac"
 }

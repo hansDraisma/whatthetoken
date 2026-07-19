@@ -4,6 +4,8 @@ set -euo pipefail
 DMG_PATH=""
 APP_PATH=""
 DRY_RUN=0
+EXPECTED_TEAM_ID="${DEVELOPER_ID_TEAM_ID:-3U98C8T3DT}"
+EXPECTED_APP_GROUP="$EXPECTED_TEAM_ID.com.whatthetoken.mac"
 
 usage() {
     printf 'Usage: %s --dmg <path> [--app <WhatTheToken.app>] [--dry-run]\n' "$0"
@@ -27,6 +29,62 @@ run_command() {
         quote_command "$@"
     else
         "$@"
+    fi
+}
+
+verify_profileless_app_bundle() {
+    local app_path="$1"
+    local widget_path="$app_path/Contents/PlugIns/WhatTheTokenWidget.appex"
+    local app_bundle_id
+    local widget_bundle_id
+    local app_team
+    local widget_team
+    local app_entitlements
+    local widget_entitlements
+
+    codesign --verify --strict --verbose=2 "$app_path"
+    test -d "$widget_path"
+    codesign --verify --strict --verbose=2 "$widget_path"
+
+    app_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_path/Contents/Info.plist")"
+    [[ "$app_bundle_id" == "com.whatthetoken.mac" ]] || {
+        printf 'error: app bundle id is %s, expected com.whatthetoken.mac\n' "$app_bundle_id" >&2
+        exit 1
+    }
+    widget_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$widget_path/Contents/Info.plist")"
+    [[ "$widget_bundle_id" == "com.whatthetoken.mac.widget" ]] || {
+        printf 'error: widget bundle id is %s, expected com.whatthetoken.mac.widget\n' "$widget_bundle_id" >&2
+        exit 1
+    }
+
+    widget_team="$(codesign -dvv "$widget_path" 2>&1 | awk -F'=' '/TeamIdentifier/ { print $2; exit }')"
+    app_team="$(codesign -dvv "$app_path" 2>&1 | awk -F'=' '/TeamIdentifier/ { print $2; exit }')"
+    [[ -n "$widget_team" && "$widget_team" == "$app_team" ]] || {
+        printf 'error: widget TeamIdentifier (%s) does not match app (%s)\n' "$widget_team" "$app_team" >&2
+        exit 1
+    }
+    [[ "$app_team" == "$EXPECTED_TEAM_ID" ]] || {
+        printf 'error: app TeamIdentifier is %s, expected %s\n' "$app_team" "$EXPECTED_TEAM_ID" >&2
+        exit 1
+    }
+
+    app_entitlements="$(codesign -d --entitlements :- "$app_path" 2>/dev/null || true)"
+    echo "$app_entitlements" | grep -Fq "$EXPECTED_APP_GROUP" || {
+        printf 'error: host App Group entitlement (%s) missing from signed app\n' "$EXPECTED_APP_GROUP" >&2
+        exit 1
+    }
+    widget_entitlements="$(codesign -d --entitlements :- "$widget_path" 2>/dev/null || true)"
+    echo "$widget_entitlements" | grep -Fq "$EXPECTED_APP_GROUP" || {
+        printf 'error: widget App Group entitlement missing from signed widget\n' >&2
+        exit 1
+    }
+    echo "$widget_entitlements" | plutil -p - | grep -Fq '"com.apple.security.app-sandbox" => true' || {
+        printf 'error: widget sandbox entitlement is missing or disabled\n' >&2
+        exit 1
+    }
+    if find "$app_path" -name embedded.provisionprofile -print -quit | grep -q .; then
+        printf 'error: Team-ID app group release must not embed provisioning profiles\n' >&2
+        exit 1
     fi
 }
 
@@ -79,32 +137,9 @@ if [[ -n "$APP_PATH" ]]; then
         printf 'App bundle not found: %s\n' "$APP_PATH" >&2
         exit 66
     fi
-    run_command codesign --verify --strict --verbose=2 "$APP_PATH"
     WIDGET_PATH="$APP_PATH/Contents/PlugIns/WhatTheTokenWidget.appex"
-    run_command test -d "$APP_PATH/Contents/PlugIns/WhatTheTokenWidget.appex"
-    run_command codesign --verify --strict --verbose=2 "$WIDGET_PATH"
     if [[ "$DRY_RUN" -eq 0 ]]; then
-        WIDGET_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WIDGET_PATH/Contents/Info.plist")"
-        [[ "$WIDGET_BUNDLE_ID" == "com.whatthetoken.mac.widget" ]] || {
-            printf 'error: widget bundle id is %s, expected com.whatthetoken.mac.widget\n' "$WIDGET_BUNDLE_ID" >&2
-            exit 1
-        }
-        WIDGET_TEAM="$(codesign -dvv "$WIDGET_PATH" 2>&1 | awk -F'=' '/TeamIdentifier/ { print $2; exit }')"
-        APP_TEAM="$(codesign -dvv "$APP_PATH" 2>&1 | awk -F'=' '/TeamIdentifier/ { print $2; exit }')"
-        [[ -n "$WIDGET_TEAM" && "$WIDGET_TEAM" == "$APP_TEAM" ]] || {
-            printf 'error: widget TeamIdentifier (%s) does not match app (%s)\n' "$WIDGET_TEAM" "$APP_TEAM" >&2
-            exit 1
-        }
-        APP_ENTITLEMENTS="$(codesign -d --entitlements :- "$APP_PATH" 2>/dev/null || true)"
-        echo "$APP_ENTITLEMENTS" | grep -q "group.com.whatthetoken.mac" || {
-            printf 'error: host App Group entitlement (group.com.whatthetoken.mac) missing from signed app\n' >&2
-            exit 1
-        }
-        WIDGET_ENTITLEMENTS="$(codesign -d --entitlements :- "$WIDGET_PATH" 2>/dev/null || true)"
-        echo "$WIDGET_ENTITLEMENTS" | grep -q "group.com.whatthetoken.mac" || {
-            printf 'error: widget App Group entitlement missing from signed widget\n' >&2
-            exit 1
-        }
+        verify_profileless_app_bundle "$APP_PATH"
     else
         WIDGET_INFO_PLIST_Q="$(shell_quote "$WIDGET_PATH/Contents/Info.plist")"
         WIDGET_PATH_Q="$(shell_quote "$WIDGET_PATH")"
@@ -112,8 +147,11 @@ if [[ -n "$APP_PATH" ]]; then
         print_shell_command "/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' $WIDGET_INFO_PLIST_Q | grep -Fx com.whatthetoken.mac.widget"
         print_shell_command "WIDGET_TEAM=\"\$(codesign -dvv $WIDGET_PATH_Q 2>&1 | awk -F= '/TeamIdentifier/ { print \$2; exit }')\""
         print_shell_command "APP_TEAM=\"\$(codesign -dvv $APP_PATH_Q 2>&1 | awk -F= '/TeamIdentifier/ { print \$2; exit }')\""
-        print_shell_command "codesign -d --entitlements :- $APP_PATH_Q 2>/dev/null | grep -q group.com.whatthetoken.mac # App Group entitlement"
-        print_shell_command "codesign -d --entitlements :- $WIDGET_PATH_Q 2>/dev/null | grep -q group.com.whatthetoken.mac # App Group entitlement"
+        print_shell_command "test \"\$APP_TEAM\" = $EXPECTED_TEAM_ID # Developer ID team"
+        print_shell_command "codesign -d --entitlements :- $APP_PATH_Q 2>/dev/null | grep -Fq $EXPECTED_APP_GROUP # App Group entitlement"
+        print_shell_command "codesign -d --entitlements :- $WIDGET_PATH_Q 2>/dev/null | grep -Fq $EXPECTED_APP_GROUP # App Group entitlement"
+        print_shell_command "codesign -d --entitlements :- $WIDGET_PATH_Q 2>/dev/null | plutil -p - | grep -Fq '\"com.apple.security.app-sandbox\" => true' # widget sandbox"
+        print_shell_command "test -z \"\$(find $APP_PATH_Q -name embedded.provisionprofile -print -quit)\" # profileless Team-ID app group"
     fi
     if [[ "$DRY_RUN" -eq 0 ]]; then
         codesign -dv --verbose=4 "$APP_PATH" 2>&1 | grep -F "Timestamp="
@@ -153,9 +191,8 @@ if [[ "$DRY_RUN" -eq 0 ]]; then
     fi
 
     cp -R "$MOUNT_DIR/WhatTheToken.app" "$COPY_DIR/WhatTheToken.app"
+    verify_profileless_app_bundle "$COPY_DIR/WhatTheToken.app"
     codesign --verify --deep --strict --verbose=2 "$COPY_DIR/WhatTheToken.app"
-    test -d "$COPY_DIR/WhatTheToken.app/Contents/PlugIns/WhatTheTokenWidget.appex"
-    codesign --verify --strict --verbose=2 "$COPY_DIR/WhatTheToken.app/Contents/PlugIns/WhatTheTokenWidget.appex"
     codesign -dv --verbose=4 "$COPY_DIR/WhatTheToken.app" 2>&1 | grep -F "Timestamp="
     spctl -a -vv -t exec "$COPY_DIR/WhatTheToken.app"
     /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$COPY_DIR/WhatTheToken.app/Contents/Info.plist" | grep -Fx "AppIcon" >/dev/null

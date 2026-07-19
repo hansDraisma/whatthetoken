@@ -137,7 +137,7 @@ import Testing
 
         let url = WidgetSnapshotCacheFile.localAppGroupURL(homeDirectory: home)
 
-        #expect(url.path == "/Users/example/Library/Group Containers/group.com.whatthetoken.mac/snapshot-cache.json")
+        #expect(url.path == "/Users/example/Library/Group Containers/3U98C8T3DT.com.whatthetoken.mac/snapshot-cache.json")
     }
 
     @Test func replaceSnapshotsOnlyReplacesMatchingProvider() {

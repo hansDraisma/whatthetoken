@@ -1,10 +1,11 @@
+import Foundation
 import Testing
 
 @Test func releaseDocsDescribeGitHubHostedManualFirstUpdates() throws {
     let readme = try repositoryFileContents("README.md")
     let hosting = try repositoryFileContents("docs/release/github-hosting-and-updates.md")
     let checklist = try repositoryFileContents("docs/release/public-v1-checklist.md")
-    let appcast = try repositoryFileContents("docs/appcast.xml")
+    let privateAppcastPath = macRepositoryRootURL().appendingPathComponent("docs/appcast.xml").path
 
     #expect(readme.contains("manual-first"))
     #expect(readme.contains("macOS may show a Gatekeeper confirmation on first launch"))
@@ -15,19 +16,22 @@ import Testing
     #expect(readme.contains("Automatic background checks and silent installs remain disabled"))
     #expect(hosting.contains("GitHub Releases"))
     #expect(hosting.contains("GitHub Pages"))
-    #expect(hosting.contains("https://hansdraisma.github.io/whatthetoken/appcast.xml"))
+    #expect(hosting.contains("hansDraisma/whatthetoken-releases"))
+    #expect(hosting.contains("private source repository"))
+    #expect(hosting.contains("single customer destination"))
+    #expect(hosting.contains("https://hansdraisma.github.io/whatthetoken-releases/appcast.xml"))
     #expect(hosting.contains("Do not ship or announce a signed build with `SUFeedURL`"))
     #expect(hosting.contains("Do not announce Sparkle update support until the signed old-build to new-build smoke passes"))
-    #expect(hosting.contains("curl -fL https://hansdraisma.github.io/whatthetoken/appcast.xml"))
+    #expect(hosting.contains("curl -fL https://hansdraisma.github.io/whatthetoken-releases/appcast.xml"))
+    #expect(hosting.contains("apps/mac/Scripts/publish-release.sh"))
     #expect(checklist.contains("docs/release/github-hosting-and-updates.md"))
     #expect(checklist.contains("DEVELOPER_ID_APP_PROFILE_SPECIFIER"))
     #expect(checklist.contains("DEVELOPER_ID_WIDGET_PROFILE_SPECIFIER"))
     #expect(checklist.contains("Developer ID provisioning profile for `com.whatthetoken.mac.widget`"))
-    #expect(checklist.contains("If shipping a release with Sparkle intentionally inert, skip this section"))
+    #expect(checklist.contains("If shipping a release with Sparkle intentionally inert, skip the update smoke"))
     #expect(checklist.contains("If `SUPublicEDKey` and `SUFeedURL` are embedded, confirm `Check for Updates` is visible"))
     #expect(checklist.contains("If the smoke has not passed, release notes must state GitHub Releases is the supported update path"))
-    #expect(appcast.contains("<title>WhatTheToken Updates</title>"))
-    #expect(appcast.contains("No public updates have been published yet"))
+    #expect(!FileManager.default.fileExists(atPath: privateAppcastPath))
 }
 
 @Test func releaseRunbooksCoverPublicV1CredentialedGates() throws {
@@ -53,7 +57,7 @@ import Testing
     #expect(roadmap.contains("GitHub Actions release automation"))
     #expect(roadmap.contains("manual approval gates"))
     #expect(roadmap.contains("owned domain you control"))
-    #expect(security.contains("Until Public V1 ships, there are no official builds"))
-    #expect(security.contains("GitHub private vulnerability reporting will be enabled before the repository becomes public"))
+    #expect(security.contains("Official builds are only the signed and notarized DMGs"))
+    #expect(security.contains("Use private vulnerability reporting in `hansDraisma/whatthetoken-releases`"))
     #expect(security.contains("draisma.hans@gmail.com"))
 }

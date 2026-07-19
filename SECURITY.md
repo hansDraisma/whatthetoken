@@ -2,11 +2,11 @@
 
 ## Supported Versions
 
-Before Public V1, only the current private development branch is supported. Public V1 support begins after the first signed and notarized free DMG is published.
+The latest signed and notarized release in `hansDraisma/whatthetoken-releases` is supported. Private development builds and older prerelease candidates are unsupported.
 
 ## Reporting A Vulnerability
 
-Before Public V1, report vulnerabilities through an existing private maintainer channel. GitHub private vulnerability reporting will be enabled before the repository becomes public. If GitHub private vulnerability reporting is unavailable, use the monitored fallback address `draisma.hans@gmail.com`.
+Use private vulnerability reporting in `hansDraisma/whatthetoken-releases`. If it is unavailable, use the monitored fallback address `draisma.hans@gmail.com`. Do not submit vulnerabilities as public issues.
 
 Do not paste secrets, provider tokens, cookies, auth headers, prompts, responses, raw provider payloads, raw local database rows, or sensitive local paths into issues, discussions, pull requests, or logs.
 
@@ -29,7 +29,7 @@ Provider credentials stay local. Connectors may use local provider credentials o
 
 ## Official Builds
 
-Until Public V1 ships, there are no official builds. Public V1 official builds are the signed and notarized DMGs published by the project on GitHub Releases. Release checksums are published beside the DMG.
+Official builds are only the signed and notarized DMGs published at `https://github.com/hansDraisma/whatthetoken-releases/releases`. Release checksums are published beside the DMG.
 
 Developer ID signing, notarization credentials, and Sparkle EdDSA private material must stay outside the repository. Sparkle appcast publishing is part of the release checklist and must not point to unpublished or unverified artifacts.
 

@@ -8,7 +8,7 @@ This document is the source of truth for step-by-step product development. Earli
 
 ## Product Direction
 
-WhatTheToken is an open-source, local-first Mac menu bar app that helps developers avoid AI quota surprises across coding agents and assistants.
+WhatTheToken is a local-first Mac menu bar app that helps developers avoid AI quota surprises across coding agents and assistants. The signed product is publicly downloadable while its implementation repository remains private.
 
 The first useful product is not a generic analytics dashboard. It is a trusted local status surface that answers:
 
@@ -21,16 +21,16 @@ The product must be useful locally before it becomes public, and it must be usef
 ## Release Definitions
 
 - Internal V0: end of Stage 4. The repo can remain private, but the app should be a working local Mac menu bar product for the maintainer and private testers. V0 includes Claude Code and Codex, connector consent, refresh, local cache, notifications, and trust-focused UI polish. V0 does not require a public DMG.
-- Public V1: end of Stage 5. The repo can flip public only after the app has a signed/notarized free DMG, release checklist, public project docs, license, privacy/security docs, and a working menu bar app. Public V1 coverage is Claude Code and Codex unless a later explicit decision pulls provider expansion forward. Public V1 has no trial, no license key, no paid DMG, and no local-provider paywall.
+- Public V1: end of Stage 5. A dedicated public distribution repository launches after the app has a signed/notarized free DMG, release checklist, customer-facing license/privacy/security docs, and a working menu bar app. The implementation repository remains private. Public V1 coverage is Claude Code and Codex unless a later explicit decision pulls provider expansion forward. Public V1 has no trial, no license key, no paid DMG, and no local-provider paywall.
 - Post-V1: Stage 6 and later. Provider expansion, history, prediction, recommendations, sync, team, and agent integrations happen only after the local product is useful, trusted, and installable.
 
 ## Public-Launch Gate
 
-Do not make the repository public at Stage 0.
+Do not make the source repository public at Stage 0.
 
 Stage 0 creates public-readiness documents while the project can still be private. Publishing too early would create a weak first impression because there is no finished menu bar shell or installable build yet.
 
-The repository should become public at the end of Stage 5, together with the first signed/notarized free DMG on GitHub Releases. Private testers can receive local or ad-hoc builds after Internal V0 if needed, but broad public launch waits for Public V1.
+The public distribution repository launches at the end of Stage 5 together with the first signed/notarized free DMG. The source repository remains private. Private testers can receive local or ad-hoc builds after Internal V0 if needed, but broad public launch waits for Public V1.
 
 ## Current State
 
@@ -64,7 +64,7 @@ Not yet in the repo:
 - Every number shown to users must carry confidence: `verified`, `observed`, `estimated`, or `stale`.
 - Every connector must expose source state and parser/source version.
 - Local-only mode must remain useful.
-- Open-source code and official signed builds must tell the same privacy story.
+- Private source and official signed builds must tell the same privacy story.
 - Live provider checks stay manual and opt-in. CI uses synthetic fixtures only.
 
 ## Canonical Documents
@@ -134,7 +134,7 @@ Why now: the connectors already exist. The next risk is trust, not ingestion.
 
 Tasks:
 
-- Add root `README.md` with product positioning, current support matrix, privacy promise, local development setup, verification commands, and a clear note that the repo is not public-launch ready until Public V1.
+- Add root `README.md` with product positioning, current support matrix, privacy promise, local development setup, verification commands, and a clear note that the product is not public-launch ready until Public V1.
 - Add `LICENSE` using Apache-2.0.
 - Add `PRIVACY.md` with deny list, allowed sanitized data, connector rules, threat model, diagnostics rules, and incident response.
 - Add `SECURITY.md` with vulnerability reporting and instructions not to paste secrets, prompts, provider payloads, or raw logs.
@@ -146,7 +146,7 @@ Tasks:
 Exit criteria:
 
 - An authorized developer can clone the private repo, understand what the app does, run tests, and understand the privacy boundary.
-- Issue templates are ready to discourage leaking sensitive data once the repo becomes public.
+- Public distribution issue templates are ready to discourage leaking sensitive data at launch.
 - CI runs on pull requests, pushes to `main`, and manual dispatch without live provider, Keychain, Codex app-server, or network dependencies.
 - Repo remains private unless Public V1 exit criteria are met.
 
@@ -312,11 +312,11 @@ Tasks:
 - Add notarization script using `xcrun notarytool`.
 - Add DMG packaging script.
 - Add release checklist.
-- Publish signed/notarized free DMG through GitHub Releases.
-- Host the Public V1 Sparkle appcast on GitHub Pages from the repository `/docs` folder.
+- Publish the signed/notarized free DMG through the public `hansDraisma/whatthetoken-releases` GitHub Releases page.
+- Host the Public V1 Sparkle appcast on GitHub Pages from that public repository's root.
 - Add a manual Sparkle `Check for Updates` action for Public V1; keep automatic background checks and silent installs disabled.
 - Add Sparkle auto-update only after at least one stable signed release flow and manual signed update path are proven.
-- Add a long-term Stage 5D distribution item for an owned domain you control; do not move `SUFeedURL` away from GitHub Pages until a redirect and migration design exists for already-installed apps.
+- Add a long-term Stage 5D distribution item for an owned domain you control; do not move `SUFeedURL` away from the public GitHub Pages feed until a redirect and migration design exists for already-installed apps.
 - Add a long-term Stage 5D GitHub Actions release automation item for a scalable release path after Public V1 is stable: evaluate secure Developer ID certificate storage, notary credentials, Sparkle EdDSA signing, GitHub Release asset upload, appcast generation, and manual approval gates before any CI job can publish public artifacts.
 - Extend the existing About panel in V1.x with build commit, Sparkle version, and license attribution.
 - Add launch-at-login with `SMAppService`.
@@ -325,7 +325,7 @@ Stage 5A repo foundation is complete when release metadata, Xcode target, Sparkl
 
 Stage 5B credentialed rehearsal remains gated on Developer ID certificate access, notarization profile, signed archive/export, notarized DMG, Gatekeeper verification, Sparkle signed-update smoke, and fresh-account smoke. Unsigned Xcode archive smoke is repo-verified on an initialized local Xcode installation.
 
-Stage 5C public launch remains gated on GitHub Release publication, checksum publication, public docs, repository visibility scan, and Sparkle appcast publication only after signed update smoke passes.
+Stage 5C public launch remains gated on distribution-repository visibility, GitHub Release and checksum publication, customer docs, and Sparkle appcast publication only after signed update smoke passes.
 
 Stage 5D owned distribution remains a later refinement: evaluate a product site, custom domain, analytics-free download page, redirect policy, appcast migration, and full GitHub Actions release automation after Public V1 is stable on GitHub-hosted infrastructure.
 

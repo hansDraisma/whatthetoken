@@ -1,6 +1,6 @@
 # Rollback And Hotfix
 
-Release artifacts are immutable from the user's point of view. If a candidate reaches GitHub Releases, appcast publication, or user installation, do not replace it with a different binary under the same version/build.
+Release artifacts are immutable from the user's point of view. If a candidate reaches the public distribution repository, appcast publication, or user installation, do not replace it with a different binary under the same version/build.
 
 ## Build Number Rules
 
@@ -19,22 +19,22 @@ Release artifacts are immutable from the user's point of view. If a candidate re
 
 Do not resubmit a modified binary with the same build number.
 
-## Bad GitHub Release Before Appcast
+## Bad Public Release Before Appcast
 
-If a DMG is attached to GitHub Releases but `docs/appcast.xml` has not been published:
+If a DMG is attached to the public GitHub Release but the public `appcast.xml` has not been updated:
 
-1. If no user could have downloaded the asset, mark the GitHub Release as draft or delete the bad asset.
+1. If no user could have downloaded the asset, return the GitHub Release to draft or delete the bad asset.
 2. If any user may have downloaded the asset, increment the build number before publishing a replacement.
 3. Publish a corrected release.
 4. Keep the appcast pointed only at the corrected artifact.
 
 ## Bad Appcast
 
-If `docs/appcast.xml` points at a bad artifact:
+If the public `appcast.xml` points at a bad artifact:
 
-1. Revert or patch `docs/appcast.xml` immediately.
+1. Patch the public distribution repository's root `appcast.xml` immediately so it points at the last known-good artifact.
 2. Confirm GitHub Pages serves the corrected appcast.
-3. If users may have updated, publish a higher build hotfix.
+3. If users may have updated, publish a higher-build hotfix.
 4. Do not point the appcast at a lower build.
 
 ## Hotfix Flow
@@ -47,4 +47,4 @@ cd apps/mac && swift test && cd ../..
 apps/mac/Scripts/rehearse-release.sh --version <version> --build <higher-build> --mode signed
 ```
 
-Then publish the new DMG and checksum to GitHub Releases, generate a new appcast entry, and verify manual Sparkle update from the previous public build.
+Push the new signed source tag, then run `apps/mac/Scripts/publish-release.sh` with the matching version/build and sanitized release notes. Verify a manual Sparkle update from the previous public build.

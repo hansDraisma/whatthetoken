@@ -44,7 +44,7 @@ import Testing
     #expect(plist["SUEnableAutomaticChecks"] as? Bool == false)
     #expect(plist["SUAutomaticallyUpdate"] as? Bool == false)
     #expect(plist["SUEnableSystemProfiling"] == nil)
-    #expect(plist["SUFeedURL"] as? String == "https://hansdraisma.github.io/whatthetoken/appcast.xml")
+    #expect(plist["SUFeedURL"] as? String == "https://hansdraisma.github.io/whatthetoken-releases/appcast.xml")
     #expect(plist["SUPublicEDKey"] as? String == "rwQnge6z/GQvR9NwGuQFBpN44ZcaUBzixfISv77Z2hg=")
 }
 

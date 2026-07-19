@@ -177,6 +177,33 @@ import Testing
             ]
         ),
         (
+            "publish-release.sh",
+            [
+                "hansDraisma/whatthetoken-releases",
+                "https://hansdraisma.github.io/whatthetoken-releases/appcast.xml",
+                "verify-release-provenance.sh",
+                "verify-release-artifacts.sh",
+                "git ls-remote --exit-code --tags origin",
+                "gh release create",
+                "--draft",
+                "gh release edit",
+                "gh release upload",
+                "--draft=false",
+                "--resume",
+                "Hosted DMG does not match the locally verified artifact",
+                "Published release is missing an immutable asset",
+                "Cannot resume because the public release does not exist",
+                "generate-appcast.sh",
+                "sparkle:edSignature",
+                "contents/appcast.xml",
+                "immutable-releases",
+                "Immutable releases must be enabled before publication",
+                "refusing to replace immutable public artifacts",
+                "curl -fL",
+                "shasum -a 256 -c"
+            ]
+        ),
+        (
             "smoke-archive-unsigned.sh",
             [
                 "xcodebuild",
@@ -425,6 +452,25 @@ import Testing
     #expect(result.exitCode != 0)
     #expect(result.output.contains("Build must be a monotonically increasing integer."))
     #expect(!result.output.contains("xcodebuild"))
+}
+
+@Test func publicReleaseDryRunDescribesSingleRepositoryPublicationWithoutMutating() throws {
+    let result = try runMacReleaseScript(
+        "publish-release.sh",
+        arguments: [
+            "--version", "0.1.0",
+            "--build", "1",
+            "--notes", "/tmp/WhatTheToken-release-notes.md",
+            "--dry-run"
+        ]
+    )
+
+    #expect(result.exitCode == 0)
+    #expect(result.output.contains("hansDraisma/whatthetoken-releases"))
+    #expect(result.output.contains("https://hansdraisma.github.io/whatthetoken-releases/appcast.xml"))
+    #expect(result.output.contains("gh release create"))
+    #expect(result.output.contains("gh release edit"))
+    #expect(result.output.contains("No release, tag, asset, or appcast was published."))
 }
 
 private struct ScriptResult {

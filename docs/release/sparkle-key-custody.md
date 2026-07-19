@@ -7,45 +7,30 @@ Sparkle update signing uses an EdDSA keypair separate from Apple Developer ID si
 - Generate keys only on the maintainer release machine.
 - Store private material in the maintainer Keychain and one secure offline backup.
 - Commit only the public key.
-- Record the public key fingerprint in the release notes or maintainer release record.
+- Record the public key fingerprint in the maintainer release record.
 - Rotate only with a tested migration plan because installed apps trust the embedded public key.
 
-## Generation
+## Release Metadata
 
-Use Sparkle's official `generate_keys` tool from the resolved Sparkle package or release tooling. Run it only on the release machine.
+The app embeds:
 
-After generation:
+- `SUPublicEDKey`: the public EdDSA key
+- `SUFeedURL`: `https://hansdraisma.github.io/whatthetoken-releases/appcast.xml`
+- `SUEnableAutomaticChecks = false`
+- `SUAutomaticallyUpdate = false`
 
-1. Copy only the printed public key.
-2. Confirm it contains no whitespace.
-3. Add it to `apps/mac/Packaging/Info.plist` as `SUPublicEDKey`.
-4. Add `SUFeedURL = https://hansdraisma.github.io/whatthetoken/appcast.xml`.
-5. Keep `SUEnableAutomaticChecks = false`.
-6. Keep `SUAutomaticallyUpdate = false`.
-
-Suggested guarded command:
-
-```bash
-PUBLIC_ED_KEY="$(pbpaste | tr -d '\n')"
-test -n "$PUBLIC_ED_KEY"
-printf '%s' "$PUBLIC_ED_KEY" | grep -E '^[A-Za-z0-9+/=]+$' >/dev/null
-/usr/libexec/PlistBuddy -c 'Delete :SUFeedURL' apps/mac/Packaging/Info.plist 2>/dev/null || true
-/usr/libexec/PlistBuddy -c 'Delete :SUPublicEDKey' apps/mac/Packaging/Info.plist 2>/dev/null || true
-/usr/libexec/PlistBuddy -c 'Add :SUFeedURL string https://hansdraisma.github.io/whatthetoken/appcast.xml' apps/mac/Packaging/Info.plist
-/usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $PUBLIC_ED_KEY" apps/mac/Packaging/Info.plist
-plutil -lint apps/mac/Packaging/Info.plist
-```
+The private source repository does not host the appcast. The canonical appcast is the root `appcast.xml` in the public `hansDraisma/whatthetoken-releases` distribution repository.
 
 ## Appcast Publication
 
-Generate `docs/appcast.xml` only after the notarized DMG and checksum have been published on GitHub Releases.
+Use `apps/mac/Scripts/publish-release.sh` after the signed source tag is pushed and the notarized DMG passes local verification. The script invokes Sparkle's `generate_appcast`, checks for the expected public versioned asset URL and `sparkle:edSignature`, publishes through the public distribution repository, waits for GitHub Pages, and verifies the downloaded assets.
 
 The appcast must:
 
-- point at the public versioned DMG URL,
+- point at a public versioned DMG URL,
 - include Sparkle's update signature,
 - link to public release notes,
-- avoid internal workspace paths,
+- avoid internal paths and sensitive data,
 - be reachable without GitHub authentication.
 
 ## Manual Update Smoke

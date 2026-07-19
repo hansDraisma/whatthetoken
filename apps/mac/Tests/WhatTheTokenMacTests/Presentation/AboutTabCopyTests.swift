@@ -8,7 +8,7 @@ import Testing
     }
 
     @Test func privacyURLPointsAtRepositoryNotice() {
-        #expect(AboutTabCopy.privacyURL.absoluteString == "https://github.com/whatthetoken/whatthetoken/blob/main/PRIVACY.md")
+        #expect(AboutTabCopy.privacyURL.absoluteString == "https://github.com/hansDraisma/whatthetoken-releases/blob/main/PRIVACY.md")
     }
 
     @Test func quitButtonTitleIsExplicit() {

@@ -29,7 +29,7 @@
 	<key>SentryDSN</key>
 	<string>$(SENTRY_DSN)</string>
 	<key>SUFeedURL</key>
-	<string>https://hansdraisma.github.io/whatthetoken/appcast.xml</string>
+	<string>https://hansdraisma.github.io/whatthetoken-releases/appcast.xml</string>
 	<key>SUAutomaticallyUpdate</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>

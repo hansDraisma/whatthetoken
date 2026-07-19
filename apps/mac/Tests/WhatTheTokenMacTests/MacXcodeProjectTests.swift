@@ -80,6 +80,14 @@ private struct AppIconContents: Decodable {
     #expect(resolved.contains("\"location\" : \"https://github.com/getsentry/sentry-cocoa\""))
 }
 
+@Test func swiftPackageResolutionPinsSentryForTestReproducibility() throws {
+    let resolved = try macFileContents("Package.resolved")
+
+    #expect(resolved.contains("\"identity\" : \"sentry-cocoa\""))
+    #expect(resolved.contains("\"location\" : \"https://github.com/getsentry/sentry-cocoa\""))
+    #expect(resolved.contains("\"version\" : \"9.22.0\""))
+}
+
 @Test func xcodeProjectRegistersAppIconAssetCatalogAsResource() throws {
     let project = try macFileContents("WhatTheToken.xcodeproj/project.pbxproj")
 

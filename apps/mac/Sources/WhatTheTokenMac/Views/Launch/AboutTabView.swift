@@ -3,7 +3,7 @@ import AppKit
 
 enum AboutTabCopy {
     static let privacyText = "WhatTheToken stores and displays only sanitized usage status. Provider credentials, prompts, responses, and raw provider payloads never leave your device."
-    static let privacyURL = URL(string: "https://github.com/whatthetoken/whatthetoken/blob/main/PRIVACY.md")!
+    static let privacyURL = URL(string: "https://github.com/hansDraisma/whatthetoken-releases/blob/main/PRIVACY.md")!
     static let privacyLinkTitle = "Read the full privacy notice"
     static let quitButtonTitle = "Quit WhatTheToken"
 }

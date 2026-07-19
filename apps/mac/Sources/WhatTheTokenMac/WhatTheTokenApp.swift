@@ -137,7 +137,10 @@ struct WhatTheTokenApp: App {
             }
         }
         #else
-        Window("WhatTheToken", id: "command-host") {
+        // A Settings scene hosts the main-menu commands without creating a
+        // default window when this menu bar app launches. The visible window
+        // is owned by LaunchWindowController below.
+        Settings {
             EmptyView()
         }
             .commands {

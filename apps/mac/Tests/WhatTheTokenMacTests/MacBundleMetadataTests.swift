@@ -92,10 +92,10 @@ import Testing
     #expect(plist["NSPrivacyTrackingDomains"] as? [String] == [])
 }
 
-@Test func sharedXcconfigPinsInitialPublicVersionAndBuild() throws {
+@Test func sharedXcconfigPinsCurrentPublicVersionAndBuild() throws {
     let sharedConfig = try macFileContents("Packaging/WhatTheToken.xcconfig")
 
-    #expect(sharedConfig.contains("\nMARKETING_VERSION = 0.1.0\n"))
-    #expect(sharedConfig.contains("\nCURRENT_PROJECT_VERSION = 1\n"))
+    #expect(sharedConfig.contains("\nMARKETING_VERSION = 0.1.1\n"))
+    #expect(sharedConfig.contains("\nCURRENT_PROJECT_VERSION = 2\n"))
     #expect(sharedConfig.contains("\nASSETCATALOG_COMPILER_APPICON_NAME = AppIcon\n"))
 }

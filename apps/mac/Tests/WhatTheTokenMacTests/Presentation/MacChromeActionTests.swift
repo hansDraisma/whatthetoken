@@ -53,7 +53,7 @@ import Testing
         #expect(recorder.calls == ["dismissPopover", "activate", "openWindow"])
     }
 
-    @Test func appScenesDoesNotContainSettingsScene() throws {
+    @Test func appScenesUseNonPresentingSettingsHostInsteadOfBlankWindow() throws {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -62,8 +62,8 @@ import Testing
             .appendingPathComponent("Sources/WhatTheTokenMac/WhatTheTokenApp.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
-        #expect(!source.contains("Settings("))
-        #expect(!source.contains("Settings {"))
+        #expect(source.contains("Settings {\n            EmptyView()\n        }"))
+        #expect(!source.contains("Window(\"WhatTheToken\", id: \"command-host\")"))
         #expect(source.contains("CommandGroup(replacing: .appSettings)"))
         #expect(source.contains("MacChromeActions.openLaunchWindow("))
         #expect(source.contains("dismissPopover:"))

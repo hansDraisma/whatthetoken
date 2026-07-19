@@ -7,6 +7,13 @@ enum NotificationAuthorizationStatus: Equatable, Sendable {
     case granted
 }
 
+enum NotificationSettingsUpdateResult: Equatable, Sendable {
+    case enabled
+    case disabled
+    case permissionDenied
+    case saveFailed
+}
+
 protocol NotificationDelivery: Sendable {
     func authorizationStatus() async -> NotificationAuthorizationStatus
     func requestAuthorization() async -> NotificationAuthorizationStatus
@@ -16,6 +23,7 @@ protocol NotificationDelivery: Sendable {
 actor RecordingNotificationDelivery: NotificationDelivery {
     private let permissionResult: NotificationAuthorizationStatus
     private var status: NotificationAuthorizationStatus = .notDetermined
+    private var storedAuthorizationRequestCount = 0
     private var storedDeliveredIntents: [NotificationIntent] = []
 
     init(permissionResult: NotificationAuthorizationStatus) {
@@ -26,11 +34,16 @@ actor RecordingNotificationDelivery: NotificationDelivery {
         storedDeliveredIntents
     }
 
+    var authorizationRequestCount: Int {
+        storedAuthorizationRequestCount
+    }
+
     func authorizationStatus() async -> NotificationAuthorizationStatus {
         status
     }
 
     func requestAuthorization() async -> NotificationAuthorizationStatus {
+        storedAuthorizationRequestCount += 1
         status = permissionResult
         return status
     }
@@ -70,6 +83,8 @@ struct UserNotificationDelivery: NotificationDelivery {
 
     func requestAuthorization() async -> NotificationAuthorizationStatus {
         guard isNotificationCenterAvailable() else { return .denied }
+        let currentStatus = await authorizationStatus()
+        guard currentStatus == .notDetermined else { return currentStatus }
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
             return granted ? .granted : .denied

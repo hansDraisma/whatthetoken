@@ -3,10 +3,30 @@ import SwiftUI
 enum NotificationAlertsCopy {
     static func statusMessage(
         authorizationStatus: NotificationAuthorizationStatus?,
-        notificationsEnabled: Bool
+        notificationsEnabled: Bool,
+        updateResult: NotificationSettingsUpdateResult? = nil
     ) -> String? {
-        guard notificationsEnabled, authorizationStatus == .denied else { return nil }
-        return "Notifications are enabled in WhatTheToken, but macOS notification permission is denied. Enable notifications in System Settings to receive quota alerts."
+        if updateResult == .saveFailed {
+            return "WhatTheToken could not save the notification setting. Try again."
+        }
+        if authorizationStatus == .denied {
+            return "macOS notification permission is denied. Enable WhatTheToken in System Settings > Notifications, then try again."
+        }
+        if notificationsEnabled,
+           authorizationStatus == .granted || updateResult == .enabled {
+            return "Notifications are enabled."
+        }
+        return nil
+    }
+
+    static func statusIsSuccess(
+        authorizationStatus: NotificationAuthorizationStatus?,
+        notificationsEnabled: Bool,
+        updateResult: NotificationSettingsUpdateResult? = nil
+    ) -> Bool {
+        notificationsEnabled
+            && updateResult != .saveFailed
+            && (authorizationStatus == .granted || updateResult == .enabled)
     }
 }
 
@@ -14,6 +34,8 @@ struct NotificationAlertsView: View {
     let viewModel: StatusViewModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var authorizationStatus: NotificationAuthorizationStatus?
+    @State private var updateResult: NotificationSettingsUpdateResult?
+    @State private var isUpdatingNotifications = false
 
     var body: some View {
         Section {
@@ -22,11 +44,14 @@ struct NotificationAlertsView: View {
                 set: { enabled in
                     let viewModel = self.viewModel
                     Task {
-                        _ = await viewModel.setNotificationsEnabled(enabled)
+                        isUpdatingNotifications = true
+                        updateResult = await viewModel.setNotificationsEnabled(enabled)
                         await refreshAuthorizationStatus()
+                        isUpdatingNotifications = false
                     }
                 }
             ))
+            .disabled(isUpdatingNotifications)
 
             Toggle("Claude Code alerts", isOn: Binding(
                 get: { viewModel.settings.notifications.providerAlerts.claudeCode.isEnabled },
@@ -86,12 +111,20 @@ struct NotificationAlertsView: View {
         } header: {
             Text("Alerts")
         } footer: {
-            if let message = NotificationAlertsCopy.statusMessage(
+            if isUpdatingNotifications {
+                ProgressView("Updating notification settings...")
+                    .controlSize(.small)
+            } else if let message = NotificationAlertsCopy.statusMessage(
                 authorizationStatus: authorizationStatus,
-                notificationsEnabled: viewModel.settings.notifications.isEnabled
+                notificationsEnabled: viewModel.settings.notifications.isEnabled,
+                updateResult: updateResult
             ) {
                 Text(message)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(NotificationAlertsCopy.statusIsSuccess(
+                        authorizationStatus: authorizationStatus,
+                        notificationsEnabled: viewModel.settings.notifications.isEnabled,
+                        updateResult: updateResult
+                    ) ? .green : .orange)
             }
         }
         .task {

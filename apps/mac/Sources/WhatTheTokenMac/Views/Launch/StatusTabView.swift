@@ -15,8 +15,21 @@ enum StatusTabStepBodyPolicy {
         anyProviderConnected && currentState == .pending
     }
 
-    static func shouldMarkNotificationsDone(status: NotificationAuthorizationStatus) -> Bool {
-        status == .granted
+    static func shouldMarkNotificationsDone(result: NotificationSettingsUpdateResult) -> Bool {
+        result == .enabled
+    }
+
+    static func notificationActionMessage(
+        result: NotificationSettingsUpdateResult
+    ) -> String? {
+        switch result {
+        case .permissionDenied:
+            return StatusTabCopy.notificationPermissionDenied
+        case .saveFailed:
+            return StatusTabCopy.notificationSaveFailed
+        case .enabled, .disabled:
+            return nil
+        }
     }
 
     static func shouldMarkHotkeyDone(warning: String?) -> Bool {
@@ -38,6 +51,8 @@ struct StatusTabView: View {
     let viewModel: StatusViewModel
     let onOpenConnectors: () -> Void
     @State private var selectedTab: ProviderTab = .codex
+    @State private var isUpdatingNotifications = false
+    @State private var notificationActionMessage: String?
 
     init(viewModel: StatusViewModel, onOpenConnectors: @escaping () -> Void = {}) {
         self.viewModel = viewModel
@@ -205,16 +220,30 @@ struct StatusTabView: View {
             HStack {
                 Button(StatusTabCopy.enableNotificationsTitle) {
                     Task {
-                        let status = await viewModel.setNotificationsEnabled(true)
-                        if StatusTabStepBodyPolicy.shouldMarkNotificationsDone(status: status) {
+                        isUpdatingNotifications = true
+                        let result = await viewModel.setNotificationsEnabled(true)
+                        notificationActionMessage = StatusTabStepBodyPolicy.notificationActionMessage(
+                            result: result
+                        )
+                        if StatusTabStepBodyPolicy.shouldMarkNotificationsDone(result: result) {
                             await viewModel.markOnboardingStep(.allowNotifications, as: .done)
                         }
+                        isUpdatingNotifications = false
                     }
                 }
+                .disabled(isUpdatingNotifications)
                 Button(StatusTabCopy.skipStepTitle) {
                     Task { await viewModel.markOnboardingStep(.allowNotifications, as: .skipped) }
                 }
                 .buttonStyle(.link)
+            }
+            if isUpdatingNotifications {
+                ProgressView("Updating notification settings...")
+                    .controlSize(.small)
+            } else if let notificationActionMessage {
+                Text(notificationActionMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
             }
         }
     }

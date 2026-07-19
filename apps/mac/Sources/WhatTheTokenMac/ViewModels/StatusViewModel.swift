@@ -240,21 +240,24 @@ final class StatusViewModel {
     }
 
     @discardableResult
-    func setNotificationsEnabled(_ enabled: Bool) async -> NotificationAuthorizationStatus {
+    func setNotificationsEnabled(_ enabled: Bool) async -> NotificationSettingsUpdateResult {
         if enabled {
-            let status = await notificationDelivery.requestAuthorization()
+            let currentStatus = await notificationDelivery.authorizationStatus()
+            let status = currentStatus == .notDetermined
+                ? await notificationDelivery.requestAuthorization()
+                : currentStatus
             guard status == .granted else {
                 var disabled = settings
                 disabled.notifications.isEnabled = false
-                _ = await saveSettings(disabled)
-                return status
+                guard await saveSettings(disabled) else { return .saveFailed }
+                return .permissionDenied
             }
         }
 
         var nextSettings = settings
         nextSettings.notifications.isEnabled = enabled
-        _ = await saveSettings(nextSettings)
-        return enabled ? .granted : await notificationDelivery.authorizationStatus()
+        guard await saveSettings(nextSettings) else { return .saveFailed }
+        return enabled ? .enabled : .disabled
     }
 
     func notificationAuthorizationStatus() async -> NotificationAuthorizationStatus {
@@ -390,9 +393,18 @@ final class StatusViewModel {
         if previousSteps.launchAtLogin == .pending, nextSettings.launchAtLogin.isEnabled {
             nextSettings.onboarding.steps.launchAtLogin = .done
         }
-        if previousSteps.allowNotifications == .pending,
-           await notificationDelivery.authorizationStatus() == .granted {
-            nextSettings.onboarding.steps.allowNotifications = .done
+        if nextSettings.onboarding.firstLaunchCompleted == false {
+            let notificationStatus = await notificationDelivery.authorizationStatus()
+            if previousSteps.allowNotifications == .pending,
+               nextSettings.notifications.isEnabled,
+               notificationStatus == .granted {
+                nextSettings.onboarding.steps.allowNotifications = .done
+            } else if previousSteps.allowNotifications == .done,
+                      nextSettings.notifications.isEnabled == false {
+                // Older builds treated system permission alone as completion,
+                // even though WhatTheToken alerts could still be switched off.
+                nextSettings.onboarding.steps.allowNotifications = .pending
+            }
         }
         if previousSteps.connectProviders == .pending,
            nextSettings.connectors.claudeCode.isEnabled || nextSettings.connectors.codex.isEnabled {

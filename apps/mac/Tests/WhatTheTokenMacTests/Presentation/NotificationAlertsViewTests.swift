@@ -3,23 +3,57 @@ import Testing
 @testable import WhatTheTokenMac
 
 @Suite struct NotificationAlertsViewTests {
-    @Test func deniedSystemPermissionShowsFooterWhenNotificationsAreEnabled() {
+    @Test func deniedSystemPermissionShowsActionableFooter() {
         let message = NotificationAlertsCopy.statusMessage(
             authorizationStatus: .denied,
-            notificationsEnabled: true
+            notificationsEnabled: false
         )
 
         #expect(message?.contains("macOS notification permission is denied") == true)
         #expect(message?.contains("System Settings") == true)
     }
 
-    @Test func deniedSystemPermissionDoesNotShowFooterWhenNotificationsAreDisabled() {
+    @Test func grantedPermissionConfirmsNotificationsAreEnabled() {
         let message = NotificationAlertsCopy.statusMessage(
-            authorizationStatus: .denied,
-            notificationsEnabled: false
+            authorizationStatus: .granted,
+            notificationsEnabled: true
         )
 
-        #expect(message == nil)
+        #expect(message == "Notifications are enabled.")
+        #expect(NotificationAlertsCopy.statusIsSuccess(
+            authorizationStatus: .granted,
+            notificationsEnabled: true
+        ))
+    }
+
+    @Test func successfulEnableActionConfirmsImmediately() {
+        let message = NotificationAlertsCopy.statusMessage(
+            authorizationStatus: nil,
+            notificationsEnabled: true,
+            updateResult: .enabled
+        )
+
+        #expect(message == "Notifications are enabled.")
+        #expect(NotificationAlertsCopy.statusIsSuccess(
+            authorizationStatus: nil,
+            notificationsEnabled: true,
+            updateResult: .enabled
+        ))
+    }
+
+    @Test func settingsSaveFailureIsVisible() {
+        let message = NotificationAlertsCopy.statusMessage(
+            authorizationStatus: .granted,
+            notificationsEnabled: false,
+            updateResult: .saveFailed
+        )
+
+        #expect(message?.contains("could not save") == true)
+        #expect(!NotificationAlertsCopy.statusIsSuccess(
+            authorizationStatus: .granted,
+            notificationsEnabled: false,
+            updateResult: .saveFailed
+        ))
     }
 
     @Test func notificationAlertsViewRefreshesPermissionStatusAfterToggle() throws {
@@ -28,6 +62,8 @@ import Testing
         #expect(source.contains("refreshAuthorizationStatus()"))
         #expect(source.contains("await viewModel.setNotificationsEnabled(enabled)"))
         #expect(source.contains("await refreshAuthorizationStatus()"))
+        #expect(source.contains("isUpdatingNotifications"))
+        #expect(source.contains("ProgressView(\"Updating notification settings...\")"))
     }
 
     @Test func notificationAlertsViewRefreshesPermissionStatusWhenAppBecomesActive() throws {

@@ -13,6 +13,8 @@ enum StatusTabCopy {
     static let findMenuBarTip = "Tip: hold Command and drag the icon to reveal it from the overflow area."
     static let allowNotificationsInstruction = "Get a banner before quota runs out - even when the menu bar icon is hidden."
     static let enableNotificationsTitle = "Enable notifications"
+    static let notificationPermissionDenied = "macOS notification permission is denied. Enable WhatTheToken in System Settings > Notifications, then try again."
+    static let notificationSaveFailed = "WhatTheToken could not save the notification setting. Try again."
     static let setHotkeyInstruction = "Press the hotkey from anywhere to open WhatTheToken. Default is Control-Option-T - change it any time."
     static let launchAtLoginInstruction = "Want WhatTheToken to start automatically when you log in?"
     static let launchAtLoginTitle = "Launch at login"

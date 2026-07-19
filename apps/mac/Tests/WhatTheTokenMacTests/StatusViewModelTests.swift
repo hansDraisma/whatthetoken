@@ -878,8 +878,22 @@ private func sensitiveKeyMatches(
 
     let result = await vm.setNotificationsEnabled(true)
 
-    #expect(result == .granted)
+    #expect(result == .enabled)
     #expect(vm.settings.notifications.isEnabled == true)
+}
+
+@MainActor
+@Test func enableNotificationsReusesExistingSystemAuthorization() async {
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    _ = await delivery.requestAuthorization()
+    let requestsBeforeEnable = await delivery.authorizationRequestCount
+    let vm = StatusViewModel(notificationDelivery: delivery)
+
+    let result = await vm.setNotificationsEnabled(true)
+
+    #expect(result == .enabled)
+    #expect(vm.settings.notifications.isEnabled == true)
+    #expect(await delivery.authorizationRequestCount == requestsBeforeEnable)
 }
 
 @MainActor
@@ -892,7 +906,7 @@ private func sensitiveKeyMatches(
 
     let result = await vm.setNotificationsEnabled(true)
 
-    #expect(result == .granted)
+    #expect(result == .enabled)
     #expect(vm.settings.notifications.isEnabled == true)
     #expect(vm.settings.notifications.providerAlerts.claudeCode.isEnabled == false)
     #expect(vm.settings.notifications.providerAlerts.codex.isEnabled == false)
@@ -905,7 +919,21 @@ private func sensitiveKeyMatches(
 
     let result = await vm.setNotificationsEnabled(true)
 
-    #expect(result == .denied)
+    #expect(result == .permissionDenied)
+    #expect(vm.settings.notifications.isEnabled == false)
+}
+
+@MainActor
+@Test func notificationSettingSaveFailureIsReported() async {
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    let vm = StatusViewModel(
+        settingsStore: FailingHotkeySettingsStore(),
+        notificationDelivery: delivery
+    )
+
+    let result = await vm.setNotificationsEnabled(true)
+
+    #expect(result == .saveFailed)
     #expect(vm.settings.notifications.isEnabled == false)
 }
 
@@ -918,7 +946,7 @@ private func sensitiveKeyMatches(
 
     let result = await vm.setNotificationsEnabled(false)
 
-    #expect(result == .notDetermined)
+    #expect(result == .disabled)
     #expect(vm.settings.notifications.isEnabled == false)
 }
 
@@ -1210,6 +1238,7 @@ final class FlakyNotificationStateStore: NotificationStateStore, @unchecked Send
 @Test func reconcileOnboardingMarksNotificationsDoneWhenAuthorized() async {
     var settings = AppSettings.defaults
     settings.onboarding.steps.allowNotifications = .pending
+    settings.notifications.isEnabled = true
     let delivery = RecordingNotificationDelivery(permissionResult: .granted)
     _ = await delivery.requestAuthorization()
     let viewModel = StatusViewModel(
@@ -1220,6 +1249,41 @@ final class FlakyNotificationStateStore: NotificationStateStore, @unchecked Send
     await viewModel.reconcileOnboardingFromSystemState()
 
     #expect(viewModel.settings.onboarding.steps.allowNotifications == .done)
+}
+
+@MainActor
+@Test func reconcileOnboardingDoesNotTreatSystemPermissionAsAppOptIn() async {
+    var settings = AppSettings.defaults
+    settings.onboarding.steps.allowNotifications = .pending
+    settings.notifications.isEnabled = false
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    _ = await delivery.requestAuthorization()
+    let viewModel = StatusViewModel(
+        settings: settings,
+        notificationDelivery: delivery
+    )
+
+    await viewModel.reconcileOnboardingFromSystemState()
+
+    #expect(viewModel.settings.onboarding.steps.allowNotifications == .pending)
+}
+
+@MainActor
+@Test func reconcileOnboardingRepairsLegacyCompletedButDisabledNotificationStep() async {
+    var settings = AppSettings.defaults
+    settings.onboarding.firstLaunchCompleted = false
+    settings.onboarding.steps.allowNotifications = .done
+    settings.notifications.isEnabled = false
+    let delivery = RecordingNotificationDelivery(permissionResult: .granted)
+    _ = await delivery.requestAuthorization()
+    let viewModel = StatusViewModel(
+        settings: settings,
+        notificationDelivery: delivery
+    )
+
+    await viewModel.reconcileOnboardingFromSystemState()
+
+    #expect(viewModel.settings.onboarding.steps.allowNotifications == .pending)
 }
 
 @MainActor

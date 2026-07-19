@@ -9,10 +9,17 @@ import Testing
         #expect(StatusTabStepBodyPolicy.shouldMarkConnectProvidersDone(anyProviderConnected: true, currentState: .skipped) == false)
     }
 
-    @Test func notificationStepCompletesOnlyWhenAuthorizationGranted() {
-        #expect(StatusTabStepBodyPolicy.shouldMarkNotificationsDone(status: .granted) == true)
-        #expect(StatusTabStepBodyPolicy.shouldMarkNotificationsDone(status: .denied) == false)
-        #expect(StatusTabStepBodyPolicy.shouldMarkNotificationsDone(status: .notDetermined) == false)
+    @Test func notificationStepCompletesOnlyWhenNotificationsWereEnabled() {
+        #expect(StatusTabStepBodyPolicy.shouldMarkNotificationsDone(result: .enabled) == true)
+        #expect(StatusTabStepBodyPolicy.shouldMarkNotificationsDone(result: .permissionDenied) == false)
+        #expect(StatusTabStepBodyPolicy.shouldMarkNotificationsDone(result: .saveFailed) == false)
+        #expect(StatusTabStepBodyPolicy.shouldMarkNotificationsDone(result: .disabled) == false)
+    }
+
+    @Test func notificationStepExplainsDeniedPermissionAndSaveFailures() {
+        #expect(StatusTabStepBodyPolicy.notificationActionMessage(result: .permissionDenied)?.contains("System Settings") == true)
+        #expect(StatusTabStepBodyPolicy.notificationActionMessage(result: .saveFailed)?.contains("could not save") == true)
+        #expect(StatusTabStepBodyPolicy.notificationActionMessage(result: .enabled) == nil)
     }
 
     @Test func hotkeyStepCompletesOnlyWhenThereIsNoWarning() {

@@ -137,7 +137,7 @@ Display metadata is presentation-only. Consumers must continue to use `poolKey` 
 Every `UsageSnapshot` includes sanitized source metadata:
 
 - `connector`: `mac_connector`, `chrome_extension`, `web_dashboard`, or `manual_fixture`
-- `state`: connector state such as `connected`, `missing_credentials`, `token_invalid`, `schema_changed`, or `stale`
+- `state`: connector state such as `connected`, `missing_credentials`, `token_invalid`, `session_expired`, `schema_changed`, or `stale`
 - `label`: user-facing source label
 - `parserVersion`: source/parser version used to produce the snapshot
 - `deviceId`: local device identifier

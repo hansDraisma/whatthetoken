@@ -103,7 +103,9 @@ The Mac app owns Claude-specific ingestion code under `apps/mac/Sources/WhatTheT
 The connector is responsible for:
 
 - reading the Claude Code Keychain credential locally only after opt-in
+- treating provider credentials as read-only and never redeeming refresh tokens, minting credentials, or writing the provider-owned Keychain item
 - using the OAuth token in memory to request Anthropic usage
+- deriving a token digest only in memory to detect when Claude Code has rotated its credential
 - passing a detected or injected Claude Code version into the usage request
 - dynamically mapping every top-level utilization window (including `five_hour`, `seven_day`, and model windows such as `seven_day_fable`) plus enabled `extra_usage` credit data into sanitized snapshots
 - returning structured connector states for missing credentials, invalid tokens, rate limits, network errors, and schema changes
@@ -111,15 +113,17 @@ The connector is responsible for:
 
 ## Claude Connector Product Opt-In
 
-The Mac app now starts with a live `StatusViewModel` and an explicit `Connect Claude Code` action instead of fixture snapshots. App startup injects the Claude connector dependencies but does not refresh the connector, read the Keychain item, run `claude --version`, or call Anthropic.
+The Mac app starts with a live `StatusViewModel` and an explicit `Connect Claude Code` action instead of fixture snapshots. On first run, the user-initiated connect action is the first product path that may refresh Claude Code usage.
 
-The user-initiated connect action is the first product path that may refresh Claude Code usage. During refresh, the app can read the installed Claude CLI version locally, read the Claude Code Keychain item locally, call the Anthropic usage endpoint with the OAuth token in memory, and render only sanitized `UsageSnapshot` values plus connector status copy.
+Persisted enabled and unpaused state is continuing consent. After restoring settings and cache state, startup performs exactly one verification for every enabled, unpaused connector before activating automatic recovery or background refresh. The verification may read the installed CLI version, read the Claude Code Keychain item locally, call the Anthropic usage endpoint with the OAuth token in memory, and render only sanitized `UsageSnapshot` values plus connector status copy. Disabled and paused connectors are skipped. Background refresh is then scheduled without a second immediate request.
+
+`ClaudeReconnectWatcher` activates after startup verification and runs only for recoverable Claude credential states. It polls a bounded, network-free `ClaudeCredentialProbe` every 30 seconds; unreadable Keychain results back off to 60, 120, 240, and at most 300 seconds. The probe reads off the main actor and returns only presence, local expiry, and an in-memory SHA-256 digest. When a usable credential appears or the digest changes, the watcher hands one provider verification to an independent task so state changes cannot cancel the refresh. It stops while the connector is healthy and never persists the digest or calls Anthropic itself.
 
 The Claude CLI version resolver checks the launched app's `PATH` and common local install paths such as `~/.local/bin/claude`, `/opt/homebrew/bin/claude`, and `/usr/local/bin/claude`, because packaged Mac apps may start with a restricted environment. Duplicate connect attempts while a refresh is already checking are ignored so one user action cannot start overlapping provider refreshes.
 
 The connector setup titles and trust message live in a tested copy helper so product-facing opt-in language stays consistent across disconnected, checking, connected, unavailable, and error states.
 
-Automated tests use stub refreshers and version-command runners. They must not call the live Claude CLI, read Keychain credentials, or call Anthropic. A bounded local GUI launch smoke can be run manually with `swift run WhatTheTokenMac` to verify the app starts and renders. With default settings it must not trigger connector refresh; with persisted background refresh enabled, it may refresh enabled, unpaused connectors after launch.
+Automated tests use stub refreshers, credential probes, clocks, sleepers, and version-command runners. They must not call the live Claude CLI, read Keychain credentials, or call Anthropic. A bounded local GUI launch smoke can be run manually with `swift run WhatTheTokenMac` to verify the app starts and renders. A fresh or disconnected install must not trigger connector refresh. Any persisted enabled, unpaused connector receives one startup verification regardless of the optional recurring-background-refresh setting.
 
 ## Current Codex Connector Boundary
 
@@ -138,9 +142,9 @@ The connector must not parse `~/.codex` files, conversation/session/history stor
 
 ## Codex Connector Product Opt-In
 
-The Mac app starts with an explicit `Connect Codex` action. App startup injects Codex connector dependencies but does not start Codex app-server, read Codex auth state, or request rate limits until the user chooses to connect.
+The Mac app starts with an explicit `Connect Codex` action. On first run, the user-initiated connect action is the first product path that may start Codex app-server.
 
-The user-initiated connect action is the first product path that may start Codex app-server. During refresh, the app can launch the local Codex executable, call the app-server rate-limit method over stdio, and render only sanitized snapshots plus connector status copy. If app-server reports auth failure, product copy directs the user to sign in to Codex locally with `codex login`.
+After Codex has been enabled, its persisted enabled and unpaused state is continuing consent. Startup may perform one rate-limit verification through the local app-server. During either connect or startup verification, the app can launch the local Codex executable, call the app-server rate-limit method over stdio, and render only sanitized snapshots plus connector status copy. If app-server reports auth failure, product copy directs the user to sign in to Codex locally with `codex login`.
 
 The Codex executable resolver checks the launched app's `PATH` and common local install paths such as `~/.local/bin/codex`, `/opt/homebrew/bin/codex`, and `/usr/local/bin/codex`, because packaged Mac apps may start with a restricted environment. If no executable can be found or started, the connector reports `permission_denied` without exposing local paths in UI or smoke output. Duplicate connect attempts while a refresh is already checking are ignored so one user action cannot start overlapping app-server reads.
 
@@ -200,7 +204,7 @@ Stage 2 and Stage 3 added a small set of view-model-owned services that sit betw
 - `AppSettings` (Codable, schema v2) — persists connector consent and pause state, refresh preferences, notification preferences (master toggle, warning/critical thresholds, per-provider toggles), and menu bar display preferences. `decodeValidated` migrates v1 → v2 (forces `autoRefreshEnabled = false`, renames `lowThreshold` to `warningThreshold`, defaults provider alerts to true). Unknown future versions throw and the store falls back to safe defaults.
 - `SnapshotCache` — sanitized last-known-good snapshots, `lastSuccessfulRefreshAtByProvider`, and per-provider failure/backoff metadata. `SnapshotStalePolicy.from(settings:)` returns `max(2 * interval, 15 min)` when auto-refresh is on and 60 minutes otherwise.
 - `NotificationState` — sanitized dedupe records keyed by provider/normalized-pool/normalized-window. `NotificationDedupeKey.storageKey` is stable across refreshes; rolling-window keys collapse `300m` → `rolling_5h`, `10080m`/`seven_day` → `rolling_7d`. `JSONFileNotificationStateStore` writes atomically and emits `os_log` warnings on failure with `privacy: .private` interpolation.
-- `BackgroundRefreshController` — owned by `AppModel`, runs only when `settings.refresh.autoRefreshEnabled` is true. `start()` schedules the timer, registers an `NSApplication.willBecomeActiveNotification` observer, and runs an immediate `appBecameActive()` so opting in does not wait a full interval. `appBecameActive()` skips refresh if a previous automatic attempt was within the configured interval and another refresh is already in flight.
+- `BackgroundRefreshController` — owned by `AppModel`, runs only when `settings.refresh.autoRefreshEnabled` is true. `start()` schedules the timer, registers an `NSApplication.willBecomeActiveNotification` observer, and normally runs an immediate `appBecameActive()` so opting in does not wait a full interval. Startup passes `afterStartupVerification: true`, records that attempt time, and suppresses the immediate duplicate. `appBecameActive()` skips refresh if a previous automatic attempt was within the configured interval and another refresh is already in flight.
 - `PopoverRefreshController` — popover-open and manual refresh. `recentlyBackgroundRefreshed(_:)` debounces `.popoverOpened` refreshes for providers refreshed by the background timer in the last 60 seconds; `.manual` and `.retry` bypass the debounce and provider backoff but still skip paused providers.
 - `NotificationEvaluator` — pure Swift. Accepts snapshots, settings, prior state, and an optional `scopedTo` provider. Single-provider refreshes pass `scopedTo: .claude` or `.codex` so a Claude refresh cannot fire a Codex notification for a stale-but-not-yet-stale cached snapshot. Cache-load and bulk evaluations pass `nil`. Recovery rules require `threshold + 5pp` plus a 60-minute cooldown for rolling windows.
 - `NotificationDelivery` — protocol around `UserNotifications`. The live `UserNotificationDelivery` short-circuits to `.denied` when not running from a real `.app` bundle so SPM-built CLI runs do not trap. `RecordingNotificationDelivery` is the test double.

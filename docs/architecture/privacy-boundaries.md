@@ -70,7 +70,11 @@ When a connector needs a local provider credential or token to retrieve usage st
 
 For Claude Code, the Mac connector may read the local Claude Code Keychain item with explicit user consent and use the OAuth access token in memory to request usage status from Anthropic. The current implementation isolates Keychain access behind a local command runner. The runner invokes `/usr/bin/security find-generic-password -s "Claude Code-credentials" -w`, bounds the lookup with a timeout, and returns either command output or a local connector error. The credential parser extracts only `claudeAiOauth.accessToken`; all persisted and synced output remains limited to sanitized snapshot data.
 
-The product UI starts disconnected and must not read Claude credentials on launch. The `Connect Claude Code` action is the first product path that may refresh the Claude connector. App startup may construct connector dependencies, but it must not call the refresher, run `claude --version`, invoke the Keychain command, or call Anthropic until the user chooses to connect. While a refresh is already checking, duplicate connect attempts are ignored so repeated user actions cannot start overlapping provider requests.
+The product UI starts disconnected on first run. The `Connect Claude Code` action is the first product path that may read Claude credentials or refresh a connector that has not previously been enabled.
+
+An enabled, unpaused connector records continuing consent for future reads. After persisted state is restored, app startup may run exactly one verification for each such connector. That verification may resolve the local CLI, read the provider-owned credential, and request sanitized usage status from the provider. Disabled and paused connectors are excluded. The reconnect watcher is activated only after startup verification, and opted-in background refresh starts without a duplicate immediate request. While any refresh is already checking, duplicate attempts are ignored so overlapping provider requests cannot start.
+
+Claude credential observation remains read-only. WhatTheToken must never redeem a refresh token, mint provider credentials, or write a provider-owned Keychain item. The reconnect watcher may derive a SHA-256 digest from the access token for in-process equality checks, but the digest is memory-only for the lifetime of one watch and must never be persisted, logged, synced, or exposed. Outside startup verification and provider verification triggered by an observed rotation, the watcher performs only bounded local Keychain reads and makes no network request itself.
 
 The developer-only Claude smoke command must follow the same boundary. It requires `CLAUDE_CODE_VERSION` before it reads credentials or calls Anthropic, runs only when explicitly invoked with `--claude-connector-smoke`, and prints only sanitized connector state plus snapshot summaries. Smoke launch must skip live `AppModel` construction so persisted background refresh cannot start before the smoke command's explicit environment gate. The smoke command must not print tokens, authorization headers, raw provider JSON, local file contents, prompts, responses, session data, or sensitive local paths.
 
@@ -122,6 +126,7 @@ Connectors should report structured source states instead of raw provider or OS 
 - `missing_credentials`
 - `permission_denied`
 - `token_invalid`
+- `session_expired`
 - `rate_limited`
 - `network_error`
 - `schema_changed`
@@ -139,7 +144,9 @@ Ship these controls from the start:
 - no Chrome extension access to local Keychain values
 - no local or remote logging of tokens, prompts, responses, or session contents
 - bounded local credential lookup so connector refresh cannot hang indefinitely
-- product UI starts disconnected and refreshes providers only after connect, manual refresh, foreground popover refresh, or explicit background-refresh opt-in
+- product UI starts disconnected on first run and refreshes providers only after connect, manual refresh, foreground popover refresh, explicit background-refresh opt-in, or one startup verification for an already-enabled, unpaused connector
+- provider credentials are read-only: never redeem refresh tokens, mint credentials, or write provider-owned credential stores
+- token-derived digests remain memory-only and are never persisted
 - duplicate connect attempts do not start overlapping Claude refreshes
 - developer-only smoke testing stays local/manual, skips live app construction, and prints sanitized status only
 - fixture-based tests only, with synthetic usage data

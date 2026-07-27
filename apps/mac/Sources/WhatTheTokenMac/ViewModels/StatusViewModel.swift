@@ -110,6 +110,7 @@ final class StatusViewModel {
         case manual
         case timerTick
         case retry
+        case credentialRotated
     }
 
     var snapshotSections: [UsageSnapshotSection] {
@@ -521,7 +522,9 @@ final class StatusViewModel {
         guard settings.connectors.claudeCode.isEnabled && !settings.connectors.claudeCode.isPaused else { return }
         guard connectorState != .checking else { return }
         if reason == .popoverOpened && recentlyBackgroundRefreshed(.claude) { return }
-        guard reason.isManual || cache.allowsAutomaticRefresh(for: .claude, now: now()) else { return }
+        guard reason.bypassesFailureBackoff
+            || cache.allowsAutomaticRefresh(for: .claude, now: now())
+        else { return }
 
         if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
             connectorState = .missingClaudeCli
@@ -594,7 +597,9 @@ final class StatusViewModel {
         guard settings.connectors.codex.isEnabled && !settings.connectors.codex.isPaused else { return }
         guard codexConnectorState != .checking else { return }
         if reason == .popoverOpened && recentlyBackgroundRefreshed(.codex) { return }
-        guard reason.isManual || cache.allowsAutomaticRefresh(for: .codex, now: now()) else { return }
+        guard reason.bypassesFailureBackoff
+            || cache.allowsAutomaticRefresh(for: .codex, now: now())
+        else { return }
 
         let previousState = codexConnectorState
         let previousMessage = codexConnectorStatusMessage
@@ -993,9 +998,9 @@ private final class InMemoryLaunchAtLoginService: LaunchAtLoginServicing {
 }
 
 extension StatusViewModel.RefreshReason {
-    var isManual: Bool {
+    var bypassesFailureBackoff: Bool {
         switch self {
-        case .manual, .retry:
+        case .manual, .retry, .credentialRotated:
             return true
         case .popoverOpened, .timerTick:
             return false

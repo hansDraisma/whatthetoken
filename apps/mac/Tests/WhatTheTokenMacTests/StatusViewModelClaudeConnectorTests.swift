@@ -101,6 +101,36 @@ import Testing
     #expect(claudeActionTitle(for: .sessionExpired) == "Retry")
 }
 
+@Test func credentialRotatedBypassesFailureBackoff() {
+    #expect(StatusViewModel.RefreshReason.credentialRotated.bypassesFailureBackoff)
+}
+
+@MainActor
+@Test func credentialRotatedRefreshesClaudeInsideActiveFailureBackoff() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.recordFailure(
+        for: .claude,
+        code: .sessionExpired,
+        message: "Claude Code session expired",
+        now: Date(timeIntervalSince1970: 1_000)
+    )
+    let refresher = CountingClaudeConnectorRefresher(result: .success(.connected()))
+    let viewModel = StatusViewModel(
+        settings: settings,
+        cache: cache,
+        claudeRefresher: refresher,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        now: { Date(timeIntervalSince1970: 1_100) }
+    )
+
+    await viewModel.refreshAll(reason: .credentialRotated)
+
+    #expect(refresher.refreshCount == 1)
+    #expect(viewModel.connectorState == .connected)
+}
+
 @MainActor
 @Test func sessionExpiredResultSurfacesSessionExpiredState() async {
     let refresher = CountingClaudeConnectorRefresher(result: .success(.sessionExpired()))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { usageEventSchema, usageSnapshotSchema } from "../schemas";
+import { connectorStateSchema, usageEventSchema, usageSnapshotSchema } from "../schemas";
 
 const fixtureSource = {
   connector: "manual_fixture",
@@ -10,6 +10,10 @@ const fixtureSource = {
 } as const;
 
 describe("usage schemas", () => {
+  it("accepts session_expired as a connector state", () => {
+    expect(connectorStateSchema.parse("session_expired")).toBe("session_expired");
+  });
+
   it("accepts a sanitized Codex CLI usage event", () => {
     const parsed = usageEventSchema.parse({
       id: "evt_01",

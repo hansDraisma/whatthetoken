@@ -34,6 +34,7 @@ export const connectorStateSchema = z.enum([
   "missing_credentials",
   "permission_denied",
   "token_invalid",
+  "session_expired",
   "rate_limited",
   "network_error",
   "schema_changed",

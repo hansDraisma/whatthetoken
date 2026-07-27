@@ -140,9 +140,9 @@ final class StatusViewModel {
         widgetTimelineReloader: WidgetTimelineReloading = NoopWidgetTimelineReloader(),
         now: @escaping @MainActor () -> Date = { Date() },
         connectorState: ClaudeConnectorSetupState = .notConnected,
-        connectorStatusMessage: String = "Claude Code is not connected",
+        connectorStatusMessage: String = ConnectorRecoveryCopy.claude(.notConnected).headline,
         codexConnectorState: CodexConnectorSetupState = .notConnected,
-        codexConnectorStatusMessage: String = "Codex is not connected",
+        codexConnectorStatusMessage: String = ConnectorRecoveryCopy.codex(.notConnected).headline,
         launchAtLoginStatusMessage: String? = nil
     ) {
         self.snapshots = snapshots
@@ -568,7 +568,7 @@ final class StatusViewModel {
         let previousState = connectorState
         let previousMessage = connectorStatusMessage
         connectorState = .checking
-        connectorStatusMessage = "Checking Claude Code"
+            connectorStatusMessage = ConnectorRecoveryCopy.claude(.checking).headline
 
         do {
             let result = try await requireClaudeRefreshResult()
@@ -612,7 +612,7 @@ final class StatusViewModel {
             }
 
             connectorState = .networkError
-            connectorStatusMessage = "Claude Code usage could not be refreshed"
+            connectorStatusMessage = ConnectorRecoveryCopy.claude(.networkError).headline
             cache.recordFailure(for: .claude, code: .network, message: connectorStatusMessage, now: now())
             _ = await saveCacheAndReloadWidget(cache)
             applyCachedSnapshots()
@@ -630,7 +630,7 @@ final class StatusViewModel {
         let previousState = codexConnectorState
         let previousMessage = codexConnectorStatusMessage
         codexConnectorState = .checking
-        codexConnectorStatusMessage = "Checking Codex"
+        codexConnectorStatusMessage = ConnectorRecoveryCopy.codex(.checking).headline
 
         do {
             let result = try await requireCodexRefreshResult()
@@ -674,7 +674,7 @@ final class StatusViewModel {
             }
 
             codexConnectorState = .networkError
-            codexConnectorStatusMessage = "Codex usage could not be refreshed"
+            codexConnectorStatusMessage = ConnectorRecoveryCopy.codex(.networkError).headline
             cache.recordFailure(for: .codex, code: .network, message: codexConnectorStatusMessage, now: now())
             _ = await saveCacheAndReloadWidget(cache)
             applyCachedSnapshots()
@@ -694,7 +694,7 @@ final class StatusViewModel {
                         parserVersion: "unknown",
                         deviceId: "local_mac"
                     ),
-                    message: "Claude Code is not connected"
+                    message: ConnectorRecoveryCopy.claude(.notConnected).headline
                 )
             )
         }
@@ -715,7 +715,7 @@ final class StatusViewModel {
                         parserVersion: "unknown",
                         deviceId: "local_mac"
                     ),
-                    message: "Codex is not connected"
+                    message: ConnectorRecoveryCopy.codex(.notConnected).headline
                 )
             )
         }

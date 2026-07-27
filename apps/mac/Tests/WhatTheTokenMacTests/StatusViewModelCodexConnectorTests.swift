@@ -36,7 +36,7 @@ import Testing
     #expect(refresher.refreshCount == 1)
     #expect(viewModel.codexConnectorState == .missingCredentials)
     #expect(viewModel.snapshots.isEmpty)
-    #expect(viewModel.codexConnectorStatusMessage == "Sign in to Codex locally with codex login, then retry.")
+    #expect(viewModel.codexConnectorStatusMessage == "Sign in to Codex locally")
 }
 
 @MainActor
@@ -266,7 +266,7 @@ private extension CodexConnectorResult {
             status: ConnectorStatus(
                 product: "codex",
                 source: source,
-                message: "Sign in to Codex locally with codex login, then retry."
+                message: "Sign in to Codex locally"
             )
         )
     }

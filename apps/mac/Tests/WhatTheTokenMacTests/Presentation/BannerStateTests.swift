@@ -32,11 +32,11 @@ import Testing
     }
 
     @Test func bannerCopyForDisconnectedSelected_codex() {
-        #expect(BannerCopy.disconnected(selected: .codex) == "Codex is not connected. Open Settings to connect.")
+        #expect(BannerCopy.disconnected(selected: .codex) == "Codex is not connected. Open Connectors to connect.")
     }
 
     @Test func bannerCopyForDisconnectedBoth_isBroad() {
-        #expect(BannerCopy.disconnectedBoth == "Connect Claude or Codex in Settings.")
+        #expect(BannerCopy.disconnectedBoth == "Connect Claude or Codex in Connectors.")
     }
 
     @Test func bannerCopyHintForOtherHealthy_codex() {
@@ -47,14 +47,14 @@ import Testing
     @Test func banner_disconnectedSelected_codex_yieldsDisconnected() {
         let vm = StatusViewModel(snapshots: [], connectorState: .connected, codexConnectorState: .notConnected)
         let banner = BannerState.from(viewModel: vm, selected: .codex)
-        #expect(banner == .disconnected(text: "Codex is not connected. Open Settings to connect."))
+        #expect(banner == .disconnected(text: "Codex is not connected. Open Connectors to connect."))
     }
 
     @MainActor
     @Test func banner_bothDisconnected_broadensCopy() {
         let vm = StatusViewModel(snapshots: [], connectorState: .notConnected, codexConnectorState: .notConnected)
         let banner = BannerState.from(viewModel: vm, selected: .codex)
-        #expect(banner == .disconnected(text: "Connect Claude or Codex in Settings."))
+        #expect(banner == .disconnected(text: "Connect Claude or Codex in Connectors."))
     }
 
     @MainActor

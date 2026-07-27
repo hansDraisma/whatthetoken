@@ -26,7 +26,7 @@ enum BannerState: Equatable, Sendable {
 
 enum BannerCopy {
     static let stale = "Usage may be outdated. Refresh to check current limits."
-    static let disconnectedBoth = "Connect Claude or Codex in Settings."
+    static let disconnectedBoth = "Connect Claude or Codex in Connectors."
 
     static func critical(provider: ProviderTab) -> String {
         "\(provider.title) is out of usable quota"
@@ -45,7 +45,7 @@ enum BannerCopy {
     }
 
     static func disconnected(selected: ProviderTab) -> String {
-        "\(selected.title) is not connected. Open Settings to connect."
+        "\(selected.title) is not connected. Open Connectors to connect."
     }
 
     static func hint(otherHealthy other: ProviderTab) -> String {

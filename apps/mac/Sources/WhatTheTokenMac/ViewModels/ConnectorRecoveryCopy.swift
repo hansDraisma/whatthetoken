@@ -57,7 +57,7 @@ enum ConnectorRecoveryCopy {
         case .notConnected:
             return ConnectorCopy(
                 headline: "Claude Code is not connected",
-                advice: "Connect Claude Code in Settings to see remaining usage.",
+                advice: "Connect Claude Code in Connectors to see remaining usage.",
                 recovery: .connect
             )
         case .checking:
@@ -122,7 +122,7 @@ enum ConnectorRecoveryCopy {
         case .notConnected:
             return ConnectorCopy(
                 headline: "Codex is not connected",
-                advice: "Connect Codex in Settings to see remaining usage and rate-limit status.",
+                advice: "Connect Codex in Connectors to see remaining usage and rate-limit status.",
                 recovery: .connect
             )
         case .checking:
@@ -140,7 +140,7 @@ enum ConnectorRecoveryCopy {
         case .missingCredentials:
             return ConnectorCopy(
                 headline: "Sign in to Codex locally",
-                advice: "Sign in by running Codex locally, then retry.",
+                advice: "Run codex login locally, then retry.",
                 recovery: .signInLocally
             )
         case .permissionDenied:

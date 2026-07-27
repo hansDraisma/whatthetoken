@@ -17,14 +17,17 @@ extension NSWindow: LaunchWindowPresenting {}
 
 @MainActor
 final class LaunchWindowController {
+    private let navigation: LaunchWindowNavigation
     private let makeWindow: @MainActor () -> LaunchWindowPresenting
     private let activate: @MainActor () -> Void
     private var window: LaunchWindowPresenting?
 
     init(
+        navigation: LaunchWindowNavigation = LaunchWindowNavigation(),
         makeWindow: @MainActor @escaping () -> LaunchWindowPresenting,
         activate: @MainActor @escaping () -> Void
     ) {
+        self.navigation = navigation
         self.makeWindow = makeWindow
         self.activate = activate
     }
@@ -33,6 +36,11 @@ final class LaunchWindowController {
         let window = existingOrNewWindow()
         activate()
         window.makeKeyAndOrderFront(nil)
+    }
+
+    func open(tab: LaunchTab) {
+        navigation.selection = tab
+        open()
     }
 
     var hasVisibleWindow: Bool {
@@ -65,11 +73,14 @@ extension LaunchWindowController {
         viewModel: StatusViewModel,
         updateController: SparkleUpdateController
     ) {
+        let navigation = LaunchWindowNavigation()
         self.init(
+            navigation: navigation,
             makeWindow: {
                 Self.makeWindow(
                     viewModel: viewModel,
-                    updateController: updateController
+                    updateController: updateController,
+                    navigation: navigation
                 )
             },
             activate: { NSApplication.shared.activate(ignoringOtherApps: true) }
@@ -78,13 +89,15 @@ extension LaunchWindowController {
 
     private static func makeWindow(
         viewModel: StatusViewModel,
-        updateController: SparkleUpdateController
+        updateController: SparkleUpdateController,
+        navigation: LaunchWindowNavigation
     ) -> NSWindow {
         let controller = NSHostingController(
             rootView: LaunchWindowRootView(
                 viewModel: viewModel,
                 canCheckForUpdates: { updateController.canCheckForUpdates },
-                onCheckForUpdates: { updateController.checkForUpdates(nil) }
+                onCheckForUpdates: { updateController.checkForUpdates(nil) },
+                navigation: navigation
             )
         )
         let window = NSWindow(contentViewController: controller)

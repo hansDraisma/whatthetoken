@@ -40,6 +40,28 @@ import Testing
         #expect(window.orderFrontCount == 2)
     }
 
+    @MainActor
+    @Test func openTabSelectsRequestedPaneAndReusesExistingWindow() {
+        let navigation = LaunchWindowNavigation()
+        var makeWindowCount = 0
+        let window = SpyLaunchWindow()
+        let controller = LaunchWindowController(
+            navigation: navigation,
+            makeWindow: {
+                makeWindowCount += 1
+                return window
+            },
+            activate: {}
+        )
+
+        controller.open()
+        controller.open(tab: .connectors)
+
+        #expect(navigation.selection == .connectors)
+        #expect(makeWindowCount == 1)
+        #expect(window.orderFrontCount == 2)
+    }
+
     @Test func liveWindowPersistsFrameAcrossLaunches() throws {
         let source = try String(
             contentsOfFile: "\(macPackageRootURL().path)/Sources/WhatTheTokenMac/LaunchWindowController.swift",

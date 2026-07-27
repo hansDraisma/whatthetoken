@@ -23,7 +23,7 @@ struct CodexConnectorService: Sendable {
                 status: ConnectorStatus(
                     product: "codex",
                     source: source(state: .notConnected),
-                    message: "Codex is not connected"
+                    message: ConnectorRecoveryCopy.codex(.notConnected).headline
                 )
             )
         }
@@ -46,7 +46,7 @@ struct CodexConnectorService: Sendable {
                 status: ConnectorStatus(
                     product: "codex",
                     source: source(state: .networkError),
-                    message: "Codex usage could not be refreshed"
+                    message: ConnectorRecoveryCopy.codex(.networkError).headline
                 )
             )
         }
@@ -65,7 +65,7 @@ struct CodexConnectorService: Sendable {
             status: ConnectorStatus(
                 product: "codex",
                 source: connectedSource,
-                message: "Codex connected"
+                message: ConnectorRecoveryCopy.codex(.connected).headline
             )
         )
     }
@@ -96,13 +96,13 @@ struct CodexConnectorService: Sendable {
     private func message(for error: CodexAppServerClientError) -> String {
         switch error {
         case .authRequired:
-            return "Sign in to Codex locally with codex login, then retry."
+            return ConnectorRecoveryCopy.codex(.missingCredentials).headline
         case .permissionDenied:
-            return "Codex app-server could not be started"
+            return ConnectorRecoveryCopy.codex(.permissionDenied).headline
         case .networkError:
-            return "Codex usage could not be refreshed"
+            return ConnectorRecoveryCopy.codex(.networkError).headline
         case .schemaChanged:
-            return "Codex usage response changed"
+            return ConnectorRecoveryCopy.codex(.schemaChanged).headline
         }
     }
 }

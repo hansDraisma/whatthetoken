@@ -44,7 +44,7 @@ import Testing
 
     #expect(result.snapshots.isEmpty)
     #expect(result.status.source.state == .missingCredentials)
-    #expect(result.status.message == "Sign in to Codex locally with codex login, then retry.")
+    #expect(result.status.message == "Sign in to Codex locally")
 }
 
 @Test func codexPermissionDeniedMapsToPermissionDenied() async throws {

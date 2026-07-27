@@ -4,7 +4,7 @@ struct PopoverFooterView: View {
     let state: PopoverFooterState
     let onRefresh: () -> Void
     let canCheckForUpdates: Bool
-    let onOpenSettings: () -> Void
+    let onOpenConnectors: () -> Void
     let onCheckForUpdates: () -> Void
     let onOpenDeveloperWindow: (() -> Void)?
 
@@ -14,7 +14,7 @@ struct PopoverFooterView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             refreshButton
             Menu {
-                Button("Settings...", action: onOpenSettings)
+                Button("Connectors...", action: onOpenConnectors)
                 Button("Check for Updates...", action: onCheckForUpdates)
                     .disabled(!canCheckForUpdates)
                 Button("About WhatTheToken") {

@@ -1,4 +1,5 @@
 import SwiftUI
+import Observation
 
 enum LaunchTab: Hashable, CaseIterable {
     case status
@@ -38,25 +39,35 @@ enum LaunchTab: Hashable, CaseIterable {
     }
 }
 
+@MainActor
+@Observable
+final class LaunchWindowNavigation {
+    var selection: LaunchTab
+
+    init(selection: LaunchTab = .status) {
+        self.selection = selection
+    }
+}
+
 struct LaunchWindowRootView: View {
     let viewModel: StatusViewModel
     let canCheckForUpdates: @MainActor () -> Bool
     let onCheckForUpdates: @MainActor () -> Void
-    @State private var selection: LaunchTab = .status
+    @Bindable var navigation: LaunchWindowNavigation
 
     var body: some View {
         NavigationSplitView {
-            List(LaunchTab.allCases, id: \.self, selection: $selection) { tab in
+            List(LaunchTab.allCases, id: \.self, selection: $navigation.selection) { tab in
                 Label(tab.title, systemImage: tab.systemImage)
                     .tag(tab)
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
         } detail: {
-            switch selection {
+            switch navigation.selection {
             case .status:
                 StatusTabView(
                     viewModel: viewModel,
-                    onOpenConnectors: { selection = .connectors },
+                    onOpenConnectors: { navigation.selection = .connectors },
                     canCheckForUpdates: canCheckForUpdates(),
                     onCheckForUpdates: onCheckForUpdates
                 )

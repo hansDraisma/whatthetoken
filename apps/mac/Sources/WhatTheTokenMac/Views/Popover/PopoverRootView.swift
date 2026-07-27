@@ -4,7 +4,7 @@ struct PopoverRootView: View {
     let viewModel: StatusViewModel
     let controller: PopoverRefreshController
     let canCheckForUpdates: @MainActor () -> Bool
-    let onOpenSettings: () -> Void
+    let onOpenConnectors: () -> Void
     let onCheckForUpdates: () -> Void
     let onOpenDeveloperWindow: (() -> Void)?
 
@@ -22,7 +22,7 @@ struct PopoverRootView: View {
             Divider()
             ProviderTabContentView(
                 model: tabModel,
-                onOpenConnectors: onOpenSettings,
+                onOpenConnectors: onOpenConnectors,
                 onConnect: {
                     Task {
                         switch selectedTab {
@@ -43,7 +43,7 @@ struct PopoverRootView: View {
                 state: footerState,
                 onRefresh: { controller.userTappedRefresh() },
                 canCheckForUpdates: canCheckForUpdates(),
-                onOpenSettings: onOpenSettings,
+                onOpenConnectors: onOpenConnectors,
                 onCheckForUpdates: onCheckForUpdates,
                 onOpenDeveloperWindow: onOpenDeveloperWindow
             )

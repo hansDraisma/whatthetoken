@@ -5,7 +5,7 @@ import Testing
     @Test func claudeCopyCoversEveryState() {
         #expect(ConnectorRecoveryCopy.claude(.notConnected) == ConnectorCopy(
             headline: "Claude Code is not connected",
-            advice: "Connect Claude Code in Settings to see remaining usage.",
+            advice: "Connect Claude Code in Connectors to see remaining usage.",
             recovery: .connect
         ))
         #expect(ConnectorRecoveryCopy.claude(.checking) == ConnectorCopy(
@@ -58,7 +58,7 @@ import Testing
     @Test func codexCopyCoversEveryState() {
         #expect(ConnectorRecoveryCopy.codex(.notConnected) == ConnectorCopy(
             headline: "Codex is not connected",
-            advice: "Connect Codex in Settings to see remaining usage and rate-limit status.",
+            advice: "Connect Codex in Connectors to see remaining usage and rate-limit status.",
             recovery: .connect
         ))
         #expect(ConnectorRecoveryCopy.codex(.checking) == ConnectorCopy(
@@ -73,7 +73,7 @@ import Testing
         ))
         #expect(ConnectorRecoveryCopy.codex(.missingCredentials) == ConnectorCopy(
             headline: "Sign in to Codex locally",
-            advice: "Sign in by running Codex locally, then retry.",
+            advice: "Run codex login locally, then retry.",
             recovery: .signInLocally
         ))
         #expect(ConnectorRecoveryCopy.codex(.permissionDenied) == ConnectorCopy(

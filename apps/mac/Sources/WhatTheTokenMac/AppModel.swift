@@ -94,10 +94,10 @@ final class AppModel {
             viewModel: viewModel,
             controller: refreshController,
             canCheckForUpdates: { updateController.canCheckForUpdates },
-            onOpenSettings: {
+            onOpenConnectors: {
                 MacChromeActions.openLaunchWindow(
                     dismissPopover: { menuBarControllerWeak?.closePopover() },
-                    openWindow: { launchWindowController.open() }
+                    openWindow: { launchWindowController.open(tab: .connectors) }
                 )
             },
             onCheckForUpdates: { updateController.checkForUpdates(nil) },

@@ -95,7 +95,7 @@ import Testing
 @Test func sharedXcconfigPinsCurrentPublicVersionAndBuild() throws {
     let sharedConfig = try macFileContents("Packaging/WhatTheToken.xcconfig")
 
-    #expect(sharedConfig.contains("\nMARKETING_VERSION = 0.1.3\n"))
-    #expect(sharedConfig.contains("\nCURRENT_PROJECT_VERSION = 4\n"))
+    #expect(sharedConfig.contains("\nMARKETING_VERSION = 0.1.5\n"))
+    #expect(sharedConfig.contains("\nCURRENT_PROJECT_VERSION = 6\n"))
     #expect(sharedConfig.contains("\nASSETCATALOG_COMPILER_APPICON_NAME = AppIcon\n"))
 }

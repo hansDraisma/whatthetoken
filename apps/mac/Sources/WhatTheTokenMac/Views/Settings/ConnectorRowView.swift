@@ -8,8 +8,10 @@ struct ConnectorRowView: View {
     let connectionActionTitle: String
     let connectionActionRole: ButtonRole?
     let isConnectionActionDisabled: Bool
+    let secondaryActionTitle: String?
     let disconnectActionTitle: String?
     let connectionAction: () -> Void
+    let secondaryAction: (() -> Void)?
     let disconnectAction: (() -> Void)?
 
     var body: some View {
@@ -37,6 +39,10 @@ struct ConnectorRowView: View {
                     action: connectionAction
                 )
                 .disabled(isConnectionActionDisabled)
+
+                if let secondaryActionTitle, let secondaryAction {
+                    Button(secondaryActionTitle, action: secondaryAction)
+                }
 
                 if let disconnectActionTitle, let disconnectAction {
                     Button(disconnectActionTitle, role: .destructive, action: disconnectAction)

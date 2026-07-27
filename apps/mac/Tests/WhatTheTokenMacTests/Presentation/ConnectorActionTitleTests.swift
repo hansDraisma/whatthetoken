@@ -3,7 +3,7 @@ import Testing
 
 @Suite struct ConnectorActionTitleTests {
     @Test func claude_notConnected_isConnect() {
-        #expect(claudeActionTitle(for: .notConnected) == "Connect")
+        #expect(claudeActionTitle(for: .notConnected) == "Connect Claude Code")
     }
 
     @Test func claude_checking_isCheckingEllipsis() {
@@ -19,7 +19,7 @@ import Testing
     }
 
     @Test func claude_schemaChanged_isRetry() {
-        #expect(claudeActionTitle(for: .schemaChanged) == "Retry")
+        #expect(claudeActionTitle(for: .schemaChanged) == "Check for Updates")
     }
 
     @Test func claude_rateLimited_isRetry() {
@@ -27,19 +27,19 @@ import Testing
     }
 
     @Test func claude_missingCredentials_isConnect() {
-        #expect(claudeActionTitle(for: .missingCredentials) == "Connect")
+        #expect(claudeActionTitle(for: .missingCredentials) == "Retry")
     }
 
     @Test func claude_missingClaudeCli_isConnect() {
-        #expect(claudeActionTitle(for: .missingClaudeCli) == "Connect")
+        #expect(claudeActionTitle(for: .missingClaudeCli) == "Retry")
     }
 
     @Test func claude_tokenInvalid_isConnect() {
-        #expect(claudeActionTitle(for: .tokenInvalid) == "Connect")
+        #expect(claudeActionTitle(for: .tokenInvalid) == "Retry")
     }
 
     @Test func codex_notConnected_isConnect() {
-        #expect(codexActionTitle(for: .notConnected) == "Connect")
+        #expect(codexActionTitle(for: .notConnected) == "Connect Codex")
     }
 
     @Test func codex_connected_isRefreshNow() {
@@ -51,15 +51,15 @@ import Testing
     }
 
     @Test func codex_schemaChanged_isRetry() {
-        #expect(codexActionTitle(for: .schemaChanged) == "Retry")
+        #expect(codexActionTitle(for: .schemaChanged) == "Check for Updates")
     }
 
     @Test func codex_permissionDenied_isConnect() {
-        #expect(codexActionTitle(for: .permissionDenied) == "Connect")
+        #expect(codexActionTitle(for: .permissionDenied) == "Retry")
     }
 
     @Test func codex_missingCredentials_isConnect() {
-        #expect(codexActionTitle(for: .missingCredentials) == "Connect")
+        #expect(codexActionTitle(for: .missingCredentials) == "Retry")
     }
 
     @Test func codex_checking_isCheckingEllipsis() {
@@ -100,5 +100,68 @@ import Testing
     @Test func connectorDisconnectActionTitleNamesDisconnectForProviders() {
         #expect(connectorDisconnectActionTitle(for: .claude) == "Disconnect Claude Code...")
         #expect(connectorDisconnectActionTitle(for: .codex) == "Disconnect Codex...")
+    }
+
+    @Test func enabledFailingClaudeOffersRecoveryInsteadOfPauseAsPrimary() {
+        let action = connectorRowAction(
+            for: .claude(.sessionExpired),
+            isEnabled: true,
+            isPaused: false
+        )
+
+        #expect(action == .retry)
+        #expect(action.title == "Retry")
+    }
+
+    @Test func healthyEnabledClaudeKeepsRefreshPrimaryAndPauseSecondary() {
+        let action = connectorRowAction(
+            for: .claude(.connected),
+            isEnabled: true,
+            isPaused: false
+        )
+
+        #expect(action == .refresh)
+        #expect(action.title == "Refresh Now")
+        #expect(
+            connectorPauseActionTitle(
+                for: .claude,
+                isEnabled: true,
+                isPaused: false
+            ) == "Pause Claude Code"
+        )
+    }
+
+    @Test func schemaDriftChecksForUpdatesInsteadOfRetryingSameParser() {
+        #expect(
+            connectorRowAction(
+                for: .claude(.schemaChanged),
+                isEnabled: true,
+                isPaused: false
+            ) == .checkForUpdates
+        )
+        #expect(
+            connectorRowAction(
+                for: .codex(.schemaChanged),
+                isEnabled: true,
+                isPaused: false
+            ) == .checkForUpdates
+        )
+    }
+
+    @Test func pausedConnectorOffersResumeAsPrimaryWithoutPauseSecondary() {
+        #expect(
+            connectorRowAction(
+                for: .claude(.connected),
+                isEnabled: true,
+                isPaused: true
+            ) == .resume(title: "Resume Claude Code")
+        )
+        #expect(
+            connectorPauseActionTitle(
+                for: .claude,
+                isEnabled: true,
+                isPaused: true
+            ) == nil
+        )
     }
 }

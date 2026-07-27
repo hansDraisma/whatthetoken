@@ -19,6 +19,85 @@ func connectorDisconnectActionTitle(for provider: CachedProviderID) -> String {
     "Disconnect \(provider.displayName)..."
 }
 
+enum ConnectorRowState: Equatable, Sendable {
+    case claude(ClaudeConnectorSetupState)
+    case codex(CodexConnectorSetupState)
+}
+
+enum ConnectorRowAction: Equatable, Sendable {
+    case connect(title: String)
+    case checking
+    case refresh
+    case retry
+    case checkForUpdates
+    case resume(title: String)
+
+    var title: String {
+        switch self {
+        case let .connect(title), let .resume(title):
+            return title
+        case .checking:
+            return "Checking..."
+        case .refresh:
+            return "Refresh Now"
+        case .retry:
+            return "Retry"
+        case .checkForUpdates:
+            return "Check for Updates"
+        }
+    }
+
+    var isDisabledByState: Bool {
+        self == .checking
+    }
+}
+
+func connectorRowAction(
+    for state: ConnectorRowState,
+    isEnabled: Bool,
+    isPaused: Bool
+) -> ConnectorRowAction {
+    let provider: CachedProviderID
+    let recovery: ConnectorRecovery
+    switch state {
+    case let .claude(claudeState):
+        provider = .claude
+        recovery = ConnectorRecoveryCopy.claude(claudeState).recovery
+    case let .codex(codexState):
+        provider = .codex
+        recovery = ConnectorRecoveryCopy.codex(codexState).recovery
+    }
+
+    guard isEnabled else {
+        return .connect(title: "Connect \(provider.displayName)")
+    }
+    if isPaused {
+        return .resume(title: "Resume \(provider.displayName)")
+    }
+
+    switch recovery {
+    case .none:
+        return .refresh
+    case .checking:
+        return .checking
+    case .connect:
+        return .connect(title: "Connect \(provider.displayName)")
+    case .retry, .waitForClaudeCode, .signInLocally, .installCLI, .waitForReset:
+        return .retry
+    case .checkForUpdates:
+        return .checkForUpdates
+    }
+}
+
+func connectorPauseActionTitle(
+    for provider: CachedProviderID,
+    isEnabled: Bool,
+    isPaused: Bool
+) -> String? {
+    guard isEnabled, !isPaused else { return nil }
+    return "Pause \(provider.displayName)"
+}
+
 extension CachedProviderID {
     var displayName: String {
         switch self {
@@ -31,27 +110,17 @@ extension CachedProviderID {
 }
 
 func claudeActionTitle(for state: ClaudeConnectorSetupState) -> String {
-    switch state {
-    case .notConnected, .missingCredentials, .missingClaudeCli, .tokenInvalid:
-        return "Connect"
-    case .checking:
-        return "Checking..."
-    case .connected:
-        return "Refresh Now"
-    case .networkError, .schemaChanged, .rateLimited, .sessionExpired:
-        return "Retry"
-    }
+    connectorRowAction(
+        for: .claude(state),
+        isEnabled: true,
+        isPaused: false
+    ).title
 }
 
 func codexActionTitle(for state: CodexConnectorSetupState) -> String {
-    switch state {
-    case .notConnected, .missingCredentials, .permissionDenied:
-        return "Connect"
-    case .checking:
-        return "Checking..."
-    case .connected:
-        return "Refresh Now"
-    case .networkError, .schemaChanged:
-        return "Retry"
-    }
+    connectorRowAction(
+        for: .codex(state),
+        isEnabled: true,
+        isPaused: false
+    ).title
 }

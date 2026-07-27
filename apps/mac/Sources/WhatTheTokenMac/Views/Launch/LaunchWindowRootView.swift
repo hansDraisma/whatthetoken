@@ -61,7 +61,11 @@ struct LaunchWindowRootView: View {
                     onCheckForUpdates: onCheckForUpdates
                 )
             case .connectors:
-                ConnectorsView(viewModel: viewModel)
+                ConnectorsView(
+                    viewModel: viewModel,
+                    canCheckForUpdates: canCheckForUpdates(),
+                    onCheckForUpdates: onCheckForUpdates
+                )
             case .notifications:
                 NotificationsTabView(viewModel: viewModel)
             case .tools:

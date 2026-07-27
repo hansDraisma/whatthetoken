@@ -2,37 +2,61 @@ import SwiftUI
 
 struct ConnectorsView: View {
     let viewModel: StatusViewModel
+    let canCheckForUpdates: Bool
+    let onCheckForUpdates: () -> Void
     @State private var pendingDisconnect: CachedProviderID?
 
+    init(
+        viewModel: StatusViewModel,
+        canCheckForUpdates: Bool = false,
+        onCheckForUpdates: @escaping () -> Void = {}
+    ) {
+        self.viewModel = viewModel
+        self.canCheckForUpdates = canCheckForUpdates
+        self.onCheckForUpdates = onCheckForUpdates
+    }
+
     var body: some View {
+        let claudeCopy = ConnectorRecoveryCopy.claude(viewModel.connectorState)
+        let claudePrimary = connectorRowAction(
+            for: .claude(viewModel.connectorState),
+            isEnabled: viewModel.settings.connectors.claudeCode.isEnabled,
+            isPaused: viewModel.settings.connectors.claudeCode.isPaused
+        )
+        let codexCopy = ConnectorRecoveryCopy.codex(viewModel.codexConnectorState)
+        let codexPrimary = connectorRowAction(
+            for: .codex(viewModel.codexConnectorState),
+            isEnabled: viewModel.settings.connectors.codex.isEnabled,
+            isPaused: viewModel.settings.connectors.codex.isPaused
+        )
+
         Form {
             Section("Connectors") {
                 ConnectorRowView(
                     title: "Claude Code",
-                    stateTitle: ClaudeConnectorSetupCopy.title(for: viewModel.connectorState),
-                    detail: viewModel.connectorStatusMessage,
+                    stateTitle: claudeCopy.headline,
+                    detail: claudeCopy.advice.isEmpty
+                        ? viewModel.connectorStatusMessage
+                        : claudeCopy.advice,
                     trustMessage: ConnectorConsentCopy.claude,
-                    connectionActionTitle: connectorConnectionActionTitle(
+                    connectionActionTitle: claudePrimary.title,
+                    connectionActionRole: nil,
+                    isConnectionActionDisabled: claudePrimary.isDisabledByState
+                        || (claudePrimary == .checkForUpdates && !canCheckForUpdates),
+                    secondaryActionTitle: connectorPauseActionTitle(
                         for: .claude,
                         isEnabled: viewModel.settings.connectors.claudeCode.isEnabled,
                         isPaused: viewModel.settings.connectors.claudeCode.isPaused
                     ),
-                    connectionActionRole: nil,
-                    isConnectionActionDisabled: viewModel.connectorState == .checking,
                     disconnectActionTitle: viewModel.settings.connectors.claudeCode.isEnabled
                         ? connectorDisconnectActionTitle(for: .claude)
                         : nil,
                     connectionAction: {
-                        if !viewModel.settings.connectors.claudeCode.isEnabled {
-                            let viewModel = self.viewModel
-                            Task { await viewModel.connectClaudeCode() }
-                        } else if viewModel.settings.connectors.claudeCode.isPaused {
-                            let viewModel = self.viewModel
-                            Task { await viewModel.setConnector(.claude, paused: false) }
-                        } else {
-                            let viewModel = self.viewModel
-                            Task { await viewModel.setConnector(.claude, paused: true) }
-                        }
+                        performClaude(claudePrimary)
+                    },
+                    secondaryAction: {
+                        let viewModel = self.viewModel
+                        Task { await viewModel.setConnector(.claude, paused: true) }
                     },
                     disconnectAction: {
                         pendingDisconnect = .claude
@@ -41,30 +65,29 @@ struct ConnectorsView: View {
 
                 ConnectorRowView(
                     title: "Codex",
-                    stateTitle: CodexConnectorSetupCopy.title(for: viewModel.codexConnectorState),
-                    detail: viewModel.codexConnectorStatusMessage,
+                    stateTitle: codexCopy.headline,
+                    detail: codexCopy.advice.isEmpty
+                        ? viewModel.codexConnectorStatusMessage
+                        : codexCopy.advice,
                     trustMessage: ConnectorConsentCopy.codex,
-                    connectionActionTitle: connectorConnectionActionTitle(
+                    connectionActionTitle: codexPrimary.title,
+                    connectionActionRole: nil,
+                    isConnectionActionDisabled: codexPrimary.isDisabledByState
+                        || (codexPrimary == .checkForUpdates && !canCheckForUpdates),
+                    secondaryActionTitle: connectorPauseActionTitle(
                         for: .codex,
                         isEnabled: viewModel.settings.connectors.codex.isEnabled,
                         isPaused: viewModel.settings.connectors.codex.isPaused
                     ),
-                    connectionActionRole: nil,
-                    isConnectionActionDisabled: viewModel.codexConnectorState == .checking,
                     disconnectActionTitle: viewModel.settings.connectors.codex.isEnabled
                         ? connectorDisconnectActionTitle(for: .codex)
                         : nil,
                     connectionAction: {
-                        if !viewModel.settings.connectors.codex.isEnabled {
-                            let viewModel = self.viewModel
-                            Task { await viewModel.connectCodex() }
-                        } else if viewModel.settings.connectors.codex.isPaused {
-                            let viewModel = self.viewModel
-                            Task { await viewModel.setConnector(.codex, paused: false) }
-                        } else {
-                            let viewModel = self.viewModel
-                            Task { await viewModel.setConnector(.codex, paused: true) }
-                        }
+                        performCodex(codexPrimary)
+                    },
+                    secondaryAction: {
+                        let viewModel = self.viewModel
+                        Task { await viewModel.setConnector(.codex, paused: true) }
                     },
                     disconnectAction: {
                         pendingDisconnect = .codex
@@ -137,6 +160,34 @@ struct ConnectorsView: View {
         pendingDisconnect = nil
         let viewModel = self.viewModel
         Task { await viewModel.disconnect(provider) }
+    }
+
+    private func performClaude(_ action: ConnectorRowAction) {
+        let viewModel = self.viewModel
+        switch action {
+        case .connect, .refresh, .retry:
+            Task { await viewModel.connectClaudeCode() }
+        case .resume:
+            Task { await viewModel.setConnector(.claude, paused: false) }
+        case .checkForUpdates:
+            onCheckForUpdates()
+        case .checking:
+            break
+        }
+    }
+
+    private func performCodex(_ action: ConnectorRowAction) {
+        let viewModel = self.viewModel
+        switch action {
+        case .connect, .refresh, .retry:
+            Task { await viewModel.connectCodex() }
+        case .resume:
+            Task { await viewModel.setConnector(.codex, paused: false) }
+        case .checkForUpdates:
+            onCheckForUpdates()
+        case .checking:
+            break
+        }
     }
 }
 

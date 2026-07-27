@@ -38,7 +38,7 @@ struct ClaudeConnectorService: Sendable {
                 status: ConnectorStatus(
                     product: "claude_code",
                     source: source(state: .notConnected),
-                    message: "Claude Code is not connected"
+                    message: ConnectorRecoveryCopy.claude(.notConnected).headline
                 )
             )
         }
@@ -49,7 +49,7 @@ struct ClaudeConnectorService: Sendable {
                 status: ConnectorStatus(
                     product: "claude_code",
                     source: source(state: .missingCredentials),
-                    message: "Claude Code credentials were not found"
+                    message: ConnectorRecoveryCopy.claude(.missingCredentials).headline
                 )
             )
         }
@@ -92,7 +92,7 @@ struct ClaudeConnectorService: Sendable {
                 status: ConnectorStatus(
                     product: "claude_code",
                     source: connectedSource,
-                    message: "Claude Code connected"
+                    message: ConnectorRecoveryCopy.claude(.connected).headline
                 )
             )
         }
@@ -154,15 +154,15 @@ struct ClaudeConnectorService: Sendable {
     private func message(for state: ConnectorSourceState) -> String {
         switch state {
         case .tokenInvalid:
-            return "Claude Code credentials are invalid"
+            return ConnectorRecoveryCopy.claude(.tokenInvalid).headline
         case .sessionExpired:
-            return "Claude Code session expired"
+            return ConnectorRecoveryCopy.claude(.sessionExpired).headline
         case .rateLimited:
-            return "Claude usage is rate limited"
+            return ConnectorRecoveryCopy.claude(.rateLimited).headline
         case .schemaChanged:
-            return "Claude usage response changed"
+            return ConnectorRecoveryCopy.claude(.schemaChanged).headline
         case .connected, .notConnected, .missingCredentials, .permissionDenied, .networkError, .stale:
-            return "Claude Code usage could not be refreshed"
+            return ConnectorRecoveryCopy.claude(.networkError).headline
         }
     }
 }

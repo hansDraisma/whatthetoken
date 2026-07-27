@@ -1056,28 +1056,7 @@ enum ClaudeConnectorSetupCopy {
     static let trustMessage = "Reads Claude Code credentials locally only after you connect."
 
     static func title(for state: ClaudeConnectorSetupState) -> String {
-        switch state {
-        case .notConnected:
-            return "Claude Code is not connected"
-        case .checking:
-            return "Checking Claude Code"
-        case .connected:
-            return "Claude Code connected"
-        case .missingCredentials:
-            return "Claude Code credentials were not found"
-        case .missingClaudeCli:
-            return "Claude Code CLI was not found"
-        case .tokenInvalid:
-            return "Claude Code credentials are invalid"
-        case .sessionExpired:
-            return "Claude Code session expired"
-        case .rateLimited:
-            return "Claude usage is rate limited"
-        case .networkError:
-            return "Claude Code usage could not be refreshed"
-        case .schemaChanged:
-            return "Claude usage response changed"
-        }
+        ConnectorRecoveryCopy.claude(state).headline
     }
 }
 
@@ -1095,21 +1074,6 @@ enum CodexConnectorSetupCopy {
     static let trustMessage = "Codex auth stays inside Codex. WhatTheToken reads only local rate-limit status after you connect."
 
     static func title(for state: CodexConnectorSetupState) -> String {
-        switch state {
-        case .notConnected:
-            return "Codex is not connected"
-        case .checking:
-            return "Checking Codex"
-        case .connected:
-            return "Codex connected"
-        case .missingCredentials:
-            return "Sign in to Codex locally"
-        case .permissionDenied:
-            return "Codex app-server could not be started"
-        case .networkError:
-            return "Codex usage could not be refreshed"
-        case .schemaChanged:
-            return "Codex usage response changed"
-        }
+        ConnectorRecoveryCopy.codex(state).headline
     }
 }

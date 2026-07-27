@@ -36,6 +36,7 @@ struct ProviderTabModel: Equatable, Sendable {
 
     let tab: ProviderTab
     let body: Body
+    let copy: ConnectorCopy
 }
 
 extension ProviderTabModel {
@@ -95,7 +96,11 @@ extension ProviderTabModel {
             body = .error(kind: .schemaChanged, lastSnapshots: claudeSnapshots, isRefreshing: false)
         }
 
-        return ProviderTabModel(tab: .claude, body: body)
+        return ProviderTabModel(
+            tab: .claude,
+            body: body,
+            copy: ConnectorRecoveryCopy.claude(viewModel.connectorState)
+        )
     }
 
     @MainActor
@@ -138,7 +143,11 @@ extension ProviderTabModel {
             body = .error(kind: .schemaChanged, lastSnapshots: codexSnapshots, isRefreshing: false)
         }
 
-        return ProviderTabModel(tab: .codex, body: body)
+        return ProviderTabModel(
+            tab: .codex,
+            body: body,
+            copy: ConnectorRecoveryCopy.codex(viewModel.codexConnectorState)
+        )
     }
 }
 

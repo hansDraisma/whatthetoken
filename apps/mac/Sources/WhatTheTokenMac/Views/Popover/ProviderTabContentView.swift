@@ -92,30 +92,8 @@ struct ProviderTabContentView: View {
 
     private func headline(for reason: ProviderTabModel.DisconnectedReason) -> String {
         switch (model.tab, reason) {
-        case let (.claude, .claude(claudeReason)):
-            switch claudeReason {
-            case .notConnected:
-                return "Claude Code is not connected"
-            case .missingCredentials:
-                return "Claude Code credentials were not found"
-            case .missingCLI:
-                return "Claude Code CLI was not found"
-            case .tokenInvalid:
-                return "Claude Code credentials are invalid"
-            case .sessionExpired:
-                return "Claude Code session expired"
-            case .rateLimited:
-                return "Claude usage is rate limited"
-            }
-        case let (.codex, .codex(codexReason)):
-            switch codexReason {
-            case .notConnected:
-                return "Codex is not connected"
-            case .missingCredentials:
-                return "Sign in to Codex locally"
-            case .permissionDenied:
-                return "Codex app-server could not be started"
-            }
+        case (.claude, .claude), (.codex, .codex):
+            return model.copy.headline
         case (.claude, .codex), (.codex, .claude):
             assertionFailure("ProviderTabModel invariant violated: tab=\(model.tab) but reason=\(reason); see ProviderTabModel.from mapping in ProviderTabModel.swift")
             return "\(model.tab.title) is unavailable"
@@ -135,15 +113,7 @@ struct ProviderTabContentView: View {
     }
 
     private func errorHeadline(kind: ProviderTabModel.ErrorKind) -> String {
-        switch (model.tab, kind) {
-        case (.claude, .network):
-            return "Claude Code usage could not be refreshed"
-        case (.claude, .schemaChanged):
-            return "Claude usage response changed"
-        case (.codex, .network):
-            return "Codex usage could not be refreshed"
-        case (.codex, .schemaChanged):
-            return "Codex usage response changed"
-        }
+        _ = kind
+        return model.copy.headline
     }
 }

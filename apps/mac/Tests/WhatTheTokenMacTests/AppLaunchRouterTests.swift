@@ -81,6 +81,8 @@ import Testing
             },
             logger: logger,
             registerHotkey: { Issue.record("registerHotkey should not run after load failure") },
+            verifyConnectors: { Issue.record("verifyConnectors should not run after load failure") },
+            activateReconnectWatcher: { Issue.record("watcher should not activate after load failure") },
             startRefresh: { Issue.record("startRefresh should not run after load failure") }
         )
 
@@ -101,10 +103,27 @@ import Testing
                 await Task.yield()
                 events.append("register:end")
             },
+            verifyConnectors: {
+                events.append("verify:start")
+                await Task.yield()
+                events.append("verify:end")
+            },
+            activateReconnectWatcher: { events.append("watcher") },
             startRefresh: { events.append("refresh") }
         )
 
-        #expect(events == ["load", "register:start", "register:end", "refresh"])
+        #expect(
+            events
+                == [
+                    "load",
+                    "register:start",
+                    "register:end",
+                    "verify:start",
+                    "verify:end",
+                    "watcher",
+                    "refresh"
+                ]
+        )
     }
 
     @MainActor
@@ -127,10 +146,12 @@ import Testing
             },
             logger: logger,
             registerHotkey: { events.append("register") },
+            verifyConnectors: { events.append("verify") },
+            activateReconnectWatcher: { events.append("watcher") },
             startRefresh: { events.append("refresh") }
         )
 
-        #expect(events == ["load", "register", "refresh"])
+        #expect(events == ["load", "register", "verify", "watcher", "refresh"])
         #expect(logger.messages.isEmpty)
     }
 

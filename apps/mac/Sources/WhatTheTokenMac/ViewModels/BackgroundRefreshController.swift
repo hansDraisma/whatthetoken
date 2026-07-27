@@ -22,11 +22,14 @@ final class BackgroundRefreshController {
         self.sleeper = sleeper
     }
 
-    func start() {
+    func start(afterStartupVerification: Bool = false) {
         generation &+= 1
         stop()
         guard viewModel.settings.refresh.autoRefreshEnabled else { return }
 
+        if afterStartupVerification {
+            lastAutomaticAttemptAt = viewModel.currentDate
+        }
         startActivationObserver()
         let expected = generation
         let interval = viewModel.settings.refresh.intervalDuration
@@ -43,8 +46,10 @@ final class BackgroundRefreshController {
             }
         }
 
-        Task { [weak self] in
-            await self?.appBecameActive()
+        if !afterStartupVerification {
+            Task { [weak self] in
+                await self?.appBecameActive()
+            }
         }
     }
 

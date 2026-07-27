@@ -204,8 +204,8 @@ private func sensitiveKeyMatches(
         codexRefresher: codex
     )
 
-    async let first: Void = vm.refreshAll(reason: .manual)
-    async let second: Void = vm.refreshAll(reason: .timerTick)
+    async let first: Bool = vm.refreshAll(reason: .manual)
+    async let second: Bool = vm.refreshAll(reason: .timerTick)
     _ = await (first, second)
 
     #expect(counter.value == 1, "Second overlapping refreshAll should be dropped by the outer guard.")

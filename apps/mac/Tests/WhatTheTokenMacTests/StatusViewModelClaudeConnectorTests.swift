@@ -105,6 +105,10 @@ import Testing
     #expect(StatusViewModel.RefreshReason.credentialRotated.bypassesFailureBackoff)
 }
 
+@Test func startupVerificationBypassesPersistedFailureBackoff() {
+    #expect(StatusViewModel.RefreshReason.startupVerification.bypassesFailureBackoff)
+}
+
 @MainActor
 @Test func credentialRotatedRefreshesClaudeInsideActiveFailureBackoff() async {
     var settings = AppSettings.defaults
@@ -129,6 +133,103 @@ import Testing
 
     #expect(refresher.refreshCount == 1)
     #expect(viewModel.connectorState == .connected)
+}
+
+@MainActor
+@Test func connectorStateChangesNotifyReconnectObserver() {
+    let viewModel = StatusViewModel()
+    var observed: [ClaudeConnectorSetupState] = []
+    viewModel.onClaudeConnectorStateChanged = { observed.append($0) }
+
+    viewModel.connectorState = .sessionExpired
+    viewModel.connectorState = .connected
+
+    #expect(observed == [.sessionExpired, .connected])
+}
+
+@MainActor
+@Test func credentialRotationRefreshesClaudeWithoutRefreshingCodex() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
+    let claude = CountingClaudeConnectorRefresher(result: .success(.connected()))
+    let codexCounter = Counter()
+    let viewModel = StatusViewModel(
+        settings: settings,
+        claudeRefresher: claude,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        codexRefresher: RecordingCodexRefresher {
+            codexCounter.increment()
+        }
+    )
+
+    let accepted = await viewModel.refreshClaudeAfterCredentialRotation()
+
+    #expect(accepted)
+    #expect(claude.refreshCount == 1)
+    #expect(codexCounter.value == 0)
+}
+
+@MainActor
+@Test func startupVerificationRefreshesEveryEnabledUnpausedConnector() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.codex.isEnabled = true
+    let claude = CountingClaudeConnectorRefresher(result: .success(.connected()))
+    let codexCounter = Counter()
+    let viewModel = StatusViewModel(
+        settings: settings,
+        claudeRefresher: claude,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        codexRefresher: RecordingCodexRefresher {
+            codexCounter.increment()
+        }
+    )
+
+    await viewModel.refreshAll(reason: .startupVerification)
+
+    #expect(claude.refreshCount == 1)
+    #expect(codexCounter.value == 1)
+}
+
+@MainActor
+@Test func startupVerificationSkipsDisabledAndPausedConnectors() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    settings.connectors.claudeCode.isPaused = true
+    let claude = CountingClaudeConnectorRefresher(result: .success(.connected()))
+    let codexCounter = Counter()
+    let viewModel = StatusViewModel(
+        settings: settings,
+        claudeRefresher: claude,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        codexRefresher: RecordingCodexRefresher {
+            codexCounter.increment()
+        }
+    )
+
+    await viewModel.refreshAll(reason: .startupVerification)
+
+    #expect(claude.refreshCount == 0)
+    #expect(codexCounter.value == 0)
+}
+
+@MainActor
+@Test func claudeVersionPreflightRunsOffTheMainThread() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let versionProvider = ThreadRecordingClaudeVersionProvider()
+    let viewModel = StatusViewModel(
+        settings: settings,
+        claudeRefresher: CountingClaudeConnectorRefresher(
+            result: .success(.connected())
+        ),
+        claudeVersionProvider: versionProvider
+    )
+
+    await viewModel.refreshAll(reason: .manual)
+
+    #expect(versionProvider.wasReadOnMainThread == false)
 }
 
 @MainActor
@@ -412,6 +513,27 @@ private struct SyntheticRefreshError: Error, CustomStringConvertible {
 
     var description: String {
         Self.description
+    }
+}
+
+private final class ThreadRecordingClaudeVersionProvider:
+    ClaudeVersionProviding,
+    @unchecked Sendable
+{
+    private let lock = NSLock()
+    private var storedWasReadOnMainThread: Bool?
+
+    var claudeVersion: String {
+        lock.withLock {
+            storedWasReadOnMainThread = Thread.isMainThread
+        }
+        return "1.0.0"
+    }
+
+    var wasReadOnMainThread: Bool? {
+        lock.withLock {
+            storedWasReadOnMainThread
+        }
     }
 }
 

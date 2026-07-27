@@ -9,6 +9,7 @@ final class AppModel {
     let viewModel: StatusViewModel
     let refreshController: PopoverRefreshController
     let backgroundRefreshController: BackgroundRefreshController
+    let reconnectWatcher: ClaudeReconnectWatcher
     let updateController: SparkleUpdateController
     let menuBarController: MenuBarController
     let launchWindowController: LaunchWindowController
@@ -26,16 +27,38 @@ final class AppModel {
         self.launchWindowController = launchWindowController
         self.updateController = updateController
         let backgroundRefreshController = BackgroundRefreshController(viewModel: viewModel)
+        let reconnectWatcher = ClaudeReconnectWatcher(
+            probe: ClaudeCredentialProbe(
+                credentialStore: MacOSClaudeCredentialStore()
+            ),
+            onRotationDetected: {
+                await viewModel.refreshClaudeAfterCredentialRotation()
+            }
+        )
         self.backgroundRefreshController = backgroundRefreshController
+        self.reconnectWatcher = reconnectWatcher
         self.viewModel.onSettingsChanged = { [weak backgroundRefreshController] in
             backgroundRefreshController?.settingsDidChange()
+        }
+        self.viewModel.onClaudeConnectorStateChanged = { [weak reconnectWatcher] state in
+            reconnectWatcher?.connectorStateDidChange(to: state)
         }
         Task { @MainActor in
             await AppStartupRoutine.run(
                 loadPersistedState: { try await viewModel.loadPersistedStateThrowing() },
                 logger: OSLogAppLogger(category: "AppModel.live"),
                 registerHotkey: { await viewModel.registerCurrentHotkey() },
-                startRefresh: { backgroundRefreshController.start() }
+                verifyConnectors: {
+                    await viewModel.refreshAll(reason: .startupVerification)
+                },
+                activateReconnectWatcher: {
+                    reconnectWatcher.activate(currentState: viewModel.connectorState)
+                },
+                startRefresh: {
+                    backgroundRefreshController.start(
+                        afterStartupVerification: true
+                    )
+                }
             )
         }
     }

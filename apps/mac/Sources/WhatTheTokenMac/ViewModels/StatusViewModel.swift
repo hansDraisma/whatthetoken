@@ -27,7 +27,11 @@ typealias SystemWidgetTimelineReloader = NoopWidgetTimelineReloader
 final class StatusViewModel {
     var snapshots: [UsageSnapshot]
     var settings: AppSettings
-    var connectorState: ClaudeConnectorSetupState
+    var connectorState: ClaudeConnectorSetupState {
+        didSet {
+            onClaudeConnectorStateChanged?(connectorState)
+        }
+    }
     var connectorStatusMessage: String
     var codexConnectorState: CodexConnectorSetupState
     var codexConnectorStatusMessage: String
@@ -57,6 +61,8 @@ final class StatusViewModel {
     private var hotkeyService: GlobalHotkeyService?
     private var hotkeyTrigger: (() -> Void)?
     var onSettingsChanged: (@MainActor () -> Void)?
+    var onClaudeConnectorStateChanged:
+        (@MainActor (ClaudeConnectorSetupState) -> Void)?
 
     var isAnyRefreshing: Bool {
         connectorState == .checking
@@ -111,6 +117,7 @@ final class StatusViewModel {
         case timerTick
         case retry
         case credentialRotated
+        case startupVerification
     }
 
     var snapshotSections: [UsageSnapshotSection] {
@@ -508,14 +515,26 @@ final class StatusViewModel {
         await refreshCodex(reason: .manual)
     }
 
-    func refreshAll(reason: RefreshReason) async {
-        guard !isRefreshAllInFlight else { return }
+    @discardableResult
+    func refreshAll(reason: RefreshReason) async -> Bool {
+        guard !isRefreshAllInFlight else { return false }
         isRefreshAllInFlight = true
         defer { isRefreshAllInFlight = false }
 
         await refreshClaude(reason: reason)
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else { return true }
         await refreshCodex(reason: reason)
+        return true
+    }
+
+    @discardableResult
+    func refreshClaudeAfterCredentialRotation() async -> Bool {
+        guard !isRefreshAllInFlight else { return false }
+        isRefreshAllInFlight = true
+        defer { isRefreshAllInFlight = false }
+
+        await refreshClaude(reason: .credentialRotated)
+        return true
     }
 
     private func refreshClaude(reason: RefreshReason) async {
@@ -526,17 +545,24 @@ final class StatusViewModel {
             || cache.allowsAutomaticRefresh(for: .claude, now: now())
         else { return }
 
-        if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
-            connectorState = .missingClaudeCli
-            connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
-            cache.recordFailure(
-                for: .claude,
-                code: .missingClaudeCLI,
-                message: connectorStatusMessage,
-                now: now()
-            )
-            _ = await saveCacheAndReloadWidget(cache)
-            return
+        if let claudeVersionProvider {
+            let version = await Task.detached(priority: .utility) {
+                claudeVersionProvider.claudeVersion
+            }.value
+            if version == "unknown" {
+                connectorState = .missingClaudeCli
+                connectorStatusMessage = ClaudeConnectorSetupCopy.title(
+                    for: .missingClaudeCli
+                )
+                cache.recordFailure(
+                    for: .claude,
+                    code: .missingClaudeCLI,
+                    message: connectorStatusMessage,
+                    now: now()
+                )
+                _ = await saveCacheAndReloadWidget(cache)
+                return
+            }
         }
 
         let previousState = connectorState
@@ -1000,7 +1026,7 @@ private final class InMemoryLaunchAtLoginService: LaunchAtLoginServicing {
 extension StatusViewModel.RefreshReason {
     var bypassesFailureBackoff: Bool {
         switch self {
-        case .manual, .retry, .credentialRotated:
+        case .manual, .retry, .credentialRotated, .startupVerification:
             return true
         case .popoverOpened, .timerTick:
             return false

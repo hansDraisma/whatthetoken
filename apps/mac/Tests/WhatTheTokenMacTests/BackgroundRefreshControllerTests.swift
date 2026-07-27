@@ -56,6 +56,34 @@ import Testing
     }
 
     @MainActor
+    @Test func startAfterStartupVerificationDoesNotImmediatelyRefreshAgain() async {
+        var settings = AppSettings.defaults
+        settings.connectors.claudeCode.isEnabled = true
+        settings.refresh.autoRefreshEnabled = true
+        let counter = Counter()
+        let vm = StatusViewModel(
+            settings: settings,
+            claudeRefresher: RecordingClaudeRefresher {
+                counter.increment()
+            },
+            claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0")
+        )
+        let fake = FakeSleeper()
+        let controller = BackgroundRefreshController(
+            viewModel: vm,
+            sleeper: { duration in await fake.sleep(duration) }
+        )
+
+        controller.start(afterStartupVerification: true)
+        for _ in 0..<20 {
+            await Task.yield()
+        }
+
+        #expect(counter.value == 0)
+        controller.stop()
+    }
+
+    @MainActor
     @Test func timerTickRefreshesWhilePopoverIsClosed() async {
         var settings = AppSettings.defaults
         settings.connectors.claudeCode.isEnabled = true

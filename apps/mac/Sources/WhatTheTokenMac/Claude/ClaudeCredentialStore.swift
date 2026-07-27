@@ -40,8 +40,11 @@ struct MacOSClaudeCredentialStore: ClaudeCredentialStore {
             throw ClaudeCredentialStoreError.commandFailed
         }
 
-        guard result.terminationStatus == 0 else {
+        if result.terminationStatus == 44 {
             return nil
+        }
+        guard result.terminationStatus == 0 else {
+            throw ClaudeCredentialStoreError.commandFailed
         }
 
         return try decodeCredential(from: result.standardOutput)

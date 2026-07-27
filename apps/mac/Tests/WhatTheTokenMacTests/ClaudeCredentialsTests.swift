@@ -126,6 +126,22 @@ import Testing
     #expect(credential == nil)
 }
 
+@Test func macOSCredentialStoreTreatsOtherSecurityFailuresAsUnavailable() throws {
+    let runner = StubClaudeCredentialCommandRunner(
+        result: .success(
+            ClaudeCredentialCommandResult(
+                terminationStatus: 36,
+                standardOutput: Data()
+            )
+        )
+    )
+    let store = MacOSClaudeCredentialStore(commandRunner: runner)
+
+    #expect(throws: ClaudeCredentialStoreError.commandFailed) {
+        _ = try store.readCredential()
+    }
+}
+
 @Test func macOSCredentialStoreMapsRunnerFailuresToCommandFailed() throws {
     let runner = StubClaudeCredentialCommandRunner(result: .failure(ClaudeCredentialStoreError.commandFailed))
     let store = MacOSClaudeCredentialStore(commandRunner: runner)

@@ -15,8 +15,10 @@ enum ClaudeRotationDecision {
         }
 
         switch previous {
-        case .absent, .unavailable:
+        case .absent:
             return true
+        case .unavailable:
+            return false
         case let .found(previousFingerprint):
             if previousFingerprint.tokenDigest != currentFingerprint.tokenDigest {
                 return true
@@ -27,16 +29,4 @@ enum ClaudeRotationDecision {
         }
     }
 
-    /// Start-of-watch rule for a failure restored from cache. No fingerprint is
-    /// persisted across launches, so verify once when the stored credential
-    /// looks usable now.
-    static func shouldVerifyOnStart(
-        current: ClaudeCredentialProbeResult,
-        now: Date
-    ) -> Bool {
-        guard case let .found(fingerprint) = current else {
-            return false
-        }
-        return !fingerprint.isExpired(at: now)
-    }
 }

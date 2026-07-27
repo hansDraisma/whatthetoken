@@ -80,20 +80,9 @@ func unavailableNeverRefreshes() {
 }
 
 @Test
-func credentialDisappearingDoesNotRefresh() {
+func recoveredKeychainReadWithoutBaselineDoesNotRefresh() {
     #expect(!ClaudeRotationDecision.shouldRefresh(
-        previous: foundCredential(
-            "a",
-            expiresAt: rotationDecisionNow.addingTimeInterval(-100)
-        ),
-        current: .absent,
-        now: rotationDecisionNow
-    ))
-}
-
-@Test
-func verifyOnStartRefreshesWhenStoredCredentialIsUsable() {
-    #expect(ClaudeRotationDecision.shouldVerifyOnStart(
+        previous: .unavailable,
         current: foundCredential(
             "a",
             expiresAt: rotationDecisionNow.addingTimeInterval(3_600)
@@ -103,32 +92,13 @@ func verifyOnStartRefreshesWhenStoredCredentialIsUsable() {
 }
 
 @Test
-func verifyOnStartDoesNotRefreshWhenStoredCredentialIsStillExpired() {
-    #expect(!ClaudeRotationDecision.shouldVerifyOnStart(
-        current: foundCredential(
+func credentialDisappearingDoesNotRefresh() {
+    #expect(!ClaudeRotationDecision.shouldRefresh(
+        previous: foundCredential(
             "a",
             expiresAt: rotationDecisionNow.addingTimeInterval(-100)
         ),
-        now: rotationDecisionNow
-    ))
-}
-
-@Test
-func verifyOnStartRefreshesWhenExpiryIsUnknown() {
-    #expect(ClaudeRotationDecision.shouldVerifyOnStart(
-        current: foundCredential("a", expiresAt: nil),
-        now: rotationDecisionNow
-    ))
-}
-
-@Test
-func verifyOnStartDoesNotRefreshWithoutAReadableCredential() {
-    #expect(!ClaudeRotationDecision.shouldVerifyOnStart(
         current: .absent,
-        now: rotationDecisionNow
-    ))
-    #expect(!ClaudeRotationDecision.shouldVerifyOnStart(
-        current: .unavailable,
         now: rotationDecisionNow
     ))
 }

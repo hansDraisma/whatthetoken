@@ -90,7 +90,7 @@ import Testing
     #expect(ClaudeConnectorSetupCopy.title(for: .missingCredentials) == "Claude Code credentials were not found")
     #expect(ClaudeConnectorSetupCopy.title(for: .missingClaudeCli) == "Claude Code CLI was not found")
     #expect(ClaudeConnectorSetupCopy.title(for: .tokenInvalid) == "Claude Code credentials are invalid")
-    #expect(ClaudeConnectorSetupCopy.title(for: .sessionExpired) == "Claude Code session expired")
+    #expect(ClaudeConnectorSetupCopy.title(for: .sessionExpired) == "Waiting for Claude Code")
     #expect(ClaudeConnectorSetupCopy.title(for: .rateLimited) == "Claude usage is rate limited")
     #expect(ClaudeConnectorSetupCopy.title(for: .networkError) == "Claude Code usage could not be refreshed")
     #expect(ClaudeConnectorSetupCopy.title(for: .schemaChanged) == "Claude usage response changed")
@@ -240,10 +240,10 @@ import Testing
     await viewModel.connectClaudeCode()
 
     #expect(viewModel.connectorState == .sessionExpired)
-    #expect(viewModel.connectorStatusMessage == "Claude Code session expired")
+    #expect(viewModel.connectorStatusMessage == "Waiting for Claude Code")
 
     let tabModel = ProviderTabModel.from(viewModel: viewModel, tab: .claude)
-    #expect(tabModel.body == .disconnected(reason: .claude(.sessionExpired)))
+    #expect(tabModel.body == .error(kind: .sessionExpired, lastSnapshots: [], isRefreshing: false))
 }
 
 @MainActor
@@ -569,7 +569,7 @@ private extension ClaudeConnectorResult {
             status: ConnectorStatus(
                 product: "claude_code",
                 source: source,
-                message: "Claude Code session expired"
+                message: "Waiting for Claude Code"
             )
         )
     }

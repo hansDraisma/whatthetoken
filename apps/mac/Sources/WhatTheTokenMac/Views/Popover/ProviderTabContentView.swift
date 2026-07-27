@@ -79,6 +79,11 @@ struct ProviderTabContentView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(errorHeadline(kind: kind))
                 .font(.headline)
+            if !model.copy.advice.isEmpty {
+                Text(model.copy.advice)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if !lastSnapshots.isEmpty {
                 StatusSectionView(snapshots: lastSnapshots)
                     .opacity(0.6)
@@ -101,9 +106,7 @@ struct ProviderTabContentView: View {
     }
 
     private func detail(for reason: ProviderTabModel.DisconnectedReason) -> String {
-        if case .claude(.sessionExpired) = reason {
-            return "Open Claude Code to refresh your session, then retry."
-        }
+        _ = reason
         switch model.tab {
         case .claude:
             return "Connect Claude Code in Settings to see remaining usage."

@@ -34,9 +34,9 @@ import Testing
             recovery: .signInLocally
         ))
         #expect(ConnectorRecoveryCopy.claude(.sessionExpired) == ConnectorCopy(
-            headline: "Claude Code session expired",
-            advice: "Open Claude Code to refresh your session, then retry.",
-            recovery: .retry
+            headline: "Waiting for Claude Code",
+            advice: "Reconnects automatically the next time you use Claude Code.",
+            recovery: .waitForClaudeCode
         ))
         #expect(ConnectorRecoveryCopy.claude(.rateLimited) == ConnectorCopy(
             headline: "Claude usage is rate limited",

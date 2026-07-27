@@ -87,10 +87,27 @@ import Testing
     }
 
     @MainActor
-    @Test func claude_rateLimited_mapsToDisconnectedRateLimited() {
-        let vm = StatusViewModel(snapshots: [], connectorState: .rateLimited)
+    @Test func claude_rateLimited_keepsLastKnownSnapshots() {
+        let snapshots = [UsageSnapshotFixture.claudeSample()]
+        let vm = StatusViewModel(snapshots: snapshots, connectorState: .rateLimited)
         let model = ProviderTabModel.from(viewModel: vm, tab: .claude)
-        #expect(model.body == .disconnected(reason: .claude(.rateLimited)))
+        #expect(model.body == .error(
+            kind: .rateLimited,
+            lastSnapshots: snapshots,
+            isRefreshing: false
+        ))
+    }
+
+    @MainActor
+    @Test func claude_sessionExpired_keepsLastKnownSnapshots() {
+        let snapshots = [UsageSnapshotFixture.claudeSample()]
+        let vm = StatusViewModel(snapshots: snapshots, connectorState: .sessionExpired)
+        let model = ProviderTabModel.from(viewModel: vm, tab: .claude)
+        #expect(model.body == .error(
+            kind: .sessionExpired,
+            lastSnapshots: snapshots,
+            isRefreshing: false
+        ))
     }
 
     @MainActor

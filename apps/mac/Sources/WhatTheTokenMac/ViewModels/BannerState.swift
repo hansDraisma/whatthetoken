@@ -73,6 +73,8 @@ extension BannerState {
             return .disconnected(text: text)
         case .error(.network, _, _), .error(.schemaChanged, _, _):
             return .stale(text: BannerCopy.stale)
+        case .error(.sessionExpired, _, _), .error(.rateLimited, _, _):
+            return .hidden
         case let .connected(snapshots, _, _):
             let availability = ProviderAvailability.from(snapshots: snapshots, tab: selected)
 

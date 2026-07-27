@@ -65,6 +65,33 @@ import Testing
     }
 
     @MainActor
+    @Test func expiredClaudeIsStaleRatherThanDisconnected() {
+        let vm = StatusViewModel(
+            snapshots: [UsageSnapshotFixture.claudeSample()],
+            connectorState: .sessionExpired,
+            codexConnectorState: .notConnected
+        )
+
+        let chrome = PopoverChromeState.from(viewModel: vm, selected: .claude)
+
+        #expect(chrome.topBanner == .hidden)
+        #expect(chrome.selectedBanner == .hidden)
+        #expect(chrome.indicators[.claude] == .stale)
+    }
+
+    @MainActor
+    @Test func rateLimitedClaudeIsStaleRatherThanDisconnected() {
+        let vm = StatusViewModel(
+            snapshots: [UsageSnapshotFixture.claudeSample()],
+            connectorState: .rateLimited
+        )
+
+        let chrome = PopoverChromeState.from(viewModel: vm, selected: .claude)
+
+        #expect(chrome.indicators[.claude] == .stale)
+    }
+
+    @MainActor
     @Test func menuBarTitleReflectsCriticalProvider() {
         var settings = AppSettings.defaults
         settings.connectors.claudeCode.isEnabled = true

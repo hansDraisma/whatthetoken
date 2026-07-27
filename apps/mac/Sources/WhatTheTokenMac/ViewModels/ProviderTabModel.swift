@@ -19,8 +19,6 @@ struct ProviderTabModel: Equatable, Sendable {
         case missingCredentials
         case missingCLI
         case tokenInvalid
-        case sessionExpired
-        case rateLimited
     }
 
     enum CodexDisconnectedReason: Equatable, Sendable {
@@ -32,6 +30,8 @@ struct ProviderTabModel: Equatable, Sendable {
     enum ErrorKind: Equatable, Sendable {
         case network
         case schemaChanged
+        case sessionExpired
+        case rateLimited
     }
 
     let tab: ProviderTab
@@ -87,9 +87,17 @@ extension ProviderTabModel {
         case .tokenInvalid:
             body = .disconnected(reason: .claude(.tokenInvalid))
         case .sessionExpired:
-            body = .disconnected(reason: .claude(.sessionExpired))
+            body = .error(
+                kind: .sessionExpired,
+                lastSnapshots: claudeSnapshots,
+                isRefreshing: false
+            )
         case .rateLimited:
-            body = .disconnected(reason: .claude(.rateLimited))
+            body = .error(
+                kind: .rateLimited,
+                lastSnapshots: claudeSnapshots,
+                isRefreshing: false
+            )
         case .networkError:
             body = .error(kind: .network, lastSnapshots: claudeSnapshots, isRefreshing: false)
         case .schemaChanged:

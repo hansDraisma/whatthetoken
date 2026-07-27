@@ -65,6 +65,26 @@ import Testing
     }
 
     @MainActor
+    @Test func banner_claudeSessionExpired_isHiddenBecauseBodyCarriesRecovery() {
+        let vm = StatusViewModel(
+            snapshots: [UsageSnapshotFixture.claudeSample()],
+            connectorState: .sessionExpired
+        )
+
+        #expect(BannerState.from(viewModel: vm, selected: .claude) == .hidden)
+    }
+
+    @MainActor
+    @Test func banner_claudeRateLimited_isHiddenBecauseBodyCarriesRecovery() {
+        let vm = StatusViewModel(
+            snapshots: [UsageSnapshotFixture.claudeSample()],
+            connectorState: .rateLimited
+        )
+
+        #expect(BannerState.from(viewModel: vm, selected: .claude) == .hidden)
+    }
+
+    @MainActor
     @Test func banner_connectedHealthy_yieldsHidden() {
         let snap = UsageSnapshotFixture.claudeIncludedSample(remaining: 62, utilization: 0.38)
         let vm = StatusViewModel(snapshots: [snap], connectorState: .connected)

@@ -140,7 +140,7 @@ import Testing
     let result = try await service.refresh()
 
     #expect(result.status.source.state == .sessionExpired)
-    #expect(result.status.message == "Claude Code session expired")
+    #expect(result.status.message == "Waiting for Claude Code")
     #expect(usageFetcher.fetchCount == 1)
     #expect(credentialStore.readCount == 2)
 }

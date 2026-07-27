@@ -22,9 +22,21 @@ struct PopoverRootView: View {
             Divider()
             ProviderTabContentView(
                 model: tabModel,
-                onOpenSettings: onOpenSettings,
+                onOpenConnectors: onOpenSettings,
+                onConnect: {
+                    Task {
+                        switch selectedTab {
+                        case .claude:
+                            await viewModel.connectClaudeCode()
+                        case .codex:
+                            await viewModel.connectCodex()
+                        }
+                    }
+                },
                 onRetry: { controller.userTappedRetry() },
-                onRefresh: { controller.userTappedRefresh() }
+                onRefresh: { controller.userTappedRefresh() },
+                canCheckForUpdates: canCheckForUpdates(),
+                onCheckForUpdates: onCheckForUpdates
             )
             Divider()
             PopoverFooterView(

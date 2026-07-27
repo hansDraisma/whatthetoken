@@ -13,6 +13,38 @@ enum ConnectorRecovery: Equatable, Sendable {
     case checkForUpdates
 }
 
+enum ConnectorPrimaryAction: Equatable, Sendable {
+    case connect(title: String)
+    case retry
+    case checkForUpdates
+
+    var title: String {
+        switch self {
+        case let .connect(title):
+            return title
+        case .retry:
+            return "Retry"
+        case .checkForUpdates:
+            return "Check for Updates"
+        }
+    }
+}
+
+extension ConnectorRecovery {
+    func primaryAction(for provider: ProviderTab) -> ConnectorPrimaryAction? {
+        switch self {
+        case .none, .checking:
+            return nil
+        case .connect:
+            return .connect(title: "Connect \(provider.title)")
+        case .retry, .waitForClaudeCode, .signInLocally, .installCLI, .waitForReset:
+            return .retry
+        case .checkForUpdates:
+            return .checkForUpdates
+        }
+    }
+}
+
 struct ConnectorCopy: Equatable, Sendable {
     let headline: String
     let advice: String

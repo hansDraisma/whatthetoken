@@ -61,15 +61,32 @@ final class LaunchWindowController {
 
 #if canImport(AppKit)
 extension LaunchWindowController {
-    convenience init(viewModel: StatusViewModel) {
+    convenience init(
+        viewModel: StatusViewModel,
+        updateController: SparkleUpdateController
+    ) {
         self.init(
-            makeWindow: { Self.makeWindow(viewModel: viewModel) },
+            makeWindow: {
+                Self.makeWindow(
+                    viewModel: viewModel,
+                    updateController: updateController
+                )
+            },
             activate: { NSApplication.shared.activate(ignoringOtherApps: true) }
         )
     }
 
-    private static func makeWindow(viewModel: StatusViewModel) -> NSWindow {
-        let controller = NSHostingController(rootView: LaunchWindowRootView(viewModel: viewModel))
+    private static func makeWindow(
+        viewModel: StatusViewModel,
+        updateController: SparkleUpdateController
+    ) -> NSWindow {
+        let controller = NSHostingController(
+            rootView: LaunchWindowRootView(
+                viewModel: viewModel,
+                canCheckForUpdates: { updateController.canCheckForUpdates },
+                onCheckForUpdates: { updateController.checkForUpdates(nil) }
+            )
+        )
         let window = NSWindow(contentViewController: controller)
         window.title = "WhatTheToken"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]

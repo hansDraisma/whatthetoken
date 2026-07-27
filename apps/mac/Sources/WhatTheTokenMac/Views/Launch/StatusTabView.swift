@@ -47,13 +47,22 @@ enum StatusTabHotkeyWarningBanner {
 struct StatusTabView: View {
     let viewModel: StatusViewModel
     let onOpenConnectors: () -> Void
+    let canCheckForUpdates: Bool
+    let onCheckForUpdates: () -> Void
     @State private var selectedTab: ProviderTab = .codex
     @State private var isUpdatingNotifications = false
     @State private var notificationActionMessage: String?
 
-    init(viewModel: StatusViewModel, onOpenConnectors: @escaping () -> Void = {}) {
+    init(
+        viewModel: StatusViewModel,
+        onOpenConnectors: @escaping () -> Void = {},
+        canCheckForUpdates: Bool = false,
+        onCheckForUpdates: @escaping () -> Void = {}
+    ) {
         self.viewModel = viewModel
         self.onOpenConnectors = onOpenConnectors
+        self.canCheckForUpdates = canCheckForUpdates
+        self.onCheckForUpdates = onCheckForUpdates
     }
 
     var body: some View {
@@ -114,9 +123,21 @@ struct StatusTabView: View {
                 ProviderTabBarView(selected: $selectedTab, indicators: chromeState.indicators)
                 ProviderTabContentView(
                     model: ProviderTabModel.from(viewModel: viewModel, tab: selectedTab),
-                    onOpenSettings: onOpenConnectors,
+                    onOpenConnectors: onOpenConnectors,
+                    onConnect: {
+                        Task {
+                            switch selectedTab {
+                            case .claude:
+                                await viewModel.connectClaudeCode()
+                            case .codex:
+                                await viewModel.connectCodex()
+                            }
+                        }
+                    },
                     onRetry: { Task { await viewModel.refreshAll(reason: .retry) } },
-                    onRefresh: { Task { await viewModel.refreshAll(reason: .manual) } }
+                    onRefresh: { Task { await viewModel.refreshAll(reason: .manual) } },
+                    canCheckForUpdates: canCheckForUpdates,
+                    onCheckForUpdates: onCheckForUpdates
                 )
             }
             .background(Color(nsColor: .textBackgroundColor))

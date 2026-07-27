@@ -35,8 +35,8 @@ import Testing
             encoding: .utf8
         )
 
-        #expect(launchRoot.contains("StatusTabView(viewModel: viewModel, onOpenConnectors: { selection = .connectors })"))
+        #expect(launchRoot.contains("onOpenConnectors: { selection = .connectors }"))
         #expect(statusTab.contains("let onOpenConnectors: () -> Void"))
-        #expect(statusTab.contains("onOpenSettings: onOpenConnectors"))
+        #expect(statusTab.contains("onOpenConnectors: onOpenConnectors"))
     }
 }

@@ -55,7 +55,10 @@ import Testing
         let controller = PopoverRefreshController(viewModel: vm, sleeper: { duration in await fake.sleep(duration) })
 
         controller.popoverDidOpen()
-        for _ in 0..<10 { await Task.yield() }
+        for _ in 0..<100 {
+            if vm.lastClaudeRefreshAt != nil { break }
+            await Task.yield()
+        }
 
         #expect(vm.lastClaudeRefreshAt != nil)
         #expect(fake.pendingTicks == 0)

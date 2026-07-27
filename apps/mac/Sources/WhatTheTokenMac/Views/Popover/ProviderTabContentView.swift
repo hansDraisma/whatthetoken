@@ -2,9 +2,12 @@ import SwiftUI
 
 struct ProviderTabContentView: View {
     let model: ProviderTabModel
-    let onOpenSettings: () -> Void
+    let onOpenConnectors: () -> Void
+    let onConnect: () -> Void
     let onRetry: () -> Void
     let onRefresh: () -> Void
+    let canCheckForUpdates: Bool
+    let onCheckForUpdates: () -> Void
 
     var body: some View {
         switch model.body {
@@ -63,13 +66,12 @@ struct ProviderTabContentView: View {
 
     private func disconnected(reason: ProviderTabModel.DisconnectedReason) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(headline(for: reason))
+            Text(model.copy.headline)
                 .font(.headline)
-            Text(detail(for: reason))
+            Text(model.copy.advice)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Button("Open Settings", action: onOpenSettings)
-                .buttonStyle(.borderedProminent)
+            recoveryActions
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,30 +90,34 @@ struct ProviderTabContentView: View {
                 StatusSectionView(snapshots: lastSnapshots)
                     .opacity(0.6)
             }
-            Button("Retry", action: onRetry)
-                .buttonStyle(.bordered)
+            recoveryActions
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func headline(for reason: ProviderTabModel.DisconnectedReason) -> String {
-        switch (model.tab, reason) {
-        case (.claude, .claude), (.codex, .codex):
-            return model.copy.headline
-        case (.claude, .codex), (.codex, .claude):
-            assertionFailure("ProviderTabModel invariant violated: tab=\(model.tab) but reason=\(reason); see ProviderTabModel.from mapping in ProviderTabModel.swift")
-            return "\(model.tab.title) is unavailable"
+    @ViewBuilder
+    private var recoveryActions: some View {
+        if let action = model.copy.recovery.primaryAction(for: model.tab) {
+            Button(action.title) {
+                perform(action)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(action == .checkForUpdates && !canCheckForUpdates)
+
+            Button("Open Connectors", action: onOpenConnectors)
+                .buttonStyle(.link)
         }
     }
 
-    private func detail(for reason: ProviderTabModel.DisconnectedReason) -> String {
-        _ = reason
-        switch model.tab {
-        case .claude:
-            return "Connect Claude Code in Settings to see remaining usage."
-        case .codex:
-            return "Connect Codex in Settings to see remaining usage and rate-limit status."
+    private func perform(_ action: ConnectorPrimaryAction) {
+        switch action {
+        case .connect:
+            onConnect()
+        case .retry:
+            onRetry()
+        case .checkForUpdates:
+            onCheckForUpdates()
         }
     }
 

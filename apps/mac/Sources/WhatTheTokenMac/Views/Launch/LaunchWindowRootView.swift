@@ -40,6 +40,8 @@ enum LaunchTab: Hashable, CaseIterable {
 
 struct LaunchWindowRootView: View {
     let viewModel: StatusViewModel
+    let canCheckForUpdates: @MainActor () -> Bool
+    let onCheckForUpdates: @MainActor () -> Void
     @State private var selection: LaunchTab = .status
 
     var body: some View {
@@ -52,7 +54,12 @@ struct LaunchWindowRootView: View {
         } detail: {
             switch selection {
             case .status:
-                StatusTabView(viewModel: viewModel, onOpenConnectors: { selection = .connectors })
+                StatusTabView(
+                    viewModel: viewModel,
+                    onOpenConnectors: { selection = .connectors },
+                    canCheckForUpdates: canCheckForUpdates(),
+                    onCheckForUpdates: onCheckForUpdates
+                )
             case .connectors:
                 ConnectorsView(viewModel: viewModel)
             case .notifications:

@@ -119,4 +119,42 @@ import Testing
         #expect(claudeRecoveries.filter { $0 == .none }.count == 1)
         #expect(codexRecoveries.filter { $0 == .none }.count == 1)
     }
+
+    @Test func everyRecoveryIntentHasAnHonestPrimaryAction() {
+        #expect(ConnectorRecovery.none.primaryAction(for: .claude) == nil)
+        #expect(ConnectorRecovery.checking.primaryAction(for: .claude) == nil)
+        #expect(
+            ConnectorRecovery.connect.primaryAction(for: .claude)
+                == .connect(title: "Connect Claude Code")
+        )
+        #expect(
+            ConnectorRecovery.connect.primaryAction(for: .codex)
+                == .connect(title: "Connect Codex")
+        )
+        #expect(ConnectorRecovery.retry.primaryAction(for: .claude) == .retry)
+        #expect(ConnectorRecovery.waitForClaudeCode.primaryAction(for: .claude) == .retry)
+        #expect(ConnectorRecovery.signInLocally.primaryAction(for: .codex) == .retry)
+        #expect(ConnectorRecovery.installCLI.primaryAction(for: .claude) == .retry)
+        #expect(ConnectorRecovery.waitForReset.primaryAction(for: .claude) == .retry)
+        #expect(
+            ConnectorRecovery.checkForUpdates.primaryAction(for: .claude)
+                == .checkForUpdates
+        )
+    }
+
+    @Test func enabledBrokenStatesNeverOfferOpenSettingsAsTheirOnlyAction() {
+        let brokenRecoveries: [ConnectorRecovery] = [
+            .retry,
+            .waitForClaudeCode,
+            .signInLocally,
+            .installCLI,
+            .waitForReset,
+            .checkForUpdates
+        ]
+
+        for recovery in brokenRecoveries {
+            #expect(recovery.primaryAction(for: .claude) != nil)
+            #expect(recovery.primaryAction(for: .codex) != nil)
+        }
+    }
 }

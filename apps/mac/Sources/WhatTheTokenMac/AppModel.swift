@@ -84,7 +84,10 @@ final class AppModel {
         )
         let updateController = SparkleUpdateController()
         let refreshController = PopoverRefreshController(viewModel: viewModel)
-        let launchWindowController = LaunchWindowController(viewModel: viewModel)
+        let launchWindowController = LaunchWindowController(
+            viewModel: viewModel,
+            updateController: updateController
+        )
 
         weak var menuBarControllerWeak: MenuBarController?
         let popoverRoot = PopoverRootView(

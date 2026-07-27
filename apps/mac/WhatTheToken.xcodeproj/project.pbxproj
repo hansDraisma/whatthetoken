@@ -99,6 +99,8 @@
 		20000000000000000000005A = {isa = PBXBuildFile; fileRef = 10000000000000000000005A; };
 		20000000000000000000005B = {isa = PBXBuildFile; fileRef = 10000000000000000000005B; };
 		20000000000000000000005C = {isa = PBXBuildFile; fileRef = 10000000000000000000005C; };
+		20000000000000000000005D = {isa = PBXBuildFile; fileRef = 10000000000000000000005D; };
+		20000000000000000000005E = {isa = PBXBuildFile; fileRef = 10000000000000000000005E; };
 		300000000000000000000001 = {isa = PBXBuildFile; fileRef = 000000000000000000000026; };
 		300000000000000000000002 = {isa = PBXBuildFile; fileRef = 000000000000000000000027; };
 		300000000000000000000003 = {isa = PBXBuildFile; fileRef = 000000000000000000000028; };
@@ -240,6 +242,8 @@
 		10000000000000000000005A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/AppLogger.swift; sourceTree = "<group>"; };
 		10000000000000000000005B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/AppStartupRoutine.swift; sourceTree = "<group>"; };
 		10000000000000000000005C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Views/Launch/StatusTabCopy.swift; sourceTree = "<group>"; };
+		10000000000000000000005D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Claude/ClaudeCredentialProbe.swift; sourceTree = "<group>"; };
+		10000000000000000000005E = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Claude/ClaudeRotationDecision.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -291,6 +295,8 @@
 				100000000000000000000041,
 				100000000000000000000002,
 				100000000000000000000003,
+				10000000000000000000005D,
+				10000000000000000000005E,
 				100000000000000000000004,
 				100000000000000000000005,
 				100000000000000000000006,
@@ -530,6 +536,8 @@
 				200000000000000000000041,
 				200000000000000000000002,
 				200000000000000000000003,
+				20000000000000000000005D,
+				20000000000000000000005E,
 				200000000000000000000004,
 				200000000000000000000005,
 				200000000000000000000006,

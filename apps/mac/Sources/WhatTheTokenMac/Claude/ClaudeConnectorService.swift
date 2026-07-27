@@ -104,6 +104,11 @@ struct ClaudeConnectorService: Sendable {
     }
 
     private func fetchUsageOutcome(credential: ClaudeStoredCredential) async -> FetchOutcome {
+        if let expiresAt = credential.expiresAt,
+           currentDate().timeIntervalSince(expiresAt) > 300 {
+            return .failure(.sessionExpired)
+        }
+
         do {
             let response = try await usageFetcher.fetchUsage(
                 accessToken: credential.accessToken,
@@ -127,6 +132,9 @@ struct ClaudeConnectorService: Sendable {
     }
 
     private func tokenFailureState(credential: ClaudeStoredCredential) -> ConnectorSourceState {
+        // The preflight above tolerates five minutes of clock skew before
+        // suppressing a request. Once the provider has actually rejected the
+        // token, local expiry can classify the failure without that allowance.
         if let expiresAt = credential.expiresAt, expiresAt <= currentDate() {
             return .sessionExpired
         }

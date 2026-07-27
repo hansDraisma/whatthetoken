@@ -122,7 +122,7 @@ import Testing
 @Test func tokenInvalidWithExpiredCredentialReturnsSessionExpired() async throws {
     let credentialStore = StubClaudeCredentialStore(
         accessToken: "synthetic-access-token",
-        expiresAt: Date(timeIntervalSince1970: 1000)
+        expiresAt: Date(timeIntervalSince1970: 1900)
     )
     let usageFetcher = StubClaudeUsageFetcher(error: ClaudeUsageClientError.tokenInvalid)
 
@@ -141,6 +141,69 @@ import Testing
 
     #expect(result.status.source.state == .sessionExpired)
     #expect(result.status.message == "Claude Code session expired")
+    #expect(usageFetcher.fetchCount == 1)
+    #expect(credentialStore.readCount == 2)
+}
+
+@Test func credentialExpiredBeyondSkewSkipsGuaranteedFailingUsageCall() async throws {
+    let credentialStore = StubClaudeCredentialStore(
+        accessToken: "synthetic-access-token",
+        expiresAt: Date(timeIntervalSince1970: 1600)
+    )
+    let usageFetcher = StubClaudeUsageFetcher(
+        response: ClaudeUsageResponse(
+            fiveHour: ClaudeWindowUsage(
+                utilization: 42.5,
+                resetsAt: "2026-05-04T15:00:00Z"
+            ),
+            sevenDay: nil,
+            sevenDayOpus: nil,
+            sevenDaySonnet: nil,
+            extraUsage: nil
+        )
+    )
+    let service = ClaudeConnectorService(
+        settings: ClaudeConnectorSettings(isEnabled: true),
+        credentialStore: credentialStore,
+        usageFetcher: usageFetcher,
+        claudeVersionProvider: StaticClaudeVersionProvider(
+            claudeVersion: "2.2.0-test"
+        ),
+        deviceId: "device_mac_01",
+        userAccountId: "local_user",
+        now: { "2026-05-04T10:00:00.000Z" },
+        currentDate: { Date(timeIntervalSince1970: 2000) }
+    )
+
+    let result = try await service.refresh()
+
+    #expect(result.status.source.state == .sessionExpired)
+    #expect(usageFetcher.fetchCount == 0)
+}
+
+@Test func credentialExpiredExactlyAtSkewBoundaryStillAttemptsUsageCall() async throws {
+    let credentialStore = StubClaudeCredentialStore(
+        accessToken: "synthetic-access-token",
+        expiresAt: Date(timeIntervalSince1970: 1700)
+    )
+    let usageFetcher = StubClaudeUsageFetcher(error: ClaudeUsageClientError.tokenInvalid)
+    let service = ClaudeConnectorService(
+        settings: ClaudeConnectorSettings(isEnabled: true),
+        credentialStore: credentialStore,
+        usageFetcher: usageFetcher,
+        claudeVersionProvider: StaticClaudeVersionProvider(
+            claudeVersion: "2.2.0-test"
+        ),
+        deviceId: "device_mac_01",
+        userAccountId: "local_user",
+        now: { "2026-05-04T10:00:00.000Z" },
+        currentDate: { Date(timeIntervalSince1970: 2000) }
+    )
+
+    let result = try await service.refresh()
+
+    #expect(result.status.source.state == .sessionExpired)
+    #expect(usageFetcher.fetchCount == 1)
 }
 
 @Test func tokenInvalidWithUnexpiredCredentialReturnsTokenInvalid() async throws {

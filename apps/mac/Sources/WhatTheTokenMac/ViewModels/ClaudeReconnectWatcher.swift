@@ -55,7 +55,7 @@ final class ClaudeReconnectWatcher {
         }
 
         if Self.isRecoverable(state) {
-            start(state: state)
+            start()
         } else {
             cancelWatch()
         }
@@ -66,7 +66,9 @@ final class ClaudeReconnectWatcher {
         cancelWatch()
     }
 
-    private func start(state: ClaudeConnectorSetupState) {
+    /// - Parameter initialDelay: Wait before the first probe. Required on the
+    ///   re-arm path so a refusal to refresh cannot spin the probe.
+    private func start(initialDelay: Duration? = nil) {
         guard task == nil else {
             return
         }
@@ -76,7 +78,7 @@ final class ClaudeReconnectWatcher {
         task = Task { [weak self] in
             await self?.run(
                 expectedGeneration: expectedGeneration,
-                state: state
+                initialDelay: initialDelay
             )
             guard let self, self.generation == expectedGeneration else {
                 return
@@ -87,14 +89,21 @@ final class ClaudeReconnectWatcher {
 
     private func run(
         expectedGeneration: Int,
-        state: ClaudeConnectorSetupState
+        initialDelay: Duration?
     ) async {
+        if let initialDelay {
+            await sleeper(initialDelay)
+            guard isCurrent(expectedGeneration) else {
+                return
+            }
+        }
+
         let initial = await probe.probe()
         guard isCurrent(expectedGeneration) else {
             return
         }
 
-        if shouldRefreshImmediately(initial, for: state) {
+        if shouldRefreshImmediately(initial) {
             handOffRefresh()
             return
         }
@@ -125,7 +134,7 @@ final class ClaudeReconnectWatcher {
             interval = Self.baseInterval
 
             guard let previous = previousSuccessful else {
-                if shouldRefreshImmediately(current, for: state) {
+                if shouldRefreshImmediately(current) {
                     handOffRefresh()
                     return
                 }
@@ -145,15 +154,17 @@ final class ClaudeReconnectWatcher {
         }
     }
 
+    /// Reads `currentState` rather than a state captured when the watch started,
+    /// so a recoverable state that changes under a live watch cannot leave the
+    /// previous state's rule in force.
     private func shouldRefreshImmediately(
-        _ result: ClaudeCredentialProbeResult,
-        for state: ClaudeConnectorSetupState
+        _ result: ClaudeCredentialProbeResult
     ) -> Bool {
         guard case let .found(fingerprint) = result else {
             return false
         }
 
-        switch state {
+        switch currentState {
         case .sessionExpired:
             return !fingerprint.isExpired(at: now())
         case .missingCredentials:
@@ -179,7 +190,9 @@ final class ClaudeReconnectWatcher {
             else {
                 return
             }
-            self.start(state: self.currentState)
+            // A refusal usually means a refresh is already in flight. Re-arm
+            // behind a full interval; probing again straight away would spin.
+            self.start(initialDelay: Self.baseInterval)
         }
     }
 

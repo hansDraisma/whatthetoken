@@ -1,69 +1,79 @@
 import Testing
 @testable import WhatTheTokenMac
 
+/// Titles for an enabled, unpaused connector — the state-driven part of the row
+/// action, with the enabled/paused overrides covered separately below.
+private func claudeRowTitle(_ state: ClaudeConnectorSetupState) -> String {
+    connectorRowAction(for: .claude(state), isEnabled: true, isPaused: false).title
+}
+
+private func codexRowTitle(_ state: CodexConnectorSetupState) -> String {
+    connectorRowAction(for: .codex(state), isEnabled: true, isPaused: false).title
+}
+
 @Suite struct ConnectorActionTitleTests {
     @Test func claude_notConnected_isConnect() {
-        #expect(claudeActionTitle(for: .notConnected) == "Connect Claude Code")
+        #expect(claudeRowTitle(.notConnected) == "Connect Claude Code")
     }
 
     @Test func claude_checking_isCheckingEllipsis() {
-        #expect(claudeActionTitle(for: .checking) == "Checking...")
+        #expect(claudeRowTitle(.checking) == "Checking...")
     }
 
     @Test func claude_connected_isRefreshNow() {
-        #expect(claudeActionTitle(for: .connected) == "Refresh Now")
+        #expect(claudeRowTitle(.connected) == "Refresh Now")
     }
 
     @Test func claude_networkError_isRetry() {
-        #expect(claudeActionTitle(for: .networkError) == "Retry")
+        #expect(claudeRowTitle(.networkError) == "Retry")
     }
 
-    @Test func claude_schemaChanged_isRetry() {
-        #expect(claudeActionTitle(for: .schemaChanged) == "Check for Updates")
+    @Test func claude_schemaChanged_isCheckForUpdates() {
+        #expect(claudeRowTitle(.schemaChanged) == "Check for Updates")
     }
 
     @Test func claude_rateLimited_isRetry() {
-        #expect(claudeActionTitle(for: .rateLimited) == "Retry")
+        #expect(claudeRowTitle(.rateLimited) == "Retry")
     }
 
-    @Test func claude_missingCredentials_isConnect() {
-        #expect(claudeActionTitle(for: .missingCredentials) == "Retry")
+    @Test func claude_missingCredentials_isRetry() {
+        #expect(claudeRowTitle(.missingCredentials) == "Retry")
     }
 
-    @Test func claude_missingClaudeCli_isConnect() {
-        #expect(claudeActionTitle(for: .missingClaudeCli) == "Retry")
+    @Test func claude_missingClaudeCli_isRetry() {
+        #expect(claudeRowTitle(.missingClaudeCli) == "Retry")
     }
 
-    @Test func claude_tokenInvalid_isConnect() {
-        #expect(claudeActionTitle(for: .tokenInvalid) == "Retry")
+    @Test func claude_tokenInvalid_isRetry() {
+        #expect(claudeRowTitle(.tokenInvalid) == "Retry")
     }
 
     @Test func codex_notConnected_isConnect() {
-        #expect(codexActionTitle(for: .notConnected) == "Connect Codex")
+        #expect(codexRowTitle(.notConnected) == "Connect Codex")
     }
 
     @Test func codex_connected_isRefreshNow() {
-        #expect(codexActionTitle(for: .connected) == "Refresh Now")
+        #expect(codexRowTitle(.connected) == "Refresh Now")
     }
 
     @Test func codex_networkError_isRetry() {
-        #expect(codexActionTitle(for: .networkError) == "Retry")
+        #expect(codexRowTitle(.networkError) == "Retry")
     }
 
-    @Test func codex_schemaChanged_isRetry() {
-        #expect(codexActionTitle(for: .schemaChanged) == "Check for Updates")
+    @Test func codex_schemaChanged_isCheckForUpdates() {
+        #expect(codexRowTitle(.schemaChanged) == "Check for Updates")
     }
 
-    @Test func codex_permissionDenied_isConnect() {
-        #expect(codexActionTitle(for: .permissionDenied) == "Retry")
+    @Test func codex_permissionDenied_isRetry() {
+        #expect(codexRowTitle(.permissionDenied) == "Retry")
     }
 
-    @Test func codex_missingCredentials_isConnect() {
-        #expect(codexActionTitle(for: .missingCredentials) == "Retry")
+    @Test func codex_missingCredentials_isRetry() {
+        #expect(codexRowTitle(.missingCredentials) == "Retry")
     }
 
     @Test func codex_checking_isCheckingEllipsis() {
-        #expect(codexActionTitle(for: .checking) == "Checking...")
+        #expect(codexRowTitle(.checking) == "Checking...")
     }
 
     @Test func connectorConsentCopyStatesStoredDataBoundary() {
@@ -82,19 +92,26 @@ import Testing
         #expect(codex.contains("sanitized usage status"))
     }
 
-    @Test func connectorConnectionActionTitleNamesConnectForDisabledProviders() {
-        #expect(connectorConnectionActionTitle(for: .claude, isEnabled: false, isPaused: false) == "Connect Claude Code")
-        #expect(connectorConnectionActionTitle(for: .codex, isEnabled: false, isPaused: false) == "Connect Codex")
+    @Test func disabledConnectorOffersConnectRegardlessOfState() {
+        #expect(
+            connectorRowAction(for: .claude(.sessionExpired), isEnabled: false, isPaused: false)
+                == .connect(title: "Connect Claude Code")
+        )
+        #expect(
+            connectorRowAction(for: .codex(.networkError), isEnabled: false, isPaused: false)
+                == .connect(title: "Connect Codex")
+        )
     }
 
-    @Test func connectorConnectionActionTitleNamesPauseForEnabledActiveProviders() {
-        #expect(connectorConnectionActionTitle(for: .claude, isEnabled: true, isPaused: false) == "Pause Claude Code")
-        #expect(connectorConnectionActionTitle(for: .codex, isEnabled: true, isPaused: false) == "Pause Codex")
-    }
-
-    @Test func connectorConnectionActionTitleNamesResumeForEnabledPausedProviders() {
-        #expect(connectorConnectionActionTitle(for: .claude, isEnabled: true, isPaused: true) == "Resume Claude Code")
-        #expect(connectorConnectionActionTitle(for: .codex, isEnabled: true, isPaused: true) == "Resume Codex")
+    @Test func pausedConnectorOffersResumeRegardlessOfState() {
+        #expect(
+            connectorRowAction(for: .claude(.sessionExpired), isEnabled: true, isPaused: true)
+                == .resume(title: "Resume Claude Code")
+        )
+        #expect(
+            connectorRowAction(for: .codex(.networkError), isEnabled: true, isPaused: true)
+                == .resume(title: "Resume Codex")
+        )
     }
 
     @Test func connectorDisconnectActionTitleNamesDisconnectForProviders() {

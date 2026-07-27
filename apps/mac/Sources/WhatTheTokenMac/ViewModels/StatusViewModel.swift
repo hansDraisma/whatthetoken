@@ -568,7 +568,7 @@ final class StatusViewModel {
         let previousState = connectorState
         let previousMessage = connectorStatusMessage
         connectorState = .checking
-            connectorStatusMessage = ConnectorRecoveryCopy.claude(.checking).headline
+        connectorStatusMessage = ConnectorRecoveryCopy.claude(.checking).headline
 
         do {
             let result = try await requireClaudeRefreshResult()
@@ -588,10 +588,10 @@ final class StatusViewModel {
                 )
                 lastClaudeRefreshAt = now()
                 cache.replaceSnapshots(result.snapshots, for: .claude, at: lastClaudeRefreshAt!)
-            } else {
+            } else if let code = Self.cacheErrorCode(for: result.status.source.state) {
                 cache.recordFailure(
                     for: .claude,
-                    code: Self.cacheErrorCode(for: result.status.source.state),
+                    code: code,
                     message: result.status.message,
                     now: now()
                 )
@@ -650,10 +650,10 @@ final class StatusViewModel {
                 )
                 lastCodexRefreshAt = now()
                 cache.replaceSnapshots(result.snapshots, for: .codex, at: lastCodexRefreshAt!)
-            } else {
+            } else if let code = Self.cacheErrorCode(for: result.status.source.state) {
                 cache.recordFailure(
                     for: .codex,
-                    code: Self.cacheErrorCode(for: result.status.source.state),
+                    code: code,
                     message: result.status.message,
                     now: now()
                 )
@@ -817,9 +817,11 @@ final class StatusViewModel {
         }
     }
 
+    /// `nil` for states that are not failures. `notConnected` in particular must
+    /// not be cached: it would be restored as a network error on the next launch.
     private static func cacheErrorCode(
         for sourceState: ConnectorSourceState
-    ) -> CachedProviderError.Code {
+    ) -> CachedProviderError.Code? {
         switch sourceState {
         case .sessionExpired:
             return .sessionExpired
@@ -835,8 +837,10 @@ final class StatusViewModel {
             return .schemaChanged
         case .networkError:
             return .network
-        case .connected, .notConnected, .stale:
+        case .stale:
             return .unavailable
+        case .connected, .notConnected:
+            return nil
         }
     }
 

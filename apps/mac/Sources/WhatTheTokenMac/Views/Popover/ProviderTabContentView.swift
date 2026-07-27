@@ -20,12 +20,12 @@ struct ProviderTabContentView: View {
             empty
         case .loading:
             checking
-        case let .disconnected(reason):
-            disconnected(reason: reason)
-        case let .error(kind, lastSnapshots, isRefreshing):
+        case .disconnected:
+            disconnectedBody
+        case let .error(_, lastSnapshots, isRefreshing):
             VStack(spacing: 0) {
                 refreshProgressLine(isVisible: isRefreshing)
-                errorBody(kind: kind, lastSnapshots: lastSnapshots)
+                errorBody(lastSnapshots: lastSnapshots)
             }
         }
     }
@@ -64,7 +64,7 @@ struct ProviderTabContentView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func disconnected(reason: ProviderTabModel.DisconnectedReason) -> some View {
+    private var disconnectedBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(model.copy.headline)
                 .font(.headline)
@@ -77,9 +77,9 @@ struct ProviderTabContentView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func errorBody(kind: ProviderTabModel.ErrorKind, lastSnapshots: [UsageSnapshot]) -> some View {
+    private func errorBody(lastSnapshots: [UsageSnapshot]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(errorHeadline(kind: kind))
+            Text(model.copy.headline)
                 .font(.headline)
             if !model.copy.advice.isEmpty {
                 Text(model.copy.advice)
@@ -105,12 +105,19 @@ struct ProviderTabContentView: View {
             .buttonStyle(.borderedProminent)
             .disabled(action == .checkForUpdates && !canCheckForUpdates)
 
+            if let fallback = model.copy.recovery.fallbackAction {
+                Button(fallback.title) {
+                    perform(fallback)
+                }
+                .buttonStyle(.bordered)
+            }
+
             Button("Open Connectors", action: onOpenConnectors)
                 .buttonStyle(.link)
         }
     }
 
-    private func perform(_ action: ConnectorPrimaryAction) {
+    private func perform(_ action: ConnectorAction) {
         switch action {
         case .connect:
             onConnect()
@@ -119,10 +126,5 @@ struct ProviderTabContentView: View {
         case .checkForUpdates:
             onCheckForUpdates()
         }
-    }
-
-    private func errorHeadline(kind: ProviderTabModel.ErrorKind) -> String {
-        _ = kind
-        return model.copy.headline
     }
 }

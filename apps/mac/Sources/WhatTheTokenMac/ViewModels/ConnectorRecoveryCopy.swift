@@ -13,7 +13,7 @@ enum ConnectorRecovery: Equatable, Sendable {
     case checkForUpdates
 }
 
-enum ConnectorPrimaryAction: Equatable, Sendable {
+enum ConnectorAction: Equatable, Sendable {
     case connect(title: String)
     case retry
     case checkForUpdates
@@ -31,7 +31,7 @@ enum ConnectorPrimaryAction: Equatable, Sendable {
 }
 
 extension ConnectorRecovery {
-    func primaryAction(for provider: ProviderTab) -> ConnectorPrimaryAction? {
+    func primaryAction(for provider: ProviderTab) -> ConnectorAction? {
         switch self {
         case .none, .checking:
             return nil
@@ -41,6 +41,20 @@ extension ConnectorRecovery {
             return .retry
         case .checkForUpdates:
             return .checkForUpdates
+        }
+    }
+
+    /// A second action for states whose primary action may not resolve them.
+    /// Schema drift is usually real, but the same classification also covers a
+    /// one-off undecodable 200 response, and `Check for Updates` is unavailable
+    /// entirely in builds without update metadata. Both cases need a way back.
+    var fallbackAction: ConnectorAction? {
+        switch self {
+        case .checkForUpdates:
+            return .retry
+        case .none, .checking, .connect, .retry, .waitForClaudeCode,
+             .signInLocally, .installCLI, .waitForReset:
+            return nil
         }
     }
 }

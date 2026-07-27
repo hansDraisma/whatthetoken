@@ -98,7 +98,13 @@ import Testing
 }
 
 @Test func sessionExpiredActionTitleIsRetry() {
-    #expect(claudeActionTitle(for: .sessionExpired) == "Retry")
+    #expect(
+        connectorRowAction(
+            for: .claude(.sessionExpired),
+            isEnabled: true,
+            isPaused: false
+        ).title == "Retry"
+    )
 }
 
 @Test func credentialRotatedBypassesFailureBackoff() {
@@ -230,6 +236,31 @@ import Testing
     await viewModel.refreshAll(reason: .manual)
 
     #expect(versionProvider.wasReadOnMainThread == false)
+}
+
+@MainActor
+@Test func notConnectedResultIsNotCachedAsAFailure() async {
+    // A cached failure for notConnected would be restored as a network error on
+    // the next launch, because .unavailable maps back to .networkError.
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let cacheStore = InMemorySnapshotCacheStore(
+        data: try! JSONEncoder.cacheEncoder.encode(SnapshotCache.empty)
+    )
+    let refresher = CountingClaudeConnectorRefresher(result: .success(.notConnected()))
+    let viewModel = StatusViewModel(
+        settings: settings,
+        claudeRefresher: refresher,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        cacheStore: cacheStore
+    )
+
+    await viewModel.refreshAll(reason: .manual)
+    let persisted = await cacheStore.load()
+
+    #expect(refresher.refreshCount == 1)
+    #expect(viewModel.connectorState == .notConnected)
+    #expect(persisted.lastErrorByProvider[CachedProviderID.claude.rawValue] == nil)
 }
 
 @MainActor
@@ -582,6 +613,18 @@ private extension ClaudeConnectorResult {
                 product: "claude_code",
                 source: source,
                 message: "Claude usage is rate limited"
+            )
+        )
+    }
+
+    static func notConnected() -> ClaudeConnectorResult {
+        let source = ConnectorSource.claude(state: .notConnected)
+        return ClaudeConnectorResult(
+            snapshots: [],
+            status: ConnectorStatus(
+                product: "claude_code",
+                source: source,
+                message: "Claude Code is not connected"
             )
         )
     }

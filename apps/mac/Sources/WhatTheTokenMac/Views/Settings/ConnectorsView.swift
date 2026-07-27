@@ -18,16 +18,20 @@ struct ConnectorsView: View {
 
     var body: some View {
         let claudeCopy = ConnectorRecoveryCopy.claude(viewModel.connectorState)
-        let claudePrimary = connectorRowAction(
-            for: .claude(viewModel.connectorState),
-            isEnabled: viewModel.settings.connectors.claudeCode.isEnabled,
-            isPaused: viewModel.settings.connectors.claudeCode.isPaused
+        let claudePrimary = actionable(
+            connectorRowAction(
+                for: .claude(viewModel.connectorState),
+                isEnabled: viewModel.settings.connectors.claudeCode.isEnabled,
+                isPaused: viewModel.settings.connectors.claudeCode.isPaused
+            )
         )
         let codexCopy = ConnectorRecoveryCopy.codex(viewModel.codexConnectorState)
-        let codexPrimary = connectorRowAction(
-            for: .codex(viewModel.codexConnectorState),
-            isEnabled: viewModel.settings.connectors.codex.isEnabled,
-            isPaused: viewModel.settings.connectors.codex.isPaused
+        let codexPrimary = actionable(
+            connectorRowAction(
+                for: .codex(viewModel.codexConnectorState),
+                isEnabled: viewModel.settings.connectors.codex.isEnabled,
+                isPaused: viewModel.settings.connectors.codex.isPaused
+            )
         )
 
         Form {
@@ -41,8 +45,7 @@ struct ConnectorsView: View {
                     trustMessage: ConnectorConsentCopy.claude,
                     connectionActionTitle: claudePrimary.title,
                     connectionActionRole: nil,
-                    isConnectionActionDisabled: claudePrimary.isDisabledByState
-                        || (claudePrimary == .checkForUpdates && !canCheckForUpdates),
+                    isConnectionActionDisabled: claudePrimary.isDisabledByState,
                     secondaryActionTitle: connectorPauseActionTitle(
                         for: .claude,
                         isEnabled: viewModel.settings.connectors.claudeCode.isEnabled,
@@ -72,8 +75,7 @@ struct ConnectorsView: View {
                     trustMessage: ConnectorConsentCopy.codex,
                     connectionActionTitle: codexPrimary.title,
                     connectionActionRole: nil,
-                    isConnectionActionDisabled: codexPrimary.isDisabledByState
-                        || (codexPrimary == .checkForUpdates && !canCheckForUpdates),
+                    isConnectionActionDisabled: codexPrimary.isDisabledByState,
                     secondaryActionTitle: connectorPauseActionTitle(
                         for: .codex,
                         isEnabled: viewModel.settings.connectors.codex.isEnabled,
@@ -160,6 +162,13 @@ struct ConnectorsView: View {
         pendingDisconnect = nil
         let viewModel = self.viewModel
         Task { await viewModel.disconnect(provider) }
+    }
+
+    /// Replaces an action the current build cannot perform with one it can, so
+    /// the row never presents a permanently disabled button as the only way out.
+    private func actionable(_ action: ConnectorRowAction) -> ConnectorRowAction {
+        guard action == .checkForUpdates, !canCheckForUpdates else { return action }
+        return .retry
     }
 
     private func performClaude(_ action: ConnectorRowAction) {

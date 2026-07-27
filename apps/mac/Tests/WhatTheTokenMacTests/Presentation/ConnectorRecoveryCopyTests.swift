@@ -157,4 +157,38 @@ import Testing
             #expect(recovery.primaryAction(for: .codex) != nil)
         }
     }
+
+    @Test func schemaDriftKeepsARetryPathBecauseCheckForUpdatesMayNotResolveIt() {
+        #expect(ConnectorRecovery.checkForUpdates.fallbackAction == .retry)
+    }
+
+    @Test func statesWhosePrimaryActionAlwaysAppliesHaveNoFallback() {
+        let withoutFallback: [ConnectorRecovery] = [
+            .none,
+            .checking,
+            .connect,
+            .retry,
+            .waitForClaudeCode,
+            .signInLocally,
+            .installCLI,
+            .waitForReset
+        ]
+
+        for recovery in withoutFallback {
+            #expect(recovery.fallbackAction == nil)
+        }
+    }
+
+    @Test func schemaDriftStillOffersARetryWhenUpdateChecksAreUnavailable() {
+        // Mirrors ConnectorsView.actionable: a build without update metadata must
+        // not present a permanently disabled button as the only way out.
+        let action = connectorRowAction(
+            for: .claude(.schemaChanged),
+            isEnabled: true,
+            isPaused: false
+        )
+
+        #expect(action == .checkForUpdates)
+        #expect(ConnectorRecoveryCopy.claude(.schemaChanged).recovery.fallbackAction == .retry)
+    }
 }

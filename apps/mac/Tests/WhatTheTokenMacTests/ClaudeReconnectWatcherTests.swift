@@ -235,17 +235,18 @@ func rotationTriggersExactlyOneIndependentRefresh() async {
 
 @MainActor
 @Test
-func rejectedRefreshHandoffRearmsTheWatcher() async {
+func rejectedRefreshHandoffRearmsTheWatcherBehindAFullInterval() async {
     let now = Date(timeIntervalSince1970: 2_000)
     let usable = watcherCredential(
         "new",
         expiresAt: Date(timeIntervalSince1970: 3_000)
     )
     let probe = WatcherStubProbe([usable, usable])
+    let sleeper = FakeSleeper()
     var attempts = 0
     let watcher = ClaudeReconnectWatcher(
         probe: probe,
-        sleeper: { _ in },
+        sleeper: { duration in await sleeper.sleep(duration) },
         now: { now },
         onRotationDetected: {
             attempts += 1
@@ -255,6 +256,19 @@ func rejectedRefreshHandoffRearmsTheWatcher() async {
 
     watcher.activate(currentState: .sessionExpired)
     for _ in 0..<40 {
+        if sleeper.pendingTicks == 1 {
+            break
+        }
+        await Task.yield()
+    }
+
+    // The refusal must not be retried until a full interval has elapsed.
+    #expect(attempts == 1)
+    #expect(probe.callCount == 1)
+    #expect(sleeper.lastDuration == ClaudeReconnectWatcher.baseInterval)
+
+    sleeper.fireOneTick()
+    for _ in 0..<40 {
         if attempts == 2 {
             break
         }
@@ -262,4 +276,83 @@ func rejectedRefreshHandoffRearmsTheWatcher() async {
     }
 
     #expect(attempts == 2)
+    #expect(probe.callCount == 2)
+}
+
+@MainActor
+@Test
+func repeatedlyRejectedRefreshHandoffDoesNotSpinTheProbe() async {
+    let now = Date(timeIntervalSince1970: 2_000)
+    let probe = WatcherStubProbe([
+        watcherCredential("new", expiresAt: Date(timeIntervalSince1970: 3_000))
+    ])
+    let sleeper = FakeSleeper()
+    var attempts = 0
+    let watcher = ClaudeReconnectWatcher(
+        probe: probe,
+        sleeper: { duration in await sleeper.sleep(duration) },
+        now: { now },
+        // Models refreshAll already being in flight for the whole window, which
+        // makes refreshClaudeAfterCredentialRotation() return false every time.
+        onRotationDetected: {
+            attempts += 1
+            return false
+        }
+    )
+
+    watcher.activate(currentState: .sessionExpired)
+    for _ in 0..<200 {
+        await Task.yield()
+    }
+
+    #expect(attempts == 1)
+    #expect(probe.callCount == 1)
+    #expect(sleeper.pendingTicks == 1)
+    watcher.stop()
+}
+
+@MainActor
+@Test
+func firstReadableProbeUsesTheCurrentStateNotTheStateThatStartedTheWatch() async {
+    let now = Date(timeIntervalSince1970: 2_000)
+    let probe = WatcherStubProbe([
+        .unavailable,
+        watcherCredential("new", expiresAt: Date(timeIntervalSince1970: 3_000))
+    ])
+    let sleeper = FakeSleeper()
+    var refreshCount = 0
+    let watcher = ClaudeReconnectWatcher(
+        probe: probe,
+        sleeper: { duration in await sleeper.sleep(duration) },
+        now: { now },
+        onRotationDetected: {
+            refreshCount += 1
+            return true
+        }
+    )
+
+    // An unreadable first probe leaves no baseline, so the next readable probe
+    // is still judged by the immediate rule.
+    watcher.activate(currentState: .tokenInvalid)
+    for _ in 0..<40 {
+        if sleeper.pendingTicks == 1 {
+            break
+        }
+        await Task.yield()
+    }
+    #expect(refreshCount == 0)
+
+    // The live watch cannot restart, so it must read the new state rather than
+    // the tokenInvalid it was started with — which would never refresh.
+    watcher.connectorStateDidChange(to: .sessionExpired)
+    sleeper.fireOneTick()
+    for _ in 0..<40 {
+        if refreshCount == 1 {
+            break
+        }
+        await Task.yield()
+    }
+
+    #expect(refreshCount == 1)
+    watcher.stop()
 }

@@ -102,6 +102,37 @@ import Testing
         #expect(entry.isStale == true)
     }
 
+    @Test func marksEntryStaleWhenProviderHasARecentCachedFailure() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        var cache = SnapshotCache(
+            schemaVersion: 1,
+            snapshots: [
+                usageSnapshot(
+                    provider: "anthropic",
+                    product: "claude_code",
+                    poolKey: "anthropic_claude_subscription",
+                    utilization: 0.10
+                )
+            ],
+            updatedAtByProvider: [CachedProviderID.claude.rawValue: now],
+            lastSuccessfulRefreshAtByProvider: [
+                CachedProviderID.claude.rawValue: now
+            ],
+            lastErrorByProvider: [:]
+        )
+        cache.recordFailure(
+            for: .claude,
+            code: .sessionExpired,
+            message: "Claude Code session expired",
+            now: now
+        )
+
+        let entry = SnapshotEntryBuilder.entry(from: cache, now: now)
+
+        #expect(entry.rows[0].state == .connected(percentage: 90))
+        #expect(entry.isStale == true)
+    }
+
     @Test func returnsPlaceholderEntryWhenCacheIsEmpty() {
         let entry = SnapshotEntryBuilder.placeholder()
 

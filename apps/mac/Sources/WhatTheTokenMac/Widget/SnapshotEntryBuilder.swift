@@ -32,6 +32,9 @@ enum SnapshotEntryBuilder {
     }
 
     private static func isProviderStale(_ provider: WidgetProvider, in cache: SnapshotCache, now: Date) -> Bool {
+        if cache.lastErrorByProvider[provider.cacheID.rawValue] != nil {
+            return true
+        }
         guard let updatedAt = cache.updatedAtByProvider[provider.cacheID.rawValue] else {
             return cache.updatedAtByProvider.isEmpty
         }

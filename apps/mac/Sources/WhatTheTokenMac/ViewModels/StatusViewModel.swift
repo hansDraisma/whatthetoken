@@ -524,12 +524,15 @@ final class StatusViewModel {
         guard reason.isManual || cache.allowsAutomaticRefresh(for: .claude, now: now()) else { return }
 
         if let claudeVersionProvider, claudeVersionProvider.claudeVersion == "unknown" {
-            replaceSnapshots(matching: CachedProviderID.claude.snapshotPredicate, with: [])
-            cache.removeProvider(.claude)
-            _ = await saveCacheAndReloadWidget(cache)
             connectorState = .missingClaudeCli
             connectorStatusMessage = ClaudeConnectorSetupCopy.title(for: .missingClaudeCli)
-            lastClaudeRefreshAt = now()
+            cache.recordFailure(
+                for: .claude,
+                code: .missingClaudeCLI,
+                message: connectorStatusMessage,
+                now: now()
+            )
+            _ = await saveCacheAndReloadWidget(cache)
             return
         }
 
@@ -546,16 +549,32 @@ final class StatusViewModel {
                 return
             }
 
-            replaceSnapshots(matching: CachedProviderID.claude.snapshotPredicate, with: result.snapshots)
             connectorState = Self.setupState(for: result.status.source.state)
             connectorStatusMessage = result.status.message
-            lastClaudeRefreshAt = now()
-            cache.replaceSnapshots(result.snapshots, for: .claude, at: lastClaudeRefreshAt!)
+
+            if result.status.source.state == .connected {
+                replaceSnapshots(
+                    matching: CachedProviderID.claude.snapshotPredicate,
+                    with: result.snapshots
+                )
+                lastClaudeRefreshAt = now()
+                cache.replaceSnapshots(result.snapshots, for: .claude, at: lastClaudeRefreshAt!)
+            } else {
+                cache.recordFailure(
+                    for: .claude,
+                    code: Self.cacheErrorCode(for: result.status.source.state),
+                    message: result.status.message,
+                    now: now()
+                )
+            }
             _ = await saveCacheAndReloadWidget(cache)
-            if reason == .timerTick {
+
+            if result.status.source.state == .connected, reason == .timerTick {
                 lastBackgroundRefreshAtByProvider[.claude] = lastClaudeRefreshAt
             }
-            await evaluateNotifications(suppressDelivery: false, scopedTo: .claude)
+            if result.status.source.state == .connected {
+                await evaluateNotifications(suppressDelivery: false, scopedTo: .claude)
+            }
         } catch {
             guard !Task.isCancelled else {
                 connectorState = previousState
@@ -590,16 +609,32 @@ final class StatusViewModel {
                 return
             }
 
-            replaceSnapshots(matching: CachedProviderID.codex.snapshotPredicate, with: result.snapshots)
             codexConnectorState = Self.codexSetupState(for: result.status.source.state)
             codexConnectorStatusMessage = result.status.message
-            lastCodexRefreshAt = now()
-            cache.replaceSnapshots(result.snapshots, for: .codex, at: lastCodexRefreshAt!)
+
+            if result.status.source.state == .connected {
+                replaceSnapshots(
+                    matching: CachedProviderID.codex.snapshotPredicate,
+                    with: result.snapshots
+                )
+                lastCodexRefreshAt = now()
+                cache.replaceSnapshots(result.snapshots, for: .codex, at: lastCodexRefreshAt!)
+            } else {
+                cache.recordFailure(
+                    for: .codex,
+                    code: Self.cacheErrorCode(for: result.status.source.state),
+                    message: result.status.message,
+                    now: now()
+                )
+            }
             _ = await saveCacheAndReloadWidget(cache)
-            if reason == .timerTick {
+
+            if result.status.source.state == .connected, reason == .timerTick {
                 lastBackgroundRefreshAtByProvider[.codex] = lastCodexRefreshAt
             }
-            await evaluateNotifications(suppressDelivery: false, scopedTo: .codex)
+            if result.status.source.state == .connected {
+                await evaluateNotifications(suppressDelivery: false, scopedTo: .codex)
+            }
         } catch {
             guard !Task.isCancelled else {
                 codexConnectorState = previousState
@@ -751,6 +786,29 @@ final class StatusViewModel {
         }
     }
 
+    private static func cacheErrorCode(
+        for sourceState: ConnectorSourceState
+    ) -> CachedProviderError.Code {
+        switch sourceState {
+        case .sessionExpired:
+            return .sessionExpired
+        case .missingCredentials:
+            return .missingCredentials
+        case .permissionDenied:
+            return .permissionDenied
+        case .tokenInvalid:
+            return .tokenInvalid
+        case .rateLimited:
+            return .rateLimited
+        case .schemaChanged:
+            return .schemaChanged
+        case .networkError:
+            return .network
+        case .connected, .notConnected, .stale:
+            return .unavailable
+        }
+    }
+
     private func replaceSnapshots(
         matching predicate: (UsageSnapshot) -> Bool,
         with replacement: [UsageSnapshot]
@@ -839,7 +897,7 @@ final class StatusViewModel {
             connectorState = .connected
             connectorStatusMessage = "Claude Code paused"
         } else if let error = cache.lastErrorByProvider[CachedProviderID.claude.rawValue] {
-            connectorState = error.code == .schemaChanged ? .schemaChanged : .networkError
+            connectorState = Self.claudeSetupState(forCached: error.code)
             connectorStatusMessage = error.message
         } else {
             connectorState = .connected
@@ -853,11 +911,47 @@ final class StatusViewModel {
             codexConnectorState = .connected
             codexConnectorStatusMessage = "Codex paused"
         } else if let error = cache.lastErrorByProvider[CachedProviderID.codex.rawValue] {
-            codexConnectorState = error.code == .schemaChanged ? .schemaChanged : .networkError
+            codexConnectorState = Self.codexSetupState(forCached: error.code)
             codexConnectorStatusMessage = error.message
         } else {
             codexConnectorState = .connected
             codexConnectorStatusMessage = CodexConnectorSetupCopy.title(for: .connected)
+        }
+    }
+
+    private static func claudeSetupState(
+        forCached code: CachedProviderError.Code
+    ) -> ClaudeConnectorSetupState {
+        switch code {
+        case .sessionExpired:
+            return .sessionExpired
+        case .missingCredentials:
+            return .missingCredentials
+        case .missingClaudeCLI:
+            return .missingClaudeCli
+        case .permissionDenied, .tokenInvalid:
+            return .tokenInvalid
+        case .rateLimited:
+            return .rateLimited
+        case .schemaChanged:
+            return .schemaChanged
+        case .network, .unavailable:
+            return .networkError
+        }
+    }
+
+    private static func codexSetupState(
+        forCached code: CachedProviderError.Code
+    ) -> CodexConnectorSetupState {
+        switch code {
+        case .missingCredentials, .tokenInvalid:
+            return .missingCredentials
+        case .permissionDenied:
+            return .permissionDenied
+        case .schemaChanged:
+            return .schemaChanged
+        case .missingClaudeCLI, .network, .rateLimited, .sessionExpired, .unavailable:
+            return .networkError
         }
     }
 

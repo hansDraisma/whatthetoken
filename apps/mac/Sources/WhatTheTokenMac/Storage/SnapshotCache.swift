@@ -131,6 +131,12 @@ struct CachedProviderError: Codable, Equatable, Sendable {
         case network
         case schemaChanged
         case unavailable
+        case sessionExpired
+        case missingCredentials
+        case permissionDenied
+        case tokenInvalid
+        case missingClaudeCLI
+        case rateLimited
     }
 
     var code: Code

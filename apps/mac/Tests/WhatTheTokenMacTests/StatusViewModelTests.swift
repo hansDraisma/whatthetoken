@@ -212,7 +212,7 @@ private func sensitiveKeyMatches(
 }
 
 @MainActor
-@Test func connectClaudeCode_stampsTimestamp_onMissingCLIPath() async {
+@Test func connectClaudeCode_doesNotStampTimestamp_onMissingCLIPath() async {
     let vm = StatusViewModel(
         snapshots: [],
         claudeRefresher: NoopClaudeRefresher(),
@@ -220,16 +220,16 @@ private func sensitiveKeyMatches(
     )
     #expect(vm.lastClaudeRefreshAt == nil)
     await vm.connectClaudeCode()
-    #expect(vm.lastClaudeRefreshAt != nil)
+    #expect(vm.lastClaudeRefreshAt == nil)
     #expect(vm.connectorState == .missingClaudeCli)
 }
 
 @MainActor
-@Test func connectClaudeCode_stampsTimestamp_onNoRefresherPath() async {
+@Test func connectClaudeCode_doesNotStampTimestamp_onNoRefresherPath() async {
     let vm = StatusViewModel(snapshots: [])
     #expect(vm.lastClaudeRefreshAt == nil)
     await vm.connectClaudeCode()
-    #expect(vm.lastClaudeRefreshAt != nil)
+    #expect(vm.lastClaudeRefreshAt == nil)
     #expect(vm.connectorState == .notConnected)
 }
 
@@ -286,7 +286,7 @@ private func sensitiveKeyMatches(
 }
 
 @MainActor
-@Test func connectClaudeCode_missingCLI_preservesCodexSnapshots() async {
+@Test func connectClaudeCode_missingCLI_preservesLastKnownSnapshots() async {
     let codexSnapshot = UsageSnapshotFixture.codexSample()
     let claudeSnapshot = UsageSnapshotFixture.claudeSample()
     let vm = StatusViewModel(
@@ -298,16 +298,16 @@ private func sensitiveKeyMatches(
     await vm.connectClaudeCode()
 
     #expect(vm.snapshots.contains(where: { $0.id == codexSnapshot.id }))
-    #expect(!vm.snapshots.contains(where: { $0.id == claudeSnapshot.id }))
+    #expect(vm.snapshots.contains(where: { $0.id == claudeSnapshot.id }))
     #expect(vm.connectorState == .missingClaudeCli)
 }
 
 @MainActor
-@Test func connectCodex_stampsTimestamp_onNoRefresherPath() async {
+@Test func connectCodex_doesNotStampTimestamp_onNoRefresherPath() async {
     let vm = StatusViewModel(snapshots: [])
     #expect(vm.lastCodexRefreshAt == nil)
     await vm.connectCodex()
-    #expect(vm.lastCodexRefreshAt != nil)
+    #expect(vm.lastCodexRefreshAt == nil)
     #expect(vm.codexConnectorState == .notConnected)
 }
 

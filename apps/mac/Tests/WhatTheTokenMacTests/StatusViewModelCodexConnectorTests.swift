@@ -53,6 +53,38 @@ import Testing
 }
 
 @MainActor
+@Test func persistedCodexPermissionDeniedRestoresPermissionDeniedNotMissingCredentials() async {
+    var settings = AppSettings.defaults
+    settings.connectors.codex.isEnabled = true
+    let settingsStore = InMemoryAppSettingsStore(
+        data: try! JSONEncoder.prettyStable.encode(settings)
+    )
+    let cacheStore = InMemorySnapshotCacheStore()
+    let firstViewModel = StatusViewModel(
+        settings: settings,
+        codexRefresher: CountingCodexConnectorRefresher(
+            result: .success(.permissionDenied())
+        ),
+        settingsStore: settingsStore,
+        cacheStore: cacheStore
+    )
+
+    await firstViewModel.refreshAll(reason: .manual)
+
+    let restoredViewModel = StatusViewModel(
+        settingsStore: settingsStore,
+        cacheStore: cacheStore
+    )
+    await restoredViewModel.loadPersistedState()
+
+    #expect(restoredViewModel.codexConnectorState == .permissionDenied)
+    #expect(
+        restoredViewModel.codexConnectorStatusMessage
+            == "Codex app-server could not be started"
+    )
+}
+
+@MainActor
 @Test func duplicateCodexConnectsWhileCheckingStartOnlyOneRefresh() async {
     let refresher = SuspendedCodexConnectorRefresher(result: .connected(snapshots: [.codexUsage()]))
     let viewModel = StatusViewModel(codexRefresher: refresher)
@@ -235,6 +267,18 @@ private extension CodexConnectorResult {
                 product: "codex",
                 source: source,
                 message: "Sign in to Codex locally with codex login, then retry."
+            )
+        )
+    }
+
+    static func permissionDenied() -> CodexConnectorResult {
+        let source = ConnectorSource.codex(state: .permissionDenied)
+        return CodexConnectorResult(
+            snapshots: [],
+            status: ConnectorStatus(
+                product: "codex",
+                source: source,
+                message: "Codex app-server could not be started"
             )
         )
     }

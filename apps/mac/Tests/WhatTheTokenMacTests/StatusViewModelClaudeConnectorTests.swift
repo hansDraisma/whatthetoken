@@ -116,6 +116,161 @@ import Testing
 }
 
 @MainActor
+@Test func sessionExpiredDoesNotStampASuccessfulRefreshTimestamp() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let previousRefreshAt = Date(timeIntervalSince1970: 1_000)
+    let failedAt = Date(timeIntervalSince1970: 2_000)
+    var cache = SnapshotCache.empty
+    cache.replaceSnapshots([.claudeUsage()], for: .claude, at: previousRefreshAt)
+    let cacheStore = InMemorySnapshotCacheStore(
+        data: try! JSONEncoder.cacheEncoder.encode(cache)
+    )
+    let refresher = CountingClaudeConnectorRefresher(result: .success(.sessionExpired()))
+    let viewModel = StatusViewModel(
+        snapshots: [.claudeUsage()],
+        settings: settings,
+        cache: cache,
+        claudeRefresher: refresher,
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        cacheStore: cacheStore,
+        now: { failedAt }
+    )
+    viewModel.testSet_lastClaudeRefreshAt(previousRefreshAt)
+
+    await viewModel.refreshAll(reason: .manual)
+    let persisted = await cacheStore.load()
+
+    #expect(viewModel.lastClaudeRefreshAt == previousRefreshAt)
+    #expect(viewModel.snapshots.map(\.id) == [UsageSnapshot.claudeUsage().id])
+    #expect(
+        persisted.lastSuccessfulRefreshAtByProvider[CachedProviderID.claude.rawValue]
+            == previousRefreshAt
+    )
+    #expect(
+        persisted.lastErrorByProvider[CachedProviderID.claude.rawValue]?.code
+            == .sessionExpired
+    )
+}
+
+@MainActor
+@Test func persistedSessionExpiredErrorRestoresSessionExpiredStateNotConnected() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    var cache = SnapshotCache.empty
+    cache.recordFailure(
+        for: .claude,
+        code: .sessionExpired,
+        message: "Claude Code session expired",
+        now: Date(timeIntervalSince1970: 1_000)
+    )
+    let viewModel = StatusViewModel(
+        settingsStore: InMemoryAppSettingsStore(
+            data: try! JSONEncoder.prettyStable.encode(settings)
+        ),
+        cacheStore: InMemorySnapshotCacheStore(
+            data: try! JSONEncoder.cacheEncoder.encode(cache)
+        )
+    )
+
+    await viewModel.loadPersistedState()
+
+    #expect(viewModel.connectorState == .sessionExpired)
+    #expect(viewModel.connectorStatusMessage == "Claude Code session expired")
+}
+
+@MainActor
+@Test func persistedMissingCredentialsRestoresMissingCredentialsNotTokenInvalid() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let settingsStore = InMemoryAppSettingsStore(
+        data: try! JSONEncoder.prettyStable.encode(settings)
+    )
+    let cacheStore = InMemorySnapshotCacheStore()
+    let firstViewModel = StatusViewModel(
+        settings: settings,
+        claudeRefresher: CountingClaudeConnectorRefresher(
+            result: .success(.missingCredentials())
+        ),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        settingsStore: settingsStore,
+        cacheStore: cacheStore
+    )
+
+    await firstViewModel.refreshAll(reason: .manual)
+
+    let restoredViewModel = StatusViewModel(
+        settingsStore: settingsStore,
+        cacheStore: cacheStore
+    )
+    await restoredViewModel.loadPersistedState()
+
+    #expect(restoredViewModel.connectorState == .missingCredentials)
+    #expect(
+        restoredViewModel.connectorStatusMessage
+            == "Claude Code credentials were not found"
+    )
+}
+
+@MainActor
+@Test func persistedMissingClaudeCLIRestoresMissingClaudeCLINotTokenInvalid() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let settingsStore = InMemoryAppSettingsStore(
+        data: try! JSONEncoder.prettyStable.encode(settings)
+    )
+    let cacheStore = InMemorySnapshotCacheStore()
+    let firstViewModel = StatusViewModel(
+        settings: settings,
+        claudeRefresher: CountingClaudeConnectorRefresher(result: .success(.connected())),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "unknown"),
+        settingsStore: settingsStore,
+        cacheStore: cacheStore
+    )
+
+    await firstViewModel.refreshAll(reason: .manual)
+
+    let restoredViewModel = StatusViewModel(
+        settingsStore: settingsStore,
+        cacheStore: cacheStore
+    )
+    await restoredViewModel.loadPersistedState()
+
+    #expect(restoredViewModel.connectorState == .missingClaudeCli)
+    #expect(restoredViewModel.connectorStatusMessage == "Claude Code CLI was not found")
+}
+
+@MainActor
+@Test func persistedRateLimitRestoresRateLimitedNotNetworkError() async {
+    var settings = AppSettings.defaults
+    settings.connectors.claudeCode.isEnabled = true
+    let settingsStore = InMemoryAppSettingsStore(
+        data: try! JSONEncoder.prettyStable.encode(settings)
+    )
+    let cacheStore = InMemorySnapshotCacheStore()
+    let firstViewModel = StatusViewModel(
+        settings: settings,
+        claudeRefresher: CountingClaudeConnectorRefresher(
+            result: .success(.rateLimited())
+        ),
+        claudeVersionProvider: StaticClaudeVersionProvider(claudeVersion: "1.0.0"),
+        settingsStore: settingsStore,
+        cacheStore: cacheStore
+    )
+
+    await firstViewModel.refreshAll(reason: .manual)
+
+    let restoredViewModel = StatusViewModel(
+        settingsStore: settingsStore,
+        cacheStore: cacheStore
+    )
+    await restoredViewModel.loadPersistedState()
+
+    #expect(restoredViewModel.connectorState == .rateLimited)
+    #expect(restoredViewModel.connectorStatusMessage == "Claude usage is rate limited")
+}
+
+@MainActor
 @Test func connectClaudeCodeFailsBeforeCredentialReadWhenCliVersionIsUnknown() async {
     let refresher = CountingClaudeConnectorRefresher(result: .success(.connected()))
     let viewModel = StatusViewModel(
@@ -263,6 +418,18 @@ private extension ClaudeConnectorResult {
                 product: "claude_code",
                 source: source,
                 message: "Claude Code session expired"
+            )
+        )
+    }
+
+    static func rateLimited() -> ClaudeConnectorResult {
+        let source = ConnectorSource.claude(state: .rateLimited)
+        return ClaudeConnectorResult(
+            snapshots: [],
+            status: ConnectorStatus(
+                product: "claude_code",
+                source: source,
+                message: "Claude usage is rate limited"
             )
         )
     }

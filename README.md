@@ -14,8 +14,6 @@ in one place, and is honest about how much it actually knows.
 [![Platform](https://img.shields.io/badge/macOS-14%2B-lightgrey?style=flat-square)](#install)
 [![Swift](https://img.shields.io/badge/Swift-6-orange?style=flat-square)](apps/mac)
 
-<img src="docs/assets/popover-claude.png" width="360" alt="WhatTheToken popover showing Claude Code usage">
-
 </div>
 
 ---
@@ -42,11 +40,9 @@ WhatTheToken sits in your menu bar and answers three questions:
 
 That third question is the one most tools skip.
 
-<div align="center">
-<img src="docs/assets/popover-codex.png" width="360" alt="Codex tab">
-&nbsp;&nbsp;
-<img src="docs/assets/menu-bar.png" width="360" alt="Menu bar icon">
-</div>
+A 320-point popover hangs off the menu bar icon, one tab per provider. Each row is a quota
+pool: what's left, when it resets, how confident the number is, and a colour that changes
+as you approach the wall. No Dock icon, no window to manage.
 
 ## Why this is harder than it looks
 

@@ -160,12 +160,22 @@ Download the newest signed and notarised DMG from
 shasum -a 256 -c WhatTheToken-<version>.dmg.sha256
 ```
 
-Open the DMG, drag **WhatTheToken** to Applications, and launch it. macOS may show a
-Gatekeeper prompt the first time — choose Open. The app appears in the menu bar and adds
-no Dock icon.
+Open the DMG, drag **WhatTheToken** to Applications, and launch it.
+macOS may show a Gatekeeper confirmation on first launch — choose Open. The app then
+appears in the menu bar with no Dock icon.
 
 Requires **macOS 14 or later**. Both connectors start disconnected; connect them from the
 Connectors pane when you are ready.
+
+### Updates
+
+Updates are manual-first. Sparkle is wired for an explicit `Check for Updates` action in
+builds that embed the public appcast URL and EdDSA public key.
+Automatic background checks and silent installs remain disabled, so the app never contacts
+the update feed unless you ask it to.
+
+GitHub Releases is always a supported path for fetching the newest signed and notarised DMG
+yourself.
 
 ## What it does not do
 
@@ -174,8 +184,8 @@ Being clear about the edges:
 - **No ChatGPT or Gemini quota.** No API exists. Guessing would defeat the point.
 - **No API spend tracking.** This is about subscription quotas, not billing dashboards.
 - **No iOS, web, or browser surface.** macOS menu bar only.
-- **No automatic updates.** `Check for Updates` is explicit and manual by design;
-  background checks and silent installs are disabled.
+- **No automatic updates.** Checking for one is something you do, not something that
+  happens to you. See [Updates](#updates).
 - **Codex numbers are `observed`, not `verified`,** until the app-server quota semantics
   are fully validated.
 

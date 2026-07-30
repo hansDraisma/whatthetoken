@@ -80,6 +80,11 @@ Public V1 is manual-first:
 
 Do not announce Sparkle update support until the signed old-build to new-build smoke passes.
 
+Do not market Sparkle as the primary update path until the public appcast and signed
+old-build to new-build smoke test are complete. Customer-facing copy may describe
+`Check for Updates` as available, but GitHub Releases stays the documented supported path
+until that smoke passes.
+
 ## Long-Term Site Roadmap
 
 An owned site or custom domain is optional after Public V1 is stable. Moving the appcast requires a redirect and migration plan for already-installed apps, an ownership and DNS recovery plan, and an update smoke. Do not change the appcast URL casually after public builds have shipped.

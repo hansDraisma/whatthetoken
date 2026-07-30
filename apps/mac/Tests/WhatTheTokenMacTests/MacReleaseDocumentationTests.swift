@@ -12,8 +12,10 @@ import Testing
     #expect(readme.contains("menu bar with no Dock icon"))
     #expect(readme.contains("explicit `Check for Updates` action"))
     #expect(readme.contains("builds that embed the public appcast URL and EdDSA public key"))
-    #expect(readme.contains("Do not market Sparkle as the primary update path until"))
     #expect(readme.contains("Automatic background checks and silent installs remain disabled"))
+    // Maintainer directive, not customer copy: it lives with the other release-posture
+    // rules in the hosting runbook rather than on the public README.
+    #expect(hosting.contains("Do not market Sparkle as the primary update path until"))
     #expect(hosting.contains("GitHub Releases"))
     #expect(hosting.contains("GitHub Pages"))
     #expect(hosting.contains("hansDraisma/whatthetoken-releases"))

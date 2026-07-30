@@ -1,106 +1,239 @@
+<div align="center">
+
+<img src="docs/assets/icon.png" width="120" alt="WhatTheToken">
+
 # WhatTheToken
 
-Open, local-first AI quota status for developers using multiple coding agents.
+**Know which AI coding tool you can still use — before it cuts you off.**
+
+A local-first macOS menu bar app that shows your Claude Code and Codex usage limits
+in one place, and is honest about how much it actually knows.
+
+[![Download](https://img.shields.io/badge/Download-macOS%20DMG-146ef5?style=for-the-badge)](https://github.com/hansDraisma/whatthetoken-releases/releases/latest)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/macOS-14%2B-lightgrey?style=flat-square)](#install)
+[![Swift](https://img.shields.io/badge/Swift-6-orange?style=flat-square)](apps/mac)
+
+</div>
+
+---
+
+## The problem
+
+You are forty minutes into a refactor. Claude Code stops and tells you the five-hour
+window is gone. You had no warning, because the only place that number lives is inside
+the tool that just stopped talking to you.
+
+So you switch to Codex. Is there room there? No idea — that is a different tool, with a
+different window, in a different place. You find out by hitting the wall a second time.
+
+Paying for several AI subscriptions means juggling several invisible budgets. There is no
+one place to look.
+
+## What it does
+
+WhatTheToken sits in your menu bar and answers three questions:
+
+- **Which tool can I use right now?**
+- **When does the constrained window reset?**
+- **How much should I trust this number?**
+
+That third question is the one most tools skip.
+
+A 320-point popover hangs off the menu bar icon, one tab per provider. Each row is a quota
+pool: what's left, when it resets, how confident the number is, and a colour that changes
+as you approach the wall. No Dock icon, no window to manage.
+
+## Why this is harder than it looks
+
+There is no standard for this. Providers expose wildly different amounts of truth about
+your own quota, and one of them exposes none at all:
+
+| Provider | What is actually available | What we can honestly claim |
+|---|---|---|
+| **Claude Code** | An OAuth usage endpoint — undocumented, but used by Anthropic's own client, so stable in practice. Returns real window utilisation and reset times. | `verified` — real numbers |
+| **Codex** | No public quota API. But the local Codex app-server answers `account/rateLimits/read`, so the number comes from the tool itself. | `observed` — from the local client |
+| **ChatGPT / Gemini** | No quota API of any kind. Limits are dynamic and shift with system load. | Nothing. So they are not supported. |
+
+The tempting move is to model the last row anyway, guess, and render it in the same
+confident font as the rest. That is how usage trackers end up lying to you politely.
+
+WhatTheToken makes the opposite trade: **fewer providers, and every number labelled.**
+
+## The confidence model
+
+Every value carries provenance, shown next to the number rather than buried in docs:
+
+| Label | Meaning |
+|---|---|
+| `verified` | Authoritative provider or local quota data |
+| `observed` | Directly counted from a local client |
+| `estimated` | Inferred from observed activity and public limits |
+| `stale` | The last signal is too old to trust |
+
+Freshness is re-evaluated on load, not frozen at write time — so a snapshot that was
+accurate an hour ago is *shown as stale*, not shown as fact. Rows can also carry an
+undercount warning when the reading may be low.
+
+The reasoning is in [ADR 0002](docs/adr/0002-confidence-labels-and-provenance.md).
+
+## Privacy, by construction
+
+The interesting privacy question is not "do you promise?" — it is "what would I have to
+trust you about?" The answer here is: as little as possible.
+
+**There is no account and no backend.** Nothing to sign into, nothing to breach. In
+released builds the app talks to exactly two kinds of destination: the providers you have
+explicitly connected, and the update feed — the latter only when you click
+`Check for Updates` yourself. No analytics and no crash reporting: the error-reporting
+seam ships with an empty DSN, which the app treats as "off", so the SDK never starts.
+
+**Credentials are read-only, and never redeemed.** For Claude Code the app reads the
+local Keychain item after you consent, uses the access token in memory to ask for usage
+status, and discards it. It never writes a provider credential, never mints one, and
+never redeems a refresh token — because OAuth refresh rotation is usually single-use, so
+redeeming it could invalidate Claude Code's own copy and sign you out. That restraint is
+written down in [ADR 0003](docs/adr/0003-never-refresh-provider-tokens.md).
+
+For Codex, no credential is read at all. Authentication stays inside Codex; the app talks
+to the local app-server and decodes only rate-limit metadata.
+
+**The deny list is explicit.** Prompts, completions, conversation content, cookies, auth
+headers, bearer tokens, session tokens, API keys, and raw provider payloads must never be
+collected, persisted, logged, *or used in a test fixture*. That last one matters — it is
+where this kind of promise usually leaks.
+
+Connectors start disconnected. Background refresh is off until you turn it on.
+Disconnecting deletes that provider's cached data, and if any part of that deletion fails
+the app keeps saying "connected" rather than claiming a cleanup it did not finish.
+
+Full boundary: [privacy-boundaries.md](docs/architecture/privacy-boundaries.md).
+And since the source is here, none of the above has to be taken on faith.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    subgraph mac["Mac app · Swift 6 / SwiftUI"]
+        UI["Menu bar + popover"]
+        VM["StatusViewModel"]
+        CACHE["Sanitized snapshot cache"]
+    end
+
+    subgraph conn["Connectors · read-only, opt-in"]
+        CL["Claude Code<br/>Keychain read → usage endpoint"]
+        CX["Codex<br/>local app-server JSON-RPC"]
+    end
+
+    subgraph core["@whatthetoken/core · TypeScript"]
+        SCHEMA["Snapshot schema"]
+        STALE["Staleness rules"]
+    end
+
+    CL -->|"sanitized snapshots"| VM
+    CX -->|"sanitized snapshots"| VM
+    VM --> UI
+    VM <--> CACHE
+    SCHEMA -.->|"contract test"| CACHE
+    STALE -.->|"shared rules"| VM
+```
+
+Two things worth pointing out:
+
+**The snapshot shape is a contract, not a convention.** The schema lives in TypeScript,
+and a test in the TS package reaches across into the Swift app's bundled fixture and
+validates the raw JSON against that schema — so a mapper change that breaks the shape
+fails a test in the other language.
+
+**Nothing in the diagram is a server.** The data path ends at your menu bar.
+
+- Data contract: [`docs/architecture/data-contract.md`](docs/architecture/data-contract.md)
+- Stack and approach: [`docs/architecture/tech-stack-and-development-approach.md`](docs/architecture/tech-stack-and-development-approach.md)
+
+## Install
+
+Download the newest signed and notarised DMG from
+[Releases](https://github.com/hansDraisma/whatthetoken-releases/releases/latest).
+
+```bash
+# optional, recommended: verify the download
+shasum -a 256 -c WhatTheToken-<version>.dmg.sha256
+```
+
+Open the DMG, drag **WhatTheToken** to Applications, and launch it. macOS may show a
+Gatekeeper prompt the first time — choose Open. The app appears in the menu bar and adds
+no Dock icon.
+
+Requires **macOS 14 or later**. Both connectors start disconnected; connect them from the
+Connectors pane when you are ready.
+
+## What it does not do
+
+Being clear about the edges:
+
+- **No ChatGPT or Gemini quota.** No API exists. Guessing would defeat the point.
+- **No API spend tracking.** This is about subscription quotas, not billing dashboards.
+- **No iOS, web, or browser surface.** macOS menu bar only.
+- **No automatic updates.** `Check for Updates` is explicit and manual by design;
+  background checks and silent installs are disabled.
+- **Codex numbers are `observed`, not `verified`,** until the app-server quota semantics
+  are fully validated.
 
 ## Status
 
-WhatTheToken is in active development ahead of Public V1: the first signed and notarized free DMG with Claude Code and Codex support. Expect rough edges until then.
+Active development ahead of Public V1. Current release is **0.1.5** — a signed and
+notarised free DMG with Claude Code and Codex support. Expect rough edges.
 
-## What It Answers
+Roadmap: [`docs/roadmap/development-roadmap.md`](docs/roadmap/development-roadmap.md).
 
-- Which AI coding tool can I use right now?
-- When will constrained quota reset?
-- How reliable is this number?
-
-## Current Support
-
-| Provider | Product | Surface | Status | Confidence model |
-|---|---|---|---|---|
-| Anthropic | Claude Code | CLI | Implemented connector path | Verified when provider usage status is available |
-| OpenAI | Codex | Local app-server | Implemented connector path | Observed until app-server quota semantics are fully validated |
-
-Provider expansion is post-Public V1 unless the roadmap is explicitly changed.
-
-## Privacy Promise
-
-Provider credentials stay on your device. WhatTheToken stores and displays only sanitized usage status.
-
-The app must not collect prompts, responses, conversation content, cookies, auth headers, bearer tokens, provider session tokens, raw provider payloads, or raw local databases that can contain forbidden data.
-
-Every usage number must be labeled as `verified`, `observed`, `estimated`, or `stale`.
-
-## Local Persistence And Refresh
-
-The Mac app persists connector consent, refresh preferences, notification preferences, a sanitized snapshot cache, and sanitized notification dedupe state in Application Support (`settings.json`, `snapshot-cache.json`, `notification-state.json`). It does not persist provider credentials, raw provider payloads, prompts, responses, cookies, auth headers, or provider session tokens.
-
-Connectors start disconnected by default. `Connect Claude Code` and `Connect Codex` are explicit opt-in actions. `Pause` stops refresh for a connector while keeping sanitized cached values visible. `Disconnect ...` stops future reads for that provider and removes that provider's cached usage snapshots and notification dedupe state from WhatTheToken storage. The app must not present a provider as disconnected unless disabled consent, cache removal, and notification-state removal are all persisted; if any write fails the provider stays connected.
-
-Manual refresh remains available for connected, unpaused providers. Opening the popover may refresh enabled connectors subject to provider backoff, and skips a per-provider refresh that ran in the last 60 seconds via background auto-refresh. Timer-based auto-refresh is optional, off by default, and runs while the app process is running only after explicit user opt-in. During refresh, existing values remain visible with a small updating indicator; the last-updated timestamp appears in the footer only.
-
-## Notifications
-
-Local notifications warn before quota runs out. The master toggle is off by default; enabling it requests macOS notification permission. Per-provider toggles default to enabled. Default thresholds are 20% (warning) and 10% (critical). Notifications respect connector pause state, never fire on stale snapshots, and dedupe per provider/pool/window with recovery and rolling-window cooldown so flapping pools do not spam. The menu bar surfaces a critical state when any enabled, unpaused provider has an exhausted-or-critical included quota pool.
-
-## License
-
-WhatTheToken uses Apache-2.0. Copyright 2026 Hans Draisma unless otherwise noted. See `LICENSE` and `NOTICE`; third-party components bundled in the app are attributed in `THIRD_PARTY_NOTICES.md`.
-
-## Trademarks
-
-WhatTheToken is an independent, community project and is not affiliated with, endorsed by, or sponsored by Anthropic or OpenAI. "Claude", "Claude Code", and "Anthropic" are trademarks of Anthropic, PBC; "Codex", "ChatGPT", and "OpenAI" are trademarks of OpenAI, Inc. All product names and brands are the property of their respective owners and are used only for identification (nominative fair use). See `NOTICE`.
-
-## Local Development
-
-Prerequisites:
-
-- macOS 14 or newer for the Mac app target
-- Swift 6 toolchain
-- Node.js compatible with the workspace package manager
-- pnpm 10
-
-Install dependencies:
+## Development
 
 ```bash
 pnpm install --frozen-lockfile
-```
 
-Run TypeScript core tests:
-
-```bash
+# TypeScript core
 pnpm --filter @whatthetoken/core test
+
+# Mac app
+cd apps/mac && swift test
+
+# build a runnable .app
+apps/mac/Scripts/package-app.sh
 ```
 
-Run Mac tests:
+Prerequisites: macOS 14+, Swift 6 toolchain, Node, pnpm 10.
 
-```bash
-cd apps/mac
-swift test
-```
+CI runs on synthetic fixtures only. It needs no provider credentials, no Keychain access,
+and makes no provider network calls — and neither should any test you write.
 
-## CI
+## Contributing
 
-GitHub Actions runs the synthetic test workflow on pull requests, pushes to `main`, and manual dispatch from the Actions tab. The workflow does not require live provider credentials, Keychain access, Codex app-server access, cookies, browser state, or provider network calls.
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) has the setup, the
+invariants, and an honest map of what adding a new provider connector actually involves —
+including the places where the code currently assumes exactly two providers and would
+need generalising first. If you want a way in, those are good places to start.
 
-## Connector Safety
+The one rule that is not negotiable: **never add prompts, responses, credentials, tokens,
+cookies, or raw provider payloads to code, tests, fixtures, logs, or issues.** Anything
+that weakens the deny list in
+[privacy-boundaries.md](docs/architecture/privacy-boundaries.md) needs an ADR first.
 
-Live provider checks are manual and opt-in. CI uses synthetic fixtures only.
+Architecture decisions worth reading before proposing changes:
 
-Claude Code and Codex connectors must discard raw provider responses after parsing and must never persist copied provider credentials in WhatTheToken storage.
+- [ADR 0001 — Local-first, minimal data ingestion](docs/adr/0001-local-first-minimal-data-ingestion.md)
+- [ADR 0002 — Confidence labels and provenance](docs/adr/0002-confidence-labels-and-provenance.md)
+- [ADR 0003 — Never refresh provider tokens](docs/adr/0003-never-refresh-provider-tokens.md)
 
-## Install And Updates
+## License
 
-Public V1 ships as a signed and notarized DMG from the public [WhatTheToken releases project](https://github.com/hansDraisma/whatthetoken-releases/releases). Install by opening the DMG and moving `WhatTheToken.app` to `/Applications`. macOS may show a Gatekeeper confirmation on first launch; choose Open, then the app appears in the menu bar with no Dock icon.
+Apache-2.0. Copyright 2026 Hans Draisma unless otherwise noted. See [LICENSE](LICENSE)
+and [NOTICE](NOTICE); bundled third-party components are attributed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-For Public V1, updates are manual-first. The public distribution repository is the single customer destination for downloads, checksums, privacy/security notices, and support. GitHub Releases remains the supported fallback path for the newest signed and notarized DMG. Sparkle is wired for an explicit `Check for Updates` action in builds that embed the public appcast URL and EdDSA public key. Do not market Sparkle as the primary update path until the public appcast and signed old-build to new-build smoke test are complete. Automatic background checks and silent installs remain disabled.
+## Trademarks
 
-Official release steps are documented in `docs/release/public-v1-checklist.md`.
-
-## Roadmap
-
-- Canonical roadmap: `docs/roadmap/development-roadmap.md`
-- Privacy boundary: `docs/architecture/privacy-boundaries.md`
-- Data contract: `docs/architecture/data-contract.md`
-
-## Contributing And Security
-
-Read `CONTRIBUTING.md`, `PRIVACY.md`, and `SECURITY.md` before opening connector, diagnostics, fixture, sync, or UI quota-display changes.
+WhatTheToken is an independent community project, not affiliated with, endorsed by, or
+sponsored by Anthropic or OpenAI. "Claude", "Claude Code", and "Anthropic" are trademarks
+of Anthropic, PBC; "Codex", "ChatGPT", and "OpenAI" are trademarks of OpenAI, Inc. All
+product names are the property of their respective owners and are used only for
+identification. See [NOTICE](NOTICE).

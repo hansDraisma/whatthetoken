@@ -102,6 +102,14 @@ The Mac app may persist only local app state and sanitized usage status:
 
 These files live in the app's Application Support directory. They must not contain provider credentials, copied OAuth tokens, raw provider payloads, prompts, responses, cookies, auth headers, provider session tokens, raw local database rows, or sensitive local paths.
 
+When Neon snapshot sync is explicitly configured, the Mac app sends the same validated
+`SnapshotCache` document to a WhatTheToken-owned API over HTTPS (HTTP loopback is allowed
+for local development). The API receives a separate random sync token, hashes it with
+SHA-256 for row ownership, and never stores or logs the raw token. The Neon database
+credential remains server-side and must never be embedded in the Mac app. Sync failure
+falls back to the local cache on load; a save reports failure if the remote write does not
+complete so disconnect cannot falsely claim remote deletion.
+
 Connector consent is separate from refresh. Enabling a connector allows future reads for that provider. Pausing a connector stops manual and automatic refresh while keeping sanitized cached values visible. Manual refresh may run only for enabled, unpaused connectors. Popover-open refresh is an automatic refresh trigger and must respect provider backoff. Timer-based background refresh is optional, off by default, and must run only while the app process is running after explicit user opt-in. v1 popover-only auto-refresh settings must migrate to background refresh disabled so old foreground consent does not become background consent.
 
 Refresh must preserve previously visible sanitized values when available. The UI may show a small updating indicator, but it must not blank the provider view during a refresh with cached or last-known values. Last-updated copy belongs in the footer; provider section trust lines should not duplicate the timestamp.

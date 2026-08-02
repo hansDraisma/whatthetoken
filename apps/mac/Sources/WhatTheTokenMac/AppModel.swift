@@ -68,12 +68,13 @@ final class AppModel {
         let settingsStore = JSONFileAppSettingsStore(url: appSupport.appendingPathComponent("settings.json"))
         let primaryCacheURL = WidgetSnapshotCacheFile.appGroupURL()
             ?? WidgetSnapshotCacheFile.localAppGroupURL()
-        let cacheStore = MirroringSnapshotCacheStore(
+        let localCacheStore = MirroringSnapshotCacheStore(
             primary: JSONFileSnapshotCacheStore(url: primaryCacheURL),
             mirrors: [
                 JSONFileSnapshotCacheStore(url: WidgetSnapshotCacheFile.widgetContainerMirrorURL())
             ]
         )
+        let cacheStore = NeonSnapshotSyncConfiguration.wrapping(local: localCacheStore)
         let notificationStateStore = JSONFileNotificationStateStore(url: appSupport.appendingPathComponent("notification-state.json"))
 
         let viewModel = StatusViewModel.live(

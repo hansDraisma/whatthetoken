@@ -18,7 +18,7 @@ V1 starts with Claude Code and Codex because both now have explicit local connec
 | TypeScript tests | Vitest | Fast unit tests for pure domain logic |
 | Type validation | Zod | Runtime validation for events, snapshots, and ingestor payloads |
 | Web dashboard later | Next.js | Good default for auth/dashboard when sync becomes active scope |
-| Backend later | Supabase Postgres/Auth/Realtime | Fastest path to multi-device sync with relational data and RLS |
+| Optional snapshot sync | Node.js TypeScript API + Neon Postgres | Keeps the database owner credential out of the Mac app while storing only validated sanitized caches |
 | Browser extension later | WXT | Modern TypeScript-first Chrome extension framework |
 | Payments later | Stripe | Standard SaaS billing |
 | Schema-drift reporting | Sentry Cocoa | Manual, redacted Claude parser errors only; automatic SDK collection is disabled |

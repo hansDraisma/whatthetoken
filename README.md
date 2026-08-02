@@ -82,11 +82,13 @@ The reasoning is in [ADR 0002](docs/adr/0002-confidence-labels-and-provenance.md
 The interesting privacy question is not "do you promise?" — it is "what would I have to
 trust you about?" The answer here is: as little as possible.
 
-**There is no account and no backend.** Nothing to sign into, nothing to breach. In
-released builds the app talks to exactly two kinds of destination: the providers you have
-explicitly connected, and the update feed — the latter only when you click
-`Check for Updates` yourself. No analytics and no crash reporting: the error-reporting
-seam ships with an empty DSN, which the app treats as "off", so the SDK never starts.
+**There is no account.** Released builds remain local-only by default. An opt-in sync
+configuration can mirror only the sanitized snapshot cache through the WhatTheToken API
+to Neon; provider credentials and raw provider responses never enter that path. Without
+the sync environment variables, the app talks only to providers you explicitly connect
+and the update feed when you click `Check for Updates`. No analytics and no crash
+reporting: the error-reporting seam ships with an empty DSN, which the app treats as
+"off", so the SDK never starts.
 
 **Credentials are read-only, and never redeemed.** For Claude Code the app reads the
 local Keychain item after you consent, uses the access token in memory to ask for usage
@@ -145,7 +147,8 @@ and a test in the TS package reaches across into the Swift app's bundled fixture
 validates the raw JSON against that schema — so a mapper change that breaks the shape
 fails a test in the other language.
 
-**Nothing in the diagram is a server.** The data path ends at your menu bar.
+The released app still ends at your menu bar by default. Development builds can opt into
+the Neon snapshot-sync path described below.
 
 - Data contract: [`docs/architecture/data-contract.md`](docs/architecture/data-contract.md)
 - Stack and approach: [`docs/architecture/tech-stack-and-development-approach.md`](docs/architecture/tech-stack-and-development-approach.md)
@@ -209,6 +212,23 @@ cd apps/mac && swift test
 
 # build a runnable .app
 apps/mac/Scripts/package-app.sh
+```
+
+### Local Neon sync
+
+The sync API keeps the Neon owner credential out of the macOS process. It accepts only
+the validated `SnapshotCache` contract and hashes the per-install sync token before using
+it as a database key.
+
+```bash
+# DATABASE_URL must target the dedicated `whatthetoken` Neon database
+DATABASE_URL='postgresql://…/whatthetoken?sslmode=require' pnpm --filter @whatthetoken/api migrate
+DATABASE_URL='postgresql://…/whatthetoken?sslmode=require' pnpm --filter @whatthetoken/api dev
+
+cd apps/mac
+WTT_SYNC_BASE_URL='http://127.0.0.1:4318' \
+WTT_SYNC_TOKEN='use-a-random-value-of-at-least-32-characters' \
+swift run WhatTheTokenMac
 ```
 
 Prerequisites: macOS 14+, Swift 6 toolchain, Node, pnpm 10.

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { connectorStateSchema, usageEventSchema, usageSnapshotSchema } from "../schemas";
+import {
+  connectorStateSchema,
+  snapshotCacheSchema,
+  usageEventSchema,
+  usageSnapshotSchema
+} from "../schemas";
 
 const fixtureSource = {
   connector: "manual_fixture",
@@ -10,6 +15,37 @@ const fixtureSource = {
 } as const;
 
 describe("usage schemas", () => {
+  it("normalizes omitted Swift optional values in a persisted snapshot cache", () => {
+    const parsed = snapshotCacheSchema.parse({
+      schemaVersion: 1,
+      snapshots: [{
+        id: "snap_cache_01",
+        userAccountId: "local_user",
+        provider: "anthropic",
+        product: "claude_code",
+        surface: "cli",
+        poolKey: "anthropic_claude_subscription",
+        windowKey: "five_hour",
+        unit: "utilization",
+        used: 25,
+        limit: 100,
+        remaining: 75,
+        utilization: 0.25,
+        resetAt: "2026-08-02T20:00:00.669294+00:00",
+        lastUpdatedAt: "2026-08-02T16:26:32Z",
+        confidence: "verified",
+        undercountRisk: "possible",
+        source: fixtureSource
+      }],
+      updatedAtByProvider: {},
+      lastSuccessfulRefreshAtByProvider: {},
+      lastErrorByProvider: {}
+    });
+
+    expect(parsed.snapshots[0]?.staleReason).toBeNull();
+    expect(parsed.snapshots[0]?.resetAt).toContain("+00:00");
+  });
+
   it("accepts session_expired as a connector state", () => {
     expect(connectorStateSchema.parse("session_expired")).toBe("session_expired");
   });

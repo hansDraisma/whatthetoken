@@ -1,0 +1,28 @@
+{
+  "name": "@whatthetoken/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "prebuild": "pnpm --filter @whatthetoken/core build",
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "migrate": "tsx src/migrate.ts",
+    "pretypecheck": "pnpm --filter @whatthetoken/core build",
+    "typecheck": "tsc --noEmit",
+    "pretest": "pnpm --filter @whatthetoken/core build",
+    "test": "vitest run",
+    "prelint": "pnpm --filter @whatthetoken/core build",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
+    "@whatthetoken/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "vitest": "^4.0.0"
+  }
+}

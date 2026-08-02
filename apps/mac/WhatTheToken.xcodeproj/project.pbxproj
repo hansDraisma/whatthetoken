@@ -103,6 +103,7 @@
 		20000000000000000000005E = {isa = PBXBuildFile; fileRef = 10000000000000000000005E; };
 		20000000000000000000005F = {isa = PBXBuildFile; fileRef = 10000000000000000000005F; };
 		200000000000000000000060 = {isa = PBXBuildFile; fileRef = 100000000000000000000060; };
+		200000000000000000000061 = {isa = PBXBuildFile; fileRef = 100000000000000000000061; };
 		300000000000000000000001 = {isa = PBXBuildFile; fileRef = 000000000000000000000026; };
 		300000000000000000000002 = {isa = PBXBuildFile; fileRef = 000000000000000000000027; };
 		300000000000000000000003 = {isa = PBXBuildFile; fileRef = 000000000000000000000028; };
@@ -248,6 +249,7 @@
 		10000000000000000000005E = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Claude/ClaudeRotationDecision.swift; sourceTree = "<group>"; };
 		10000000000000000000005F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/ViewModels/ClaudeReconnectWatcher.swift; sourceTree = "<group>"; };
 		100000000000000000000060 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/ViewModels/ConnectorRecoveryCopy.swift; sourceTree = "<group>"; };
+		100000000000000000000061 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/WhatTheTokenMac/Storage/NeonSnapshotSync.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -336,6 +338,7 @@
 				100000000000000000000040,
 				10000000000000000000001A,
 				10000000000000000000001B,
+				100000000000000000000061,
 				10000000000000000000001C,
 				100000000000000000000038,
 				10000000000000000000005F,
@@ -579,6 +582,7 @@
 				200000000000000000000040,
 				20000000000000000000001A,
 				20000000000000000000001B,
+				200000000000000000000061,
 				20000000000000000000001C,
 				200000000000000000000038,
 				20000000000000000000005F,

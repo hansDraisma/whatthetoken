@@ -100,7 +100,7 @@ export const usageSnapshotSchema = z
     limit: z.number().positive().nullable(),
     remaining: z.number().nonnegative().nullable(),
     utilization: z.number().min(0).nullable(),
-    resetAt: z.string().datetime().nullable(),
+    resetAt: z.string().datetime({ offset: true }).nullable(),
     lastUpdatedAt: z.string().datetime(),
     confidence: confidenceSchema,
     undercountRisk: undercountRiskSchema,
@@ -171,5 +171,44 @@ export const usageSnapshotSchema = z
     }
   });
 
+export const cachedProviderErrorSchema = z
+  .object({
+    code: z.enum([
+      "network",
+      "schemaChanged",
+      "unavailable",
+      "sessionExpired",
+      "missingCredentials",
+      "permissionDenied",
+      "tokenInvalid",
+      "missingClaudeCLI",
+      "rateLimited"
+    ]),
+    message: z.string().min(1),
+    consecutiveFailureCount: z.number().int().positive(),
+    nextAutomaticRefreshAt: z.string().datetime()
+  })
+  .strict();
+
+const persistedUsageSnapshotSchema = z.preprocess((input) => {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) return input;
+  const snapshot = { ...input } as Record<string, unknown>;
+  for (const key of ["used", "limit", "remaining", "utilization", "resetAt", "staleReason"]) {
+    if (!(key in snapshot)) snapshot[key] = null;
+  }
+  return snapshot;
+}, usageSnapshotSchema);
+
+export const snapshotCacheSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    snapshots: z.array(persistedUsageSnapshotSchema),
+    updatedAtByProvider: z.record(z.string(), z.string().datetime()),
+    lastSuccessfulRefreshAtByProvider: z.record(z.string(), z.string().datetime()),
+    lastErrorByProvider: z.record(z.string(), cachedProviderErrorSchema)
+  })
+  .strict();
+
 export type UsageEvent = z.infer<typeof usageEventSchema>;
 export type UsageSnapshot = z.infer<typeof usageSnapshotSchema>;
+export type SnapshotCache = z.infer<typeof snapshotCacheSchema>;
